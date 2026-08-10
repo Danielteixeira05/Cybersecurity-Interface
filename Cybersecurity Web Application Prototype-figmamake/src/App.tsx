@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Page, UserRole } from './types';
 
 import { PublicNavbar, AppLayout } from './components/Layout';
@@ -20,12 +20,47 @@ import {
   ClientProfile, ClientAssets, ClientIncidents,
   ClientNIS2, ClientRisk, ClientRequests, ClientCommunication, ClientPentests,
 } from './pages/ClientPages';
+import {
+  session, meApi, logoutApi, defaultHomePageForRole,
+  type ApiUtilizador, type ApiCliente,
+} from './apiClient';
 
 export default function App() {
-  const [page, setPage] = useState<Page>('home');
-  const [role, setRole] = useState<UserRole>(null);
+  const cached = session.get();
+  const [page, setPage] = useState<Page>(cached.role ? defaultHomePageForRole(cached.role) : 'home');
+  const [role, setRole] = useState<UserRole>(cached.role || null);
+  const [currentUser, setCurrentUser] = useState<ApiUtilizador | null>(cached.utilizador || null);
+  const [currentClient, setCurrentClient] = useState<ApiCliente | null>(cached.cliente || null);
+  const [hydrating, setHydrating] = useState<boolean>(!!cached.role);
 
-  // When role is set, go to the appropriate dashboard
+  // Verificar sessao com o backend ao arrancar (se houver cache local)
+  useEffect(() => {
+    if (!cached.role) return;
+    let cancel = false;
+    (async () => {
+      try {
+        const me = await meApi();
+        if (cancel) return;
+        if (me.autenticado && me.utilizador) {
+          setRole(me.role || null);
+          setCurrentUser(me.utilizador);
+          setCurrentClient(me.cliente || null);
+        } else {
+          session.clear();
+          setRole(null);
+          setCurrentUser(null);
+          setCurrentClient(null);
+          setPage('home');
+        }
+      } catch {
+        // Falha de rede -> manter a cache local (offline friendly)
+      } finally {
+        if (!cancel) setHydrating(false);
+      }
+    })();
+    return () => { cancel = true; };
+  }, []);
+
   function handleSetRole(r: UserRole) {
     setRole(r);
     if (r === 'admin') setPage('admin-dashboard');
@@ -33,14 +68,25 @@ export default function App() {
     else if (r === 'client') setPage('cli-dashboard');
   }
 
-  function handleSetRoleNull() {
+  async function handleLogout() {
+    try { await logoutApi(); } catch {}
     setRole(null);
+    setCurrentUser(null);
+    setCurrentClient(null);
     setPage('home');
   }
 
   const dashboardPage = role === 'admin' ? 'admin-dashboard' : role === 'manager' ? 'mgr-dashboard' : 'cli-dashboard';
   const publicPages = ['home', 'about', 'mission', 'services', 'news', 'contact'] as const;
   const isPublicPage = (publicPages as readonly string[]).includes(page);
+
+  if (hydrating) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-sm font-mono text-slate-500">A restabelecer sessão...</div>
+      </div>
+    );
+  }
 
   // ── Public Pages (incluindo quando autenticado) ──────────────────────────────
   if (!role || page === 'login' || (role && isPublicPage)) {
@@ -52,6 +98,7 @@ export default function App() {
             setPage={setPage}
             role={role}
             onBackToPortal={() => setPage(dashboardPage as Page)}
+            onLogout={role ? handleLogout : undefined}
           />
         )}
         {page === 'home' && <HomePage setPage={setPage} />}
@@ -60,16 +107,31 @@ export default function App() {
         {page === 'services' && <ServicesPage setPage={setPage} />}
         {page === 'news' && <NewsPage setPage={setPage} />}
         {page === 'contact' && <ContactPage setPage={setPage} />}
-        {page === 'login' && <LoginPage setRole={handleSetRole} setPage={setPage} />}
+        {page === 'login' && (
+          <LoginPage
+            setRole={handleSetRole}
+            setPage={setPage}
+            setCurrentUser={setCurrentUser}
+            setCurrentClient={setCurrentClient}
+          />
+        )}
       </div>
     );
   }
 
   // ── Authenticated Shell ─────────────────────────────────────────────────────
   return (
-    <AppLayout role={role} page={page} setPage={setPage} setRole={handleSetRoleNull} onHome={() => setPage('home')}>
+    <AppLayout
+      role={role}
+      page={page}
+      setPage={setPage}
+      setRole={handleLogout}
+      onHome={() => setPage('home')}
+      currentUser={currentUser}
+      currentClient={currentClient}
+    >
       {/* ADMIN PAGES */}
-      {page === 'admin-dashboard' && <AdminDashboard setPage={setPage} />}
+      {page === 'admin-dashboard' && <AdminDashboard setPage={setPage} currentUser={currentUser} />}
       {page === 'admin-analytics' && <AdminAnalytics />}
       {page === 'admin-users' && <AdminUsers setPage={setPage} />}
       {page === 'admin-clients' && <AdminClients setPage={setPage} />}
@@ -83,7 +145,7 @@ export default function App() {
       {page === 'admin-user-manager' && <AdminManagerDetail setPage={setPage} />}
 
       {/* MANAGER PAGES */}
-      {page === 'mgr-dashboard' && <MgrDashboard setPage={setPage} />}
+      {page === 'mgr-dashboard' && <MgrDashboard setPage={setPage} currentUser={currentUser} />}
       {page === 'mgr-analytics' && <MgrAnalytics setPage={setPage} />}
       {page === 'mgr-clients' && <MgrClients setPage={setPage} />}
       {page === 'mgr-client-detail' && <MgrClientDetail setPage={setPage} />}
@@ -100,7 +162,7 @@ export default function App() {
       {page === 'mgr-evidence' && <MgrEvidence />}
 
       {/* CLIENT PAGES */}
-      {page === 'cli-dashboard' && <ClientDashboard setPage={setPage} />}
+      {page === 'cli-dashboard' && <ClientDashboard setPage={setPage} currentClient={currentClient} currentUser={currentUser} />}
       {page === 'cli-workspace' && <ClientWorkspace setPage={setPage} />}
       {page === 'cli-documents' && <ClientDocuments setPage={setPage} />}
       {page === 'cli-reports' && <ClientReports setPage={setPage} />}
@@ -115,3 +177,4 @@ export default function App() {
     </AppLayout>
   );
 }
+

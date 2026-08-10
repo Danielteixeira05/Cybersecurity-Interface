@@ -1,5 +1,6 @@
 import { type ReactNode, useState, useRef, useEffect } from 'react';
 import type { Page, UserRole } from '../types';
+import type { ApiUtilizador, ApiCliente } from '../apiClient';
 import {
   LayoutDashboard, Users, Shield, Building2, ScrollText,
   Briefcase, AlertTriangle, FileText, BarChart3, ClipboardList,
@@ -167,8 +168,9 @@ function RolePill({ role }: { role: UserRole }) {
 }
 
 // ── Navbar Pública ────────────────────────────────────────────────────────────
-export function PublicNavbar({ page, setPage, role, onBackToPortal }: {
-  page: Page; setPage: (p: Page) => void; role?: UserRole; onBackToPortal?: () => void;
+export function PublicNavbar({ page, setPage, role, onBackToPortal, onLogout }: {
+  page: Page; setPage: (p: Page) => void; role?: UserRole;
+  onBackToPortal?: () => void; onLogout?: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const dashboardPage = role === 'admin' ? 'admin-dashboard' : role === 'manager' ? 'mgr-dashboard' : 'cli-dashboard';
@@ -199,12 +201,23 @@ export function PublicNavbar({ page, setPage, role, onBackToPortal }: {
 
         <div className="flex items-center gap-2">
           {role ? (
-            <button
-              onClick={() => onBackToPortal ? onBackToPortal() : setPage(dashboardPage as Page)}
-              className="hidden md:flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-base shadow-sm"
-            >
-              <Briefcase size={13} /> Voltar ao Portal
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => onBackToPortal ? onBackToPortal() : setPage(dashboardPage as Page)}
+                className="hidden md:flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-base shadow-sm"
+              >
+                <Briefcase size={13} /> Voltar ao Portal
+              </button>
+              {onLogout && (
+                <button
+                  onClick={onLogout}
+                  className="hidden md:flex items-center gap-2 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-md transition-base"
+                  title="Terminar sessão"
+                >
+                  <LogOut size={13} />
+                </button>
+              )}
+            </div>
           ) : (
             <button
               onClick={() => setPage('login')}
@@ -231,12 +244,22 @@ export function PublicNavbar({ page, setPage, role, onBackToPortal }: {
             </button>
           ))}
           {role ? (
-            <button
-              onClick={() => { onBackToPortal?.(); setMenuOpen(false); }}
-              className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm rounded-md mt-2"
-            >
-              <Briefcase size={13} /> Voltar ao Portal
-            </button>
+            <div className="flex flex-col gap-1 mt-2">
+              <button
+                onClick={() => { onBackToPortal?.(); setMenuOpen(false); }}
+                className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm rounded-md"
+              >
+                <Briefcase size={13} /> Voltar ao Portal
+              </button>
+              {onLogout && (
+                <button
+                  onClick={() => { onLogout(); setMenuOpen(false); }}
+                  className="flex items-center gap-2 px-3 py-2 bg-slate-200 text-slate-700 text-sm rounded-md"
+                >
+                  <LogOut size={13} /> Terminar sessão
+                </button>
+              )}
+            </div>
           ) : (
             <button onClick={() => { setPage('login'); setMenuOpen(false); }} className="flex items-center gap-2 px-3 py-2 bg-violet-600 text-white text-sm font-semibold rounded-md mt-2">
               Entrar
@@ -250,9 +273,10 @@ export function PublicNavbar({ page, setPage, role, onBackToPortal }: {
 
 
 // ── Layout Autenticado ────────────────────────────────────────────────────────
-export function AppLayout({ role, page, setPage, setRole, onHome, children }: {
+export function AppLayout({ role, page, setPage, setRole, onHome, children, currentUser, currentClient }: {
   role: UserRole; page: Page; setPage: (p: Page) => void;
   setRole: (r: UserRole) => void; onHome: () => void; children: ReactNode;
+  currentUser?: ApiUtilizador | null; currentClient?: ApiCliente | null;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -273,6 +297,10 @@ export function AppLayout({ role, page, setPage, setRole, onHome, children }: {
   const reminders = REMINDERS[role!];
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const unreadCount = reminders.filter(r => !readIds.has(r.id)).length;
+
+  const displayName = currentUser?.nome || roleUsers[role!];
+  const displayEmail = currentUser?.email || '';
+  const displayRole = currentClient?.nome || roleLabels[role!];
 
   const SidebarContent = () => (
     <aside className={`flex flex-col h-full bg-slate-900 transition-all duration-200 ${collapsed ? 'w-14' : 'w-60'}`}>
@@ -315,11 +343,11 @@ export function AppLayout({ role, page, setPage, setRole, onHome, children }: {
         {!collapsed && (
           <div className="flex items-center gap-2 px-2 py-2 rounded-md mb-1">
             <div className="w-7 h-7 rounded-full bg-blue-500 flex items-center justify-center text-xs font-bold text-white shrink-0">
-              {roleUsers[role!].charAt(0)}
+              {displayName.charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-white truncate">{roleUsers[role!]}</p>
-              <p className="text-xs text-slate-400 truncate">{roleLabels[role!]}</p>
+              <p className="text-xs font-semibold text-white truncate">{displayName}</p>
+              <p className="text-xs text-slate-400 truncate">{displayRole}</p>
             </div>
           </div>
         )}

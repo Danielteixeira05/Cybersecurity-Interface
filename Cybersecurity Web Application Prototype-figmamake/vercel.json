@@ -1,0 +1,28 @@
+{
+  "framework": "vite",
+  "buildCommand": "pnpm build",
+  "installCommand": "pnpm install --frozen-lockfile || npm install",
+  "outputDirectory": "dist",
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "nodeVersion": "20.x",
+
+  "env": {
+    "VITE_API_BASE_URL": "https://cybersecurity-api.vercel.app"
+  },
+
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://cybersecurity-api.vercel.app/api/:path*"
+    },
+    {
+      "source": "/media/:path*",
+      "destination": "https://cybersecurity-api.vercel.app/media/:path*"
+    },
+    {
+      "source": "/((?!api|media|assets|src|favicon).*)",
+      "destination": "/index.html"
+    }
+  ]
+}

@@ -2,26 +2,67 @@ import { useState } from 'react';
 import type { UserRole, Page } from '../types';
 import { Shield, Lock, Eye, EyeOff } from 'lucide-react';
 import { Button, Alert } from '../components/DesignSystem';
+import { loginApi, session, type ApiCliente, type ApiUtilizador } from '../apiClient';
 
-export default function LoginPage({ setRole, setPage }: { setRole: (r: UserRole) => void; setPage: (p: Page) => void }) {
+export default function LoginPage({
+  setRole,
+  setPage,
+  setCurrentUser,
+  setCurrentClient,
+}: {
+  setRole: (r: UserRole) => void;
+  setPage: (p: Page) => void;
+  setCurrentUser?: (u: ApiUtilizador | null) => void;
+  setCurrentClient?: (c: ApiCliente | null) => void;
+}) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const demoLogins: Record<string, UserRole> = {
-    'admin@ciberboxsecur.pt': 'admin',
-    'manager@ciberboxsecur.pt': 'manager',
-    'client@empresa.pt': 'client',
-  };
+  const demoLogins: Array<{ email: string; password: string; role: UserRole; perfil: string; color: string }> = [
+    {
+      email: 'admin@ciberbox.local',
+      password: 'Demo2026!',
+      role: 'admin',
+      perfil: 'Administrador',
+      color: 'text-purple-600 bg-purple-50 border border-purple-200',
+    },
+    {
+      email: 'colaborador@ciberbox.local',
+      password: 'Demo2026!',
+      role: 'manager',
+      perfil: 'Colaborador (Gestor)',
+      color: 'text-blue-600 bg-blue-50 border border-blue-200',
+    },
+    {
+      email: 'cliente1@ciberbox.local',
+      password: 'Demo2026!',
+      role: 'cliente',
+      perfil: 'Cliente (Alpha Saude, S.A.)',
+      color: 'text-green-600 bg-green-50 border border-green-200',
+    },
+  ];
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const role = demoLogins[email.toLowerCase()];
-    if (role && password === 'demo1234') {
+    setError('');
+    setLoading(true);
+    try {
+      const res = await loginApi({ email: email.trim(), password });
+      const role = res.utilizador.role || null;
       setRole(role);
-    } else {
-      setError('Credenciais inválidas. Utilize as contas de demonstração abaixo.');
+      setCurrentUser?.(res.utilizador);
+      setCurrentClient?.(res.cliente || null);
+      if (role === 'admin') setPage('admin-dashboard');
+      else if (role === 'manager') setPage('mgr-dashboard');
+      else if (role === 'cliente') setPage('cli-dashboard');
+      else setPage('home');
+    } catch (err: any) {
+      setError(err?.message || 'Credenciais invalidas.');
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -37,15 +78,15 @@ export default function LoginPage({ setRole, setPage }: { setRole: (r: UserRole)
         <div>
           <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-8">
             <p className="text-xs text-slate-400 font-mono mb-4 flex items-center gap-2">
-              <span className="w-2 h-2 bg-green-400 rounded-full" />ESTADO DO SISTEMA EM TEMPO REAL
+              <span className="w-2 h-2 bg-green-400 rounded-full" />DADOS DA BASE DE DADOS NEON
             </p>
             {[
-              { label: 'Ameaças bloqueadas hoje', value: '1.247', color: 'text-red-400' },
-              { label: 'Sistemas monitorizados', value: '3.891', color: 'text-blue-400' },
-              { label: 'Incidentes ativos', value: '3', color: 'text-amber-400' },
-              { label: 'Pontuação média de conformidade', value: '94%', color: 'text-green-400' },
+              { label: 'Clientes registados', value: '---', color: 'text-blue-400', id: 'lb-clientes' },
+              { label: 'Ativos monitorizados', value: '---', color: 'text-indigo-400', id: 'lb-ativos' },
+              { label: 'Incidentes abertos', value: '---', color: 'text-amber-400', id: 'lb-incidentes' },
+              { label: 'Pedidos de suporte', value: '---', color: 'text-green-400', id: 'lb-pedidos' },
             ].map((s) => (
-              <div key={s.label} className="flex justify-between items-center py-2 border-b border-white/10 last:border-0">
+              <div key={s.id} className="flex justify-between items-center py-2 border-b border-white/10 last:border-0">
                 <span className="text-xs text-slate-400">{s.label}</span>
                 <span className={`text-sm font-bold font-mono ${s.color}`}>{s.value}</span>
               </div>
@@ -55,6 +96,9 @@ export default function LoginPage({ setRole, setPage }: { setRole: (r: UserRole)
             "A CiberBoxSecur ajudou-nos a alcançar a conformidade NIS2 em apenas 4 meses — um processo sem fricções com apoio excecional."
           </blockquote>
           <p className="text-xs text-slate-500">— António Silva, Diretor de TI, Grupo Financeiro Norte</p>
+          <p className="mt-6 text-[11px] text-slate-600 font-mono">
+            Projeto de Bases de Dados — Daniel Teixiera, n. 27645 — 2025/2026
+          </p>
         </div>
 
         <p className="text-xs text-slate-600">© 2025 CiberBoxSecur Lda. Certificado ISO/IEC 27001.</p>
@@ -80,9 +124,10 @@ export default function LoginPage({ setRole, setPage }: { setRole: (r: UserRole)
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="utilizador@email.pt"
+                placeholder="utilizador@ciberbox.local"
                 required
-                className="bg-white border border-slate-300 rounded-md px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 w-full focus:border-blue-500 transition-base"
+                disabled={loading}
+                className="bg-white border border-slate-300 rounded-md px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 w-full focus:border-blue-500 transition-base disabled:opacity-60"
               />
             </div>
             <div>
@@ -94,9 +139,14 @@ export default function LoginPage({ setRole, setPage }: { setRole: (r: UserRole)
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
-                  className="bg-white border border-slate-300 rounded-md px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 w-full focus:border-blue-500 transition-base pr-10"
+                  disabled={loading}
+                  className="bg-white border border-slate-300 rounded-md px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 w-full focus:border-blue-500 transition-base pr-10 disabled:opacity-60"
                 />
-                <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setShowPass(!showPass)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                >
                   {showPass ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
               </div>
@@ -105,29 +155,34 @@ export default function LoginPage({ setRole, setPage }: { setRole: (r: UserRole)
               <label className="flex items-center gap-2 text-xs text-slate-500 cursor-pointer">
                 <input type="checkbox" className="accent-blue-600 rounded" /> Lembrar-me
               </label>
-              <button type="button" className="text-xs text-blue-600 hover:text-blue-700 transition-base font-medium">Esqueceu a palavra-passe?</button>
+              <button type="button" className="text-xs text-blue-600 hover:text-blue-700 transition-base font-medium">
+                Esqueceu a palavra-passe?
+              </button>
             </div>
-            <Button type="submit" className="w-full justify-center py-2.5 text-sm">
-              <Lock size={14} /> Entrar
+            <Button type="submit" disabled={loading} className="w-full justify-center py-2.5 text-sm">
+              <Lock size={14} />
+              {loading ? 'A autenticar...' : 'Entrar'}
             </Button>
           </form>
 
           {/* Contas de demonstração */}
           <div className="mt-8 p-4 bg-slate-50 border border-slate-200 rounded-lg">
-            <p className="text-xs text-slate-500 font-mono mb-3 uppercase tracking-wide font-semibold">Contas de Demonstração <span className="normal-case">(palavra-passe: demo1234)</span></p>
+            <p className="text-xs text-slate-500 font-mono mb-3 uppercase tracking-wide font-semibold">
+              Contas de Demonstração <span className="normal-case">(palavra-passe: Demo2026!)</span>
+            </p>
             <div className="space-y-2">
-              {[
-                { email: 'admin@ciberboxsecur.pt', role: 'Administrador', color: 'text-purple-600 bg-purple-50 border border-purple-200' },
-                { email: 'manager@ciberboxsecur.pt', role: 'Gestor', color: 'text-blue-600 bg-blue-50 border border-blue-200' },
-                { email: 'client@empresa.pt', role: 'Cliente', color: 'text-green-600 bg-green-50 border border-green-200' },
-              ].map((a) => (
+              {demoLogins.map((a) => (
                 <button
                   key={a.email}
-                  onClick={() => { setEmail(a.email); setPassword('demo1234'); }}
+                  type="button"
+                  onClick={() => {
+                    setEmail(a.email);
+                    setPassword(a.password);
+                  }}
                   className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-white border border-transparent hover:border-slate-200 transition-base text-left"
                 >
                   <span className="text-xs text-slate-600 font-mono">{a.email}</span>
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${a.color}`}>{a.role}</span>
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${a.color}`}>{a.perfil}</span>
                 </button>
               ))}
             </div>
@@ -137,3 +192,4 @@ export default function LoginPage({ setRole, setPage }: { setRole: (r: UserRole)
     </div>
   );
 }
+
