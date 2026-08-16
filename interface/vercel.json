@@ -1,14 +1,33 @@
 {
   "framework": "vite",
-  "buildCommand": "pnpm build",
-  "installCommand": "pnpm install --frozen-lockfile || npm install",
+  "buildCommand": "pnpm build || npm run build",
+  "installCommand": "pnpm install --frozen-lockfile 2>/dev/null || npm install",
   "outputDirectory": "dist",
   "cleanUrls": true,
   "trailingSlash": false,
+  "regions": ["fra1"],
 
   "env": {
     "VITE_API_BASE_URL": "https://cybersecurity-api.vercel.app"
   },
+
+  "headers": [
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" }
+      ]
+    }
+  ],
 
   "rewrites": [
     {
@@ -20,7 +39,11 @@
       "destination": "https://cybersecurity-api.vercel.app/media/:path*"
     },
     {
-      "source": "/((?!api|media|assets|src|favicon).*)",
+      "source": "/static/:path*",
+      "destination": "https://cybersecurity-api.vercel.app/static/:path*"
+    },
+    {
+      "source": "/((?!assets/|api/|media/|static/|favicon\\.ico|robots\\.txt|sitemap\\.xml|manifest\\.webmanifest).*)",
       "destination": "/index.html"
     }
   ]
