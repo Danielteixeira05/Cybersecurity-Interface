@@ -1,0 +1,10 @@
+{
+  "description": "Enterprise cybersecurity platform offering role-based dashboards, client management, incident tracking, compliance monitoring, and secure communication for admins, managers, and clients.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
