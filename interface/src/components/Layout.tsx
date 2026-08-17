@@ -131,6 +131,7 @@ interface AppLayoutProps {
   setPage: (p: Page) => void;
   setRole: (r: UserRole) => void;
   onHome: () => void;
+  children?: React.ReactNode;
 }
 
 interface SideItem {
@@ -305,7 +306,7 @@ const CLIENT_ITEMS: SideItem[] = [
   { key: 'cli-profile', label: 'Perfil', icon: ICON.profile },
 ];
 
-export function AppLayout({ role, page, setPage, setRole, onHome }: AppLayoutProps) {
+export function AppLayout({ role, page, setPage, setRole, onHome, children }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const sess = session.get();
   const items =
@@ -426,7 +427,7 @@ export function AppLayout({ role, page, setPage, setRole, onHome }: AppLayoutPro
           </div>
         </header>
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">{/* children filled by App.tsx via conditionals */}</main>
+        <main className="flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
       </div>
     </div>
   );
