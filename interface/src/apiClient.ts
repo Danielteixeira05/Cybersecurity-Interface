@@ -160,11 +160,11 @@ const DEV_MODE = typeof import.meta !== 'undefined' && !!import.meta.dev;
 export function getApiBaseUrl(): string {
   const env = (typeof import.meta !== 'undefined' && import.meta.env) || ({} as Record<string, string | undefined>);
   const explicit = env.VITE_API_BASE_URL;
-  if (typeof explicit === 'string' && explicit.length > 0) return explicit.replace(/\/$/, '');
-  if (DEV_MODE) {
-    return `http://localhost:${(import.meta.env as any)?.VITE_DJANGO_PORT || '8000'}`;
+  if (!DEV_MODE) {
+    return '';
   }
-  return '';
+  if (typeof explicit === 'string' && explicit.length > 0) return explicit.replace(/\/$/, '');
+  return `http://localhost:${(import.meta.env as any)?.VITE_DJANGO_PORT || '8000'}`;
 }
 
 let csrfToken = '';
