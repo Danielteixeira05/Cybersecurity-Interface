@@ -43,7 +43,11 @@
       "destination": "https://cybersecurity-api.vercel.app/static/:path*"
     },
     {
-      "source": "/((?!assets/|api/|media/|static/|favicon\\.ico|robots\\.txt|sitemap\\.xml|manifest\\.webmanifest).*)",
+      "source": "/login",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/((?!assets/|api/|media/|static/|login|favicon\\.ico|robots\\.txt|sitemap\\.xml|manifest\\.webmanifest).*)",
       "destination": "/index.html"
     }
   ]

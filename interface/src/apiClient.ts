@@ -177,6 +177,14 @@ export function getCsrfToken(): string {
   return m ? decodeURIComponent(m[1]) : '';
 }
 
+export async function ensureCsrfToken(): Promise<void> {
+  if (getCsrfToken()) return;
+  try {
+    await apiFetch<void>('/api/csrf/', { method: 'GET' });
+  } catch {
+  }
+}
+
 class SessionStore {
   private key = 'cbsess_v1';
   get(): { utilizador: ApiUtilizador | null; cliente: ApiCliente | null; role: UserRole } {
@@ -252,6 +260,7 @@ export async function apiFetch<T = any>(
 }
 
 export async function loginApi(payload: LoginPayload): Promise<ApiLoginResponse> {
+  await ensureCsrfToken();
   const res = await apiFetch<ApiLoginResponse>('/api/login/', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -268,6 +277,7 @@ export async function loginApi(payload: LoginPayload): Promise<ApiLoginResponse>
 
 export async function logoutApi(): Promise<void> {
   try {
+    await ensureCsrfToken();
     await apiFetch('/api/logout/', { method: 'POST' });
   } finally {
     session.clear();
