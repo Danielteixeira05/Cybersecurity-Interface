@@ -160,10 +160,10 @@ const DEV_MODE = typeof import.meta !== 'undefined' && !!import.meta.dev;
 export function getApiBaseUrl(): string {
   const env = (typeof import.meta !== 'undefined' && import.meta.env) || ({} as Record<string, string | undefined>);
   const explicit = env.VITE_API_BASE_URL;
-  if (!DEV_MODE) {
-    return '';
-  }
   if (typeof explicit === 'string' && explicit.length > 0) return explicit.replace(/\/$/, '');
+  if (!DEV_MODE) {
+    return 'https://cybersecurity-api.vercel.app';
+  }
   return `http://localhost:${(import.meta.env as any)?.VITE_DJANGO_PORT || '8000'}`;
 }
 
@@ -178,10 +178,18 @@ export function getCsrfToken(): string {
 }
 
 export async function ensureCsrfToken(): Promise<void> {
-  if (getCsrfToken()) return;
   try {
-    await apiFetch<void>('/api/csrf/', { method: 'GET' });
+    const r = await apiFetch<{ csrfToken?: string; csrf_token?: string }>('/api/csrf/', { method: 'GET', credentials: 'include' });
+    if (r?.csrfToken) setCsrfToken(r.csrfToken);
+    else if (r?.csrf_token) setCsrfToken(r.csrf_token);
   } catch {
+  }
+  if (!csrfToken) {
+    try {
+      const m = /csrftoken=([^;]+)/.exec(document.cookie || '');
+      if (m) setCsrfToken(decodeURIComponent(m[1]));
+    } catch {
+    }
   }
 }
 
