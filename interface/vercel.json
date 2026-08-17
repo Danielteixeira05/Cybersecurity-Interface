@@ -3,8 +3,6 @@
   "buildCommand": "pnpm build || npm run build",
   "installCommand": "pnpm install --frozen-lockfile 2>/dev/null || npm install",
   "outputDirectory": "dist",
-  "cleanUrls": true,
-  "trailingSlash": false,
   "regions": ["fra1"],
 
   "env": {
