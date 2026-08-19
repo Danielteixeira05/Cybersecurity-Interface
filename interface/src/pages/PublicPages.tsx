@@ -1,4 +1,16 @@
 import { useState } from 'react';
+import {
+  BookOpen,
+  ChevronRight,
+  Eye,
+  FileText,
+  Globe,
+  Mail,
+  MapPin,
+  Phone,
+  Shield,
+  Target,
+} from 'lucide-react';
 import type { Page } from '../types';
 
 interface PageProps {
@@ -15,48 +27,238 @@ const HOME_HERO_CONTENT = {
   secondaryAction: 'Agendar Serviços',
 } as const;
 
+const HOME_SERVICES = [
+  {
+    title: 'Testes de Penetração',
+    description: 'Avaliações de vulnerabilidades e testes de intrusão autorizados por hackers éticos certificados.',
+    icon: Target,
+    accent: 'blue',
+  },
+  {
+    title: 'Gestão de Incidentes NIS2',
+    description: 'Resposta rápida a incidentes com notificação às autoridades dentro dos prazos NIS2 (24h/72h).',
+    icon: Shield,
+    accent: 'rose',
+  },
+  {
+    title: 'Conformidade NIS2',
+    description: 'Apoio completo em auditoria e gestão de conformidade para os requisitos da Diretiva NIS2 da UE.',
+    icon: FileText,
+    accent: 'violet',
+  },
+  {
+    title: 'SIEM & Monitorização Contínua',
+    description: 'SOC 24/7 com deteção de ameaças em tempo real em todos os seus ativos digitais e perímetro de rede.',
+    icon: Eye,
+    accent: 'teal',
+  },
+  {
+    title: 'Formação e Consciencialização',
+    description: 'Programas de formação personalizados para aumentar a maturidade de segurança das suas equipas.',
+    icon: BookOpen,
+    accent: 'indigo',
+  },
+  {
+    title: 'Segurança Cloud & DevSecOps',
+    description: 'Proteção de ambientes cloud e integração de segurança no ciclo de desenvolvimento de software.',
+    icon: Globe,
+    accent: 'purple',
+  },
+] as const;
+
+const HOME_FOOTER_LINKS = [
+  { label: 'Início', page: 'home' },
+  { label: 'Sobre Nós', page: 'about' },
+  { label: 'Serviços', page: 'services' },
+  { label: 'Contacto', page: 'contact' },
+  { label: 'Dashboard', page: 'login' },
+] satisfies ReadonlyArray<{ label: string; page: Page }>;
+
+const HOME_FOOTER_CONTACTS = [
+  { label: 'info@ciberboxsecur.pt', icon: Mail },
+  { label: '+351 21 000 0000', icon: Phone },
+  { label: 'Av. da Liberdade 110, Lisboa', icon: MapPin },
+  { label: 'www.ciberboxsecur.pt', icon: Globe },
+] as const;
+
+const HOME_SOCIALS = [
+  { label: 'LinkedIn', mark: 'in' },
+  { label: 'Twitter', mark: '𝕏' },
+  { label: 'Facebook', mark: 'f' },
+] as const;
+
 export function HomePage({ setPage }: PageProps) {
+  const navigateTo = (target: Page) => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+    setPage(target);
+  };
+
   return (
-    <main className="public-home">
-      <section className="public-hero" aria-labelledby="home-hero-title">
-        <div className="public-hero__glow public-hero__glow--violet" aria-hidden="true" />
-        <div className="public-hero__glow public-hero__glow--blue" aria-hidden="true" />
-        <div className="container-xl public-hero__container">
-          <div className="row justify-content-center">
-            <div className="col-12 col-lg-10 col-xl-9">
-              <div className="public-hero__content">
-                <span className="public-hero__badge">
-                  <span className="public-hero__badge-dot" aria-hidden="true" />
-                  {HOME_HERO_CONTENT.certification}
-                </span>
-                <h1 id="home-hero-title" className="public-hero__title">
-                  {HOME_HERO_CONTENT.title}
-                  <span>{HOME_HERO_CONTENT.highlightedTitle}</span>
-                </h1>
-                <p className="public-hero__description">{HOME_HERO_CONTENT.description}</p>
-                <div className="public-hero__actions">
-                  <button
-                    type="button"
-                    onClick={() => setPage('services')}
-                    className="public-hero__button public-hero__button--primary"
-                  >
-                    {HOME_HERO_CONTENT.primaryAction}
-                    <span aria-hidden="true">→</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPage('contact')}
-                    className="public-hero__button public-hero__button--secondary"
-                  >
-                    {HOME_HERO_CONTENT.secondaryAction}
-                  </button>
+    <>
+      <main className="public-home">
+        <section className="public-hero" aria-labelledby="home-hero-title">
+          <div className="public-hero__glow public-hero__glow--violet" aria-hidden="true" />
+          <div className="public-hero__glow public-hero__glow--blue" aria-hidden="true" />
+          <div className="container-xl public-hero__container">
+            <div className="row justify-content-center">
+              <div className="col-12 col-lg-10 col-xl-9">
+                <div className="public-hero__content">
+                  <span className="public-hero__badge">
+                    <span className="public-hero__badge-dot" aria-hidden="true" />
+                    {HOME_HERO_CONTENT.certification}
+                  </span>
+                  <h1 id="home-hero-title" className="public-hero__title">
+                    {HOME_HERO_CONTENT.title}
+                    <span>{HOME_HERO_CONTENT.highlightedTitle}</span>
+                  </h1>
+                  <p className="public-hero__description">{HOME_HERO_CONTENT.description}</p>
+                  <div className="public-hero__actions">
+                    <button
+                      type="button"
+                      onClick={() => setPage('services')}
+                      className="public-hero__button public-hero__button--primary"
+                    >
+                      {HOME_HERO_CONTENT.primaryAction}
+                      <span aria-hidden="true">→</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPage('contact')}
+                      className="public-hero__button public-hero__button--secondary"
+                    >
+                      {HOME_HERO_CONTENT.secondaryAction}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
+        </section>
+
+        <section className="home-services" aria-labelledby="home-services-title" data-home-section="services">
+          <div className="container-xl">
+            <header className="home-section-heading">
+              <p className="home-section-heading__eyebrow">O Que Fazemos</p>
+              <h2 id="home-services-title">Serviços de Cibersegurança Completos</h2>
+              <p>
+                Proteção de ponta a ponta para a sua infraestrutura digital, desde a deteção de ameaças à
+                conformidade regulatória.
+              </p>
+            </header>
+
+            <div className="row g-4">
+              {HOME_SERVICES.map((service) => {
+                const Icon = service.icon;
+                return (
+                  <div className="col-12 col-md-4" key={service.title}>
+                    <article className="home-service-card">
+                      <div className={`home-service-card__icon home-service-card__icon--${service.accent}`}>
+                        <Icon aria-hidden="true" />
+                      </div>
+                      <h3>{service.title}</h3>
+                      <p>{service.description}</p>
+                    </article>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="home-services__action">
+              <button type="button" onClick={() => navigateTo('services')} className="home-services__details">
+                + Detalhes
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section className="home-final-cta" aria-labelledby="home-final-cta-title" data-home-section="final-cta">
+          <div className="container-xl">
+            <div className="home-final-cta__panel">
+              <p className="home-final-cta__eyebrow">Comece Hoje</p>
+              <h2 id="home-final-cta-title">
+                Pronto para Proteger o
+                <span>Seu Negócio?</span>
+              </h2>
+              <p>
+                Agende uma demonstração gratuita e veja como a nossa tecnologia pode proteger a sua empresa contra as
+                ameaças digitais.
+              </p>
+              <button type="button" onClick={() => navigateTo('contact')}>
+                Agendar Serviços
+              </button>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer className="home-footer" data-home-section="footer">
+        <div className="container-xl home-footer__container">
+          <div className="row g-4 home-footer__main">
+            <div className="col-12 col-md-4">
+              <div className="home-footer__brand">
+                <span className="home-footer__brand-icon" aria-hidden="true">
+                  <Shield />
+                </span>
+                <span>
+                  CiberBox<strong>Secur</strong>
+                </span>
+              </div>
+              <p className="home-footer__description">
+                Protegemos organizações portuguesas contra ciberameaças com serviços de nível empresarial e
+                conformidade NIS2.
+              </p>
+              <div className="home-footer__socials" aria-label="Redes sociais">
+                {HOME_SOCIALS.map((social) => (
+                  <span className="home-footer__social" role="img" aria-label={social.label} key={social.label}>
+                    {social.mark}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="col-12 col-md-4">
+              <h2 className="home-footer__heading">Links Rápidos</h2>
+              <ul className="home-footer__links">
+                {HOME_FOOTER_LINKS.map((item) => (
+                  <li key={item.label}>
+                    <button type="button" onClick={() => navigateTo(item.page)}>
+                      <ChevronRight aria-hidden="true" />
+                      {item.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="col-12 col-md-4">
+              <h2 className="home-footer__heading">Contacto</h2>
+              <ul className="home-footer__contacts">
+                {HOME_FOOTER_CONTACTS.map((contact) => {
+                  const Icon = contact.icon;
+                  return (
+                    <li key={contact.label}>
+                      <span className="home-footer__contact-icon" aria-hidden="true">
+                        <Icon />
+                      </span>
+                      {contact.label}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </div>
+
+          <div className="home-footer__bottom">
+            <p>© 2025 CiberBoxSecur Lda. Todos os direitos reservados. Lisboa, Portugal.</p>
+            <div className="home-footer__legal" aria-label="Informação legal">
+              <span>Política de Privacidade</span>
+              <span>Termos de Serviço</span>
+              <span>RGPD</span>
+            </div>
+          </div>
         </div>
-      </section>
-    </main>
+      </footer>
+    </>
   );
 }
 
