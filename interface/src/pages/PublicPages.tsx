@@ -1,193 +1,62 @@
+import { useState } from 'react';
 import type { Page } from '../types';
 
 interface PageProps {
   setPage: (p: Page) => void;
 }
 
+const HOME_HERO_CONTENT = {
+  certification: 'Plataforma Certificada NIS2 · ISO/IEC 27001',
+  title: 'Segurança Digital para um',
+  highlightedTitle: 'Mundo Conectado',
+  description:
+    'Proteja a sua empresa contra ameaças digitais e garanta conformidade com as diretivas europeias de cibersegurança.',
+  primaryAction: 'Explorar Serviços',
+  secondaryAction: 'Agendar Serviços',
+} as const;
+
 export function HomePage({ setPage }: PageProps) {
-  const services = [
-    { t: 'Gestão de Ativos', d: 'Inventário completo e classificação de ativos críticos da sua organização.', i: '📦' },
-    { t: 'Monitorização de Incidentes', d: 'Deteção, resposta e resolução de incidentes de segurança em tempo real.', i: '🛡️' },
-    { t: 'Conformidade NIS2', d: 'Implementação e monitorização contínua dos requisitos do Regulamento NIS2.', i: '✅' },
-    { t: 'Avaliação de Riscos', d: 'Identificação proativa de vulnerabilidades e matriz de risco atualizada.', i: '⚠️' },
-    { t: 'Pentesting & Ethical Hacking', d: 'Testes de penetração autorizados para validar os seus controlos de segurança.', i: '🔐' },
-    { t: 'Documentação Segura', d: 'Arquivo encriptado de políticas, relatórios e evidências de auditoria.', i: '📄' },
-  ];
-
-  const stats = [
-    { v: '500+', l: 'Clientes Protegidos' },
-    { v: '10K+', l: 'Incidentes Resolvidos' },
-    { v: '99.9%', l: 'SLA de Disponibilidade' },
-    { v: '24/7', l: 'SOC Monitorização' },
-  ];
-
   return (
-    <div>
-      <section className="hero-gradient relative overflow-hidden">
-        <div className="hero-orb-1" />
-        <div className="hero-orb-2" />
-        <div className="relative mx-auto max-w-7xl px-4 py-20 sm:px-6 sm:py-28 lg:px-8 lg:py-32">
-          <div className="max-w-3xl">
-            <span className="badge bg-blue-100 text-blue-700">
-              🚀 Plataforma Enterprise de Cibersegurança
-            </span>
-            <h1 className="mt-6 font-display text-5xl font-bold leading-[1.05] tracking-tight text-slate-900 sm:text-6xl lg:text-7xl">
-              Segurança que
-              <br />
-              <span className="bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 bg-clip-text text-transparent">
-                protege o seu negócio
-              </span>
-            </h1>
-            <p className="mt-6 max-w-2xl text-lg leading-relaxed text-slate-600 sm:text-xl">
-              A CiberBoxSecur é a plataforma all-in-one de gestão de cibersegurança para MSSPs e equipas internas.
-              Gere clientes, ativos, incidentes e conformidade NIS2 numa única interface moderna.
-            </p>
-            <div className="mt-10 flex flex-wrap items-center gap-4">
-              <button
-                onClick={() => setPage('login')}
-                className="rounded-2xl bg-slate-900 px-7 py-3.5 text-sm font-semibold text-white shadow-xl shadow-slate-900/20 transition-base hover:bg-slate-800"
-              >
-                Entrar na Plataforma →
-              </button>
-              <button
-                onClick={() => setPage('services')}
-                className="rounded-2xl border border-slate-200 bg-white px-7 py-3.5 text-sm font-semibold text-slate-900 transition-base hover:border-slate-300 hover:bg-slate-50"
-              >
-                Ver Serviços
-              </button>
-            </div>
-            <div className="mt-14 grid grid-cols-2 gap-6 sm:grid-cols-4">
-              {stats.map((s) => (
-                <div key={s.l}>
-                  <div className="font-display text-3xl font-bold text-slate-900 sm:text-4xl">{s.v}</div>
-                  <div className="mt-1 text-sm text-slate-500">{s.l}</div>
+    <main className="public-home">
+      <section className="public-hero" aria-labelledby="home-hero-title">
+        <div className="public-hero__glow public-hero__glow--violet" aria-hidden="true" />
+        <div className="public-hero__glow public-hero__glow--blue" aria-hidden="true" />
+        <div className="container-xl public-hero__container">
+          <div className="row justify-content-center">
+            <div className="col-12 col-lg-10 col-xl-9">
+              <div className="public-hero__content">
+                <span className="public-hero__badge">
+                  <span className="public-hero__badge-dot" aria-hidden="true" />
+                  {HOME_HERO_CONTENT.certification}
+                </span>
+                <h1 id="home-hero-title" className="public-hero__title">
+                  {HOME_HERO_CONTENT.title}
+                  <span>{HOME_HERO_CONTENT.highlightedTitle}</span>
+                </h1>
+                <p className="public-hero__description">{HOME_HERO_CONTENT.description}</p>
+                <div className="public-hero__actions">
+                  <button
+                    type="button"
+                    onClick={() => setPage('services')}
+                    className="public-hero__button public-hero__button--primary"
+                  >
+                    {HOME_HERO_CONTENT.primaryAction}
+                    <span aria-hidden="true">→</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPage('contact')}
+                    className="public-hero__button public-hero__button--secondary"
+                  >
+                    {HOME_HERO_CONTENT.secondaryAction}
+                  </button>
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-        <div className="text-center">
-          <span className="badge bg-violet-100 text-violet-700">Nossos Serviços</span>
-          <h2 className="mt-4 font-display text-4xl font-bold text-slate-900 sm:text-5xl">
-            Tudo o que precisa para estar seguro
-          </h2>
-          <p className="mx-auto mt-4 max-w-2xl text-lg text-slate-600">
-            Uma stack completa de cibersegurança, desenhada para equipas de SOC, MSSPs e departamentos de IT.
-          </p>
-        </div>
-        <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {services.map((s) => (
-            <div
-              key={s.t}
-              className="group rounded-2xl border border-slate-200 bg-white p-7 transition-base hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl hover:shadow-blue-500/5"
-            >
-              <div className="text-4xl">{s.i}</div>
-              <h3 className="mt-5 font-display text-xl font-semibold text-slate-900">{s.t}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">{s.d}</p>
-              <div className="mt-5 inline-flex items-center gap-1 text-sm font-medium text-blue-600 opacity-0 transition-base group-hover:opacity-100">
-                Saber mais →
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="border-y border-slate-200 bg-gradient-to-b from-white to-slate-50">
-        <div className="mx-auto grid max-w-7xl gap-12 px-4 py-20 sm:px-6 lg:grid-cols-2 lg:px-8">
-          <div>
-            <span className="badge bg-emerald-100 text-emerald-700">Conformidade NIS2</span>
-            <h2 className="mt-4 font-display text-4xl font-bold leading-tight text-slate-900 sm:text-5xl">
-              Cumpre o Regulamento NIS2 sem dores de cabeça
-            </h2>
-            <p className="mt-5 text-lg text-slate-600">
-              A CiberBoxSecur foi construída de raiz para dar resposta a todos os requisitos do Regulamento (UE) 2022/2555 (NIS2), incluindo:
-            </p>
-            <ul className="mt-7 space-y-4">
-              {[
-                'Gestão de riscos e análise de impacto',
-                'Políticas de segurança documentadas',
-                'Resposta a incidentes (Art. 14º)',
-                'Notificação obrigatória à CNCS',
-                'Testes e auditorias regulares',
-                'Formação e sensibilização',
-              ].map((p) => (
-                <li key={p} className="flex items-start gap-3">
-                  <span className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">✓</span>
-                  <span className="text-slate-700">{p}</span>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-8">
-              <button
-                onClick={() => setPage('contact')}
-                className="rounded-2xl bg-emerald-600 px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700"
-              >
-                Falar com um especialista NIS2
-              </button>
-            </div>
-          </div>
-          <div className="relative">
-            <div className="absolute -inset-4 rounded-3xl bg-gradient-to-br from-emerald-100 via-blue-100 to-violet-100 blur-2xl" />
-            <div className="relative rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-                <div>
-                  <div className="font-display text-lg font-semibold text-slate-900">Dashboard NIS2</div>
-                  <div className="text-xs text-slate-500">Estado de conformidade global</div>
-                </div>
-                <span className="badge bg-emerald-500/15 text-emerald-700">87% Conforme</span>
-              </div>
-              <div className="mt-6 space-y-4">
-                {[
-                  { d: 'Políticas Aprovadas', c: 12, m: 14, p: 86 },
-                  { d: 'Controlos Técnicos', c: 28, m: 30, p: 93 },
-                  { d: 'Formações Completadas', c: 45, m: 52, p: 87 },
-                  { d: 'Incidentes Reportados', c: 3, m: 0, p: 100 },
-                ].map((r) => (
-                  <div key={r.d}>
-                    <div className="mb-1.5 flex items-center justify-between text-sm">
-                      <span className="text-slate-700">{r.d}</span>
-                      <span className="font-mono text-slate-900">{r.c}/{r.m}</span>
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-blue-500 to-violet-500"
-                        style={{ width: `${r.p}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
               </div>
             </div>
           </div>
         </div>
       </section>
-
-      <section className="mx-auto max-w-7xl px-4 py-20 text-center sm:px-6 lg:px-8">
-        <h2 className="font-display text-4xl font-bold text-slate-900 sm:text-5xl">
-          Pronto para começar?
-        </h2>
-        <p className="mx-auto mt-4 max-w-2xl text-lg text-slate-600">
-          Entre na plataforma agora ou fale connosco para uma demonstração personalizada.
-        </p>
-        <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-          <button
-            onClick={() => setPage('login')}
-            className="rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-8 py-4 text-sm font-semibold text-white shadow-xl shadow-blue-600/25 hover:from-blue-700 hover:to-violet-700"
-          >
-            Aceder ao Portal
-          </button>
-          <button
-            onClick={() => setPage('contact')}
-            className="rounded-2xl border border-slate-200 bg-white px-8 py-4 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-          >
-            Contactar Vendas
-          </button>
-        </div>
-      </section>
-    </div>
+    </main>
   );
 }
 
