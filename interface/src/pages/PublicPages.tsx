@@ -1,7 +1,11 @@
 import { useState } from 'react';
 import {
+  ArrowRight,
+  Award,
   BookOpen,
   ChevronRight,
+  Clock3,
+  Database,
   Eye,
   FileText,
   Globe,
@@ -10,6 +14,7 @@ import {
   Phone,
   Shield,
   Target,
+  UserRoundCheck,
 } from 'lucide-react';
 import type { Page } from '../types';
 
@@ -85,6 +90,100 @@ const HOME_SOCIALS = [
   { label: 'LinkedIn', mark: 'in' },
   { label: 'Twitter', mark: '𝕏' },
   { label: 'Facebook', mark: 'f' },
+] as const;
+
+const PUBLIC_SERVICES = [
+  {
+    title: 'Managed Detection & Response (MDR)',
+    description:
+      'Monitorização 24/7 por SOC humano, com deteção avançada de ameaças, caça a intrusos e resposta imediata a incidentes.',
+    features: ['SIEM de última geração', 'Threat Intelligence global', 'MTTR < 15 minutos', 'Relatórios semanais'],
+    icon: Shield,
+  },
+  {
+    title: 'Penetration Testing (Pentest)',
+    description:
+      'Testes de intrusão éticos realizados por especialistas OSCP para descobrir vulnerabilidades antes dos atacantes.',
+    features: ['Web & Mobile Apps', 'Infraestrutura On-Prem e Cloud', 'Social Engineering', 'Relatório executivo + técnico'],
+    icon: Target,
+  },
+  {
+    title: 'Consultoria NIS2 e RGPD',
+    description:
+      'Aconselhamento jurídico e técnico para implementação e manutenção da conformidade com regulamentos europeus.',
+    features: ['Gap analysis inicial', 'Plano de implementação', 'Políticas e procedimentos', 'Auditorias de manutenção'],
+    icon: FileText,
+  },
+  {
+    title: 'Vulnerability Assessment',
+    description:
+      'Varredura contínua de vulnerabilidades nas suas aplicações, sistemas e superfície de ataque externa.',
+    features: ['Scanner automatizado diário', 'Validação manual', 'Priorização CVSS', 'Remediação guiada'],
+    icon: Eye,
+  },
+  {
+    title: 'Security Awareness Training',
+    description:
+      'Programas de formação contínua em cibersegurança para colaboradores, com simulações de phishing.',
+    features: ['Biblioteca de 50+ módulos', 'Simulações realistas', 'Dashboards de progresso', 'Certificados individuais'],
+    icon: BookOpen,
+  },
+  {
+    title: 'Virtual CISO (vCISO)',
+    description:
+      'Diretor de Segurança Informática virtual para organizações que não precisam de um recurso full-time interno.',
+    features: ['Roadmap estratégico', 'Gestão de fornecedores', 'Comité de Segurança', 'Reporting à Administração'],
+    icon: Globe,
+  },
+] as const;
+
+const SERVICE_PROOF_POINTS = [
+  { title: 'Certificado CNCS', detail: 'Autoridade Nacional', icon: Award },
+  { title: 'SLA 24/7', detail: 'Resposta garantida', icon: Clock3 },
+  { title: 'Dados na UE', detail: 'RGPD compliant', icon: Database },
+  { title: 'Gestor Dedicado', detail: 'Por cada cliente', icon: UserRoundCheck },
+] as const;
+
+const PUBLIC_NEWS_POSTS = [
+  {
+    title: 'NIS2: Guia prático de implementação para Entidades Essenciais',
+    description: 'Tudo o que precisa de saber para cumprir os prazos do regulamento europeu.',
+    meta: '15 Jan 2026 • 8 min de leitura',
+    category: 'NIS2',
+    icon: FileText,
+    accent: 'violet',
+  },
+  {
+    title: 'Ransomware 2026: novas táticas e como se defender',
+    description: 'Análise das tendências de ataques Ransomware e medidas de mitigação eficazes.',
+    meta: '02 Jan 2026 • 12 min de leitura',
+    category: 'Ameaças',
+    icon: Shield,
+    accent: 'rose',
+  },
+  {
+    title: 'Phishing com IA: o que muda e como detetar',
+    description: 'As deepfakes e LLMs estão a revolucionar os ataques de phishing. Saiba proteger-se.',
+    meta: '20 Dez 2025 • 6 min de leitura',
+    category: 'Formação',
+    icon: Eye,
+    accent: 'blue',
+  },
+  {
+    title: 'Estudo: PMEs portuguesas e a maturidade em cibersegurança',
+    description: 'Resultados do estudo anual da CiberBoxSecur sobre segurança digital nas PMEs.',
+    meta: '10 Dez 2025 • 10 min de leitura',
+    category: 'Estudo',
+    icon: BookOpen,
+    accent: 'teal',
+  },
+] as const;
+
+const PUBLIC_CONTACT_CHANNELS = [
+  { title: 'Email', value: 'geral@ciberboxsecur.pt', detail: 'Resposta em até 24h úteis', icon: Mail },
+  { title: 'Telefone', value: '+351 210 000 000', detail: 'Seg-Sex • 9h-18h', icon: Phone },
+  { title: 'Sede', value: 'Avenida da Liberdade, Lisboa', detail: 'Portugal', icon: MapPin },
+  { title: 'Urgências 24/7', value: 'soc@ciberboxsecur.pt', detail: 'Linha SOC permanente', icon: Shield },
 ] as const;
 
 export function HomePage({ setPage }: PageProps) {
@@ -363,230 +462,325 @@ export function MissionPage({ setPage }: PageProps) {
 }
 
 export function ServicesPage({ setPage }: PageProps) {
-  const services = [
-    {
-      t: 'Managed Detection & Response (MDR)',
-      d: 'Monitorização 24/7 por SOC humano, com deteção avançada de ameaças, caça a intrusos e resposta imediata a incidentes.',
-      f: ['SIEM de última geração', 'Threat Intelligence global', 'MTTR < 15 minutos', 'Relatórios semanais'],
-    },
-    {
-      t: 'Penetration Testing (Pentest)',
-      d: 'Testes de intrusão éticos realizados por especialistas OSCP para descobrir vulnerabilidades antes dos atacantes.',
-      f: ['Web & Mobile Apps', 'Infraestrutura On-Prem e Cloud', 'Social Engineering', 'Relatório executivo + técnico'],
-    },
-    {
-      t: 'Consultoria NIS2 e RGPD',
-      d: 'Aconselhamento jurídico e técnico para implementação e manutenção da conformidade com regulamentos europeus.',
-      f: ['Gap analysis inicial', 'Plano de implementação', 'Políticas e procedimentos', 'Auditorias de manutenção'],
-    },
-    {
-      t: 'Vulnerability Assessment',
-      d: 'Varredura contínua de vulnerabilidades nas suas aplicações, sistemas e superfície de ataque externa.',
-      f: ['Scanner automatizado diário', 'Validação manual', 'Priorização CVSS', 'Remediação guiada'],
-    },
-    {
-      t: 'Security Awareness Training',
-      d: 'Programas de formação contínua em cibersegurança para colaboradores, com simulações de phishing.',
-      f: ['Biblioteca de 50+ módulos', 'Simulações realistas', 'Dashboards de progresso', 'Certificados individuais'],
-    },
-    {
-      t: 'Virtual CISO (vCISO)',
-      d: 'Diretor de Segurança Informática virtual para organizações que não precisam de um recurso full-time interno.',
-      f: ['Roadmap estratégico', 'Gestão de fornecedores', 'Comité de Segurança', 'Reporting à Administração'],
-    },
-  ];
-
   return (
-    <div>
-      <section className="hero-gradient relative overflow-hidden">
-        <div className="hero-orb-1" />
-        <div className="relative mx-auto max-w-5xl px-4 py-20 text-center sm:px-6 lg:px-8 lg:py-24">
-          <span className="badge bg-blue-100 text-blue-700">Nossos Serviços</span>
-          <h1 className="mt-5 font-display text-5xl font-bold text-slate-900 sm:text-6xl">
-            Stack completa de cibersegurança
-          </h1>
-          <p className="mx-auto mt-5 max-w-2xl text-xl text-slate-600">
-            Desde a monitorização 24/7 até consultoria estratégica. Tudo num único parceiro de confiança.
-          </p>
+    <main className="public-subpage services-page" data-public-page="services">
+      <section
+        className="public-page-hero phase2-public-hero services-page__hero"
+        aria-labelledby="services-page-title"
+      >
+        <div className="public-page-hero__orb public-page-hero__orb--violet" aria-hidden="true" />
+        <div className="public-page-hero__orb public-page-hero__orb--blue" aria-hidden="true" />
+        <div className="container-xl public-page-hero__container">
+          <div className="row justify-content-center">
+            <div className="col-12 col-lg-10 col-xl-9">
+              <div className="public-page-hero__content">
+                <span className="public-page-kicker">Os Nossos Serviços · Equipa Certificada</span>
+                <h1 id="services-page-title" className="public-page-title">
+                  Proteção abrangente para cada ameaça.
+                </h1>
+                <p className="public-page-lead">
+                  Do SOC 24/7 à conformidade NIS2, a nossa equipa certificada cobre todo o ciclo de vida da
+                  cibersegurança empresarial.
+                </p>
+                <div className="public-page-hero__actions">
+                  <button type="button" className="phase2-button phase2-button--primary" onClick={() => setPage('contact')}>
+                    Pedir Proposta
+                    <ArrowRight aria-hidden="true" />
+                  </button>
+                  <button type="button" className="phase2-button phase2-button--secondary" onClick={() => setPage('contact')}>
+                    Falar com um Especialista
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-        <div className="grid gap-8 lg:grid-cols-2">
-          {services.map((s, idx) => (
-            <div
-              key={s.t}
-              className={`rounded-3xl border border-slate-200 bg-white p-8 transition-base hover:-translate-y-1 hover:shadow-xl ${
-                idx % 3 === 0 ? 'sm:translate-y-4' : ''
-              }`}
-            >
-              <div className="mb-5 flex items-center gap-2 text-blue-600">
-                <span className="h-2 w-2 rounded-full bg-blue-600" />
-                <span className="text-xs font-semibold uppercase tracking-widest">Serviço #{String(idx + 1).padStart(2, '0')}</span>
-              </div>
-              <h3 className="font-display text-2xl font-bold text-slate-900">{s.t}</h3>
-              <p className="mt-3 leading-relaxed text-slate-600">{s.d}</p>
-              <ul className="mt-5 grid grid-cols-2 gap-2">
-                {s.f.map((f) => (
-                  <li key={f} className="flex items-center gap-2 text-sm text-slate-700">
-                    <span className="text-emerald-500">✓</span> {f}
-                  </li>
-                ))}
-              </ul>
-              <button
-                onClick={() => setPage('contact')}
-                className="mt-7 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
-              >
-                Pedir proposta →
-              </button>
-            </div>
-          ))}
+      <section className="service-proof-strip" aria-label="Compromissos do serviço" data-page-section="service-proof">
+        <div className="container-xl">
+          <div className="row g-3 g-lg-0">
+            {SERVICE_PROOF_POINTS.map((point) => {
+              const Icon = point.icon;
+              return (
+                <div className="col-12 col-sm-6 col-lg-3" key={point.title}>
+                  <article className="service-proof-card">
+                    <span className="service-proof-card__icon" aria-hidden="true">
+                      <Icon />
+                    </span>
+                    <div>
+                      <h2>{point.title}</h2>
+                      <p>{point.detail}</p>
+                    </div>
+                  </article>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </section>
-    </div>
+
+      <section className="services-page__catalog" aria-label="Catálogo de serviços" data-page-section="services-catalog">
+        <div className="container-xl">
+          <div className="row g-4 g-xl-5">
+            {PUBLIC_SERVICES.map((service, index) => {
+              const Icon = service.icon;
+              return (
+                <div className="col-12 col-lg-6" key={service.title}>
+                  <article className="service-detail-card">
+                    <div className="service-detail-card__topline">
+                      <span className="service-detail-card__icon" aria-hidden="true">
+                        <Icon />
+                      </span>
+                      <span className="service-detail-card__number">{String(index + 1).padStart(2, '0')}</span>
+                    </div>
+                    <h3>{service.title}</h3>
+                    <p>{service.description}</p>
+                    <ul className="row g-2">
+                      {service.features.map((feature) => (
+                        <li className="col-12 col-sm-6" key={feature}>
+                          <span aria-hidden="true">✓</span>
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
+                    <button type="button" onClick={() => setPage('contact')}>
+                      Pedir Proposta <ArrowRight aria-hidden="true" />
+                    </button>
+                  </article>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+    </main>
   );
 }
 
-export function NewsPage({ setPage }: PageProps) {
-  const posts = [
-    { t: 'NIS2: Guia prático de implementação para Entidades Essenciais', d: 'Tudo o que precisa de saber para cumprir os prazos do regulamento europeu.', d2: '15 Jan 2026 • 8 min de leitura', c: 'NIS2' },
-    { t: 'Ransomware 2026: novas táticas e como se defender', d: 'Análise das tendências de ataques Ransomware e medidas de mitigação eficazes.', d2: '02 Jan 2026 • 12 min de leitura', c: 'Ameaças' },
-    { t: 'Phishing com IA: o que muda e como detetar', d: 'As deepfakes e LLMs estão a revolucionar os ataques de phishing. Saiba proteger-se.', d2: '20 Dez 2025 • 6 min de leitura', c: 'Formação' },
-    { t: 'Estudo: PMEs portuguesas e a maturidade em cibersegurança', d: 'Resultados do estudo anual da CiberBoxSecur sobre segurança digital nas PMEs.', d2: '10 Dez 2025 • 10 min de leitura', c: 'Estudo' },
-  ];
+export function NewsPage(_props: PageProps) {
   return (
-    <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8">
-      <span className="badge bg-blue-100 text-blue-700">Novidades & Artigos</span>
-      <h1 className="mt-4 font-display text-5xl font-bold text-slate-900">Centro de Conhecimento</h1>
-      <p className="mt-4 max-w-2xl text-xl text-slate-600">
-        Conteúdos atualizados sobre cibersegurança, conformidade e melhores práticas.
-      </p>
-
-      <div className="mt-12 grid gap-6 md:grid-cols-2">
-        {posts.map((p, i) => (
-          <article
-            key={p.t}
-            className={`overflow-hidden rounded-3xl border border-slate-200 bg-white transition-base hover:-translate-y-1 hover:shadow-xl ${
-              i === 0 ? 'md:col-span-2' : ''
-            }`}
-          >
-            <div className={`${i === 0 ? 'h-64' : 'h-48'} bg-gradient-to-br from-blue-500 via-violet-500 to-fuchsia-500`} />
-            <div className="p-7">
-              <div className="flex items-center gap-3">
-                <span className="badge bg-slate-100 text-slate-700">{p.c}</span>
-                <span className="text-xs text-slate-500">{p.d2}</span>
+    <main className="public-subpage news-page" data-public-page="news">
+      <section className="public-page-hero phase2-public-hero news-page__hero" aria-labelledby="news-page-title">
+        <div className="public-page-hero__orb public-page-hero__orb--violet" aria-hidden="true" />
+        <div className="public-page-hero__orb public-page-hero__orb--blue" aria-hidden="true" />
+        <div className="container-xl public-page-hero__container">
+          <div className="row justify-content-center">
+            <div className="col-12 col-lg-10 col-xl-9">
+              <div className="public-page-hero__content">
+                <span className="public-page-kicker">Centro de Conhecimento · Artigos &amp; Análises</span>
+                <h1 id="news-page-title" className="public-page-title">Notícias de Cibersegurança</h1>
+                <p className="public-page-lead">
+                  Mantenha-se informado sobre as últimas tendências, ameaças e boas práticas em segurança digital e
+                  conformidade regulamentar.
+                </p>
               </div>
-              <h3 className={`mt-4 font-display font-bold text-slate-900 ${i === 0 ? 'text-3xl' : 'text-xl'}`}>{p.t}</h3>
-              <p className="mt-2 leading-relaxed text-slate-600">{p.d}</p>
-              <button
-                onClick={() => setPage('contact')}
-                className="mt-5 inline-flex text-sm font-semibold text-blue-600 hover:underline"
-              >
-                Ler artigo completo →
-              </button>
             </div>
-          </article>
-        ))}
+          </div>
+        </div>
+      </section>
+
+      <div className="container-xl public-subpage__container">
+        <section className="news-page__articles" aria-label="Artigos recentes" data-page-section="news-articles">
+          <div className="row g-4">
+            {PUBLIC_NEWS_POSTS.map((post, index) => {
+              const Icon = post.icon;
+              return (
+                <div className={index === 0 ? 'col-12' : 'col-12 col-md-6 col-xl-4'} key={post.title}>
+                  <article className={`public-news-card${index === 0 ? ' is-featured' : ''}`}>
+                    <div className={`public-news-card__visual public-news-card__visual--${post.accent}`} aria-hidden="true">
+                      <span className="public-news-card__visual-grid" />
+                      <span className="public-news-card__visual-icon">
+                        <Icon />
+                      </span>
+                    </div>
+                    <div className="public-news-card__content">
+                      <div className="public-news-card__meta">
+                        <span className="public-news-card__category">{post.category}</span>
+                        <span>{post.meta}</span>
+                      </div>
+                      <h3>{post.title}</h3>
+                      <p>{post.description}</p>
+                      <span
+                        className="public-news-card__read-more"
+                        title="O detalhe de notícia ainda não tem uma rota pública implementada"
+                      >
+                        Ler artigo completo <ArrowRight aria-hidden="true" />
+                      </span>
+                    </div>
+                  </article>
+                </div>
+              );
+            })}
+          </div>
+        </section>
       </div>
-    </div>
+    </main>
   );
 }
 
 export function ContactPage({ setPage }: PageProps) {
   const [sent, setSent] = useState(false);
-  return (
-    <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8">
-      <span className="badge bg-blue-100 text-blue-700">Contacto</span>
-      <h1 className="mt-4 font-display text-5xl font-bold text-slate-900">Fale connosco</h1>
-      <p className="mt-4 max-w-2xl text-xl text-slate-600">
-        Está à procura de mais informações? Tem um projeto específico? A nossa equipa responde em menos de 24h úteis.
-      </p>
 
-      <div className="mt-12 grid gap-10 lg:grid-cols-5">
-        <div className="lg:col-span-3">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              setSent(true);
-            }}
-            className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm"
-          >
-            <div className="grid gap-5 sm:grid-cols-2">
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">Nome completo</label>
-                <input
-                  required
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
-                  placeholder="Nome Sobrenome"
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">Email profissional</label>
-                <input
-                  required
-                  type="email"
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
-                  placeholder="nome@empresa.pt"
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">Empresa</label>
-                <input className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm" placeholder="Empresa, Lda." />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">Serviço de interesse</label>
-                <select className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm">
-                  <option>MDR / SOC 24/7</option>
-                  <option>Penetration Testing</option>
-                  <option>Consultoria NIS2</option>
-                  <option>Consultoria RGPD</option>
-                  <option>Formação & Phishing</option>
-                  <option>Outro / Preciso de ajuda</option>
-                </select>
+  return (
+    <main className="public-subpage contact-page" data-public-page="contact">
+      <section className="public-page-hero phase2-public-hero contact-page__hero" aria-labelledby="contact-page-title">
+        <div className="public-page-hero__orb public-page-hero__orb--violet" aria-hidden="true" />
+        <div className="public-page-hero__orb public-page-hero__orb--blue" aria-hidden="true" />
+        <div className="container-xl public-page-hero__container">
+          <div className="row justify-content-center">
+            <div className="col-12 col-lg-10 col-xl-9">
+              <div className="public-page-hero__content">
+                <span className="public-page-kicker">Fale Connosco · Resposta em 1 dia útil</span>
+                <h1 id="contact-page-title" className="public-page-title">
+                  Estamos prontos para proteger a sua empresa.
+                </h1>
+                <p className="public-page-lead">
+                  Contacte a nossa equipa de especialistas para uma avaliação gratuita ou para saber mais sobre os
+                  nossos serviços.
+                </p>
               </div>
             </div>
-            <div className="mt-5">
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">Mensagem</label>
-              <textarea
-                required
-                rows={5}
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
-                placeholder="Conte-nos mais sobre o seu projeto ou desafio..."
-              />
-            </div>
-            <button
-              type="submit"
-              className="mt-6 w-full rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 py-3.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 hover:from-blue-700 hover:to-violet-700 sm:w-auto sm:px-8"
-            >
-              {sent ? '✓ Mensagem enviada!' : 'Enviar mensagem'}
-            </button>
-          </form>
-        </div>
-        <div className="space-y-4 lg:col-span-2">
-          {[
-            { t: '📧 Email', l: 'geral@ciberboxsecur.pt', s: 'Resposta em até 24h úteis' },
-            { t: '📞 Telefone', l: '+351 210 000 000', s: 'Seg-Sex • 9h-18h' },
-            { t: '📍 Sede', l: 'Avenida da Liberdade, Lisboa', s: 'Portugal' },
-            { t: '💬 Urgências 24/7', l: 'soc@ciberboxsecur.pt', s: 'Linha SOC permanente' },
-          ].map((c) => (
-            <div key={c.t} className="rounded-2xl border border-slate-200 bg-white p-6">
-              <div className="text-sm font-semibold text-slate-500">{c.t}</div>
-              <div className="mt-2 font-display text-xl font-semibold text-slate-900">{c.l}</div>
-              <div className="mt-1 text-sm text-slate-500">{c.s}</div>
-            </div>
-          ))}
-          <div className="rounded-2xl bg-slate-900 p-6 text-white">
-            <h4 className="font-display text-lg font-semibold">Já tem conta?</h4>
-            <p className="mt-1 text-sm text-slate-300">Entre diretamente na plataforma.</p>
-            <button
-              onClick={() => setPage('login')}
-              className="mt-4 w-full rounded-xl bg-white py-2.5 text-sm font-semibold text-slate-900 hover:bg-slate-100"
-            >
-              Iniciar Sessão →
-            </button>
           </div>
         </div>
+      </section>
+
+      <div className="container-xl public-subpage__container">
+        <section className="contact-page__content" aria-label="Formulário e contactos" data-page-section="contact-content">
+          <div className="row g-4 g-xl-5 align-items-start">
+            <div className="col-12 col-lg-7">
+              <div className="contact-form-panel">
+                <header className="contact-section-heading">
+                  <h2>Envie-nos uma mensagem</h2>
+                </header>
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    setSent(true);
+                  }}
+                  className="contact-form"
+                >
+                  <div className="row g-3">
+                    <div className="col-12 col-sm-6">
+                      <label className="form-label" htmlFor="contact-name">
+                        Nome completo
+                      </label>
+                      <input
+                        id="contact-name"
+                        name="name"
+                        autoComplete="name"
+                        required
+                        className="form-control contact-form__control"
+                        placeholder="Nome Sobrenome"
+                      />
+                    </div>
+                    <div className="col-12 col-sm-6">
+                      <label className="form-label" htmlFor="contact-email">
+                        Email profissional
+                      </label>
+                      <input
+                        id="contact-email"
+                        name="email"
+                        autoComplete="email"
+                        required
+                        type="email"
+                        className="form-control contact-form__control"
+                        placeholder="nome@empresa.pt"
+                      />
+                    </div>
+                    <div className="col-12 col-sm-6">
+                      <label className="form-label" htmlFor="contact-company">
+                        Empresa
+                      </label>
+                      <input
+                        id="contact-company"
+                        name="company"
+                        autoComplete="organization"
+                        className="form-control contact-form__control"
+                        placeholder="Empresa, Lda."
+                      />
+                    </div>
+                    <div className="col-12 col-sm-6">
+                      <label className="form-label" htmlFor="contact-service">
+                        Serviço de interesse
+                      </label>
+                      <select
+                        id="contact-service"
+                        name="service"
+                        className="form-select contact-form__control"
+                        defaultValue="MDR / SOC 24/7"
+                      >
+                        <option>MDR / SOC 24/7</option>
+                        <option>Penetration Testing</option>
+                        <option>Consultoria NIS2</option>
+                        <option>Consultoria RGPD</option>
+                        <option>Formação &amp; Phishing</option>
+                        <option>Outro / Preciso de ajuda</option>
+                      </select>
+                    </div>
+                    <div className="col-12">
+                      <label className="form-label" htmlFor="contact-message">
+                        Mensagem
+                      </label>
+                      <textarea
+                        id="contact-message"
+                        name="message"
+                        required
+                        rows={5}
+                        className="form-control contact-form__control contact-form__textarea"
+                        placeholder="Conte-nos mais sobre o seu projeto ou desafio..."
+                      />
+                    </div>
+                  </div>
+                  <button type="submit" className="contact-form__submit" aria-live="polite">
+                    {sent ? '✓ Mensagem enviada!' : 'Enviar mensagem'}
+                    {!sent && <ArrowRight aria-hidden="true" />}
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            <aside className="col-12 col-lg-5 contact-page__aside" aria-label="Canais de contacto">
+              <section className="contact-office" aria-labelledby="contact-office-title">
+                <header className="contact-section-heading">
+                  <h2 id="contact-office-title">O nosso escritório</h2>
+                </header>
+
+                <div className="contact-office__map" aria-hidden="true">
+                  <span className="contact-office__map-grid" />
+                  <span className="contact-office__pin"><MapPin /></span>
+                </div>
+
+                <div className="contact-office__channels">
+                  {PUBLIC_CONTACT_CHANNELS.map((channel) => {
+                    const Icon = channel.icon;
+                    return (
+                      <article className="contact-channel-card" key={channel.title}>
+                        <span className="contact-channel-card__icon" aria-hidden="true">
+                          <Icon />
+                        </span>
+                        <div>
+                          <h3>{channel.title}</h3>
+                          <p>{channel.value}</p>
+                          <span>{channel.detail}</span>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <div className="contact-login-card">
+                <h2>Já tem conta?</h2>
+                <p>Entre diretamente na plataforma.</p>
+                <button type="button" onClick={() => setPage('login')}>
+                  Iniciar Sessão <ArrowRight aria-hidden="true" />
+                </button>
+              </div>
+            </aside>
+          </div>
+        </section>
       </div>
-    </div>
+    </main>
   );
 }
