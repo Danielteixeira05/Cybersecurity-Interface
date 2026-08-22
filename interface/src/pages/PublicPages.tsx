@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
+  Award,
   BarChart3,
   BookOpen,
   CalendarDays,
@@ -16,6 +17,7 @@ import {
   Mail,
   MapPin,
   Phone,
+  Send,
   Shield,
   ShieldCheck,
   Tag,
@@ -466,12 +468,29 @@ const NEWS_ARTICLES = [
   },
 ] satisfies readonly NewsArticle[];
 
-const PUBLIC_CONTACT_CHANNELS = [
-  { title: 'Email', value: 'geral@ciberboxsecur.pt', detail: 'Resposta em até 24h úteis', icon: Mail },
-  { title: 'Telefone', value: '+351 210 000 000', detail: 'Seg-Sex • 9h-18h', icon: Phone },
-  { title: 'Sede', value: 'Avenida da Liberdade, Lisboa', detail: 'Portugal', icon: MapPin },
-  { title: 'Urgências 24/7', value: 'soc@ciberboxsecur.pt', detail: 'Linha SOC permanente', icon: Shield },
+const CONTACT_CHANNELS = [
+  {
+    title: 'Morada',
+    value: 'Av. da Liberdade 110, 3.º\n1269-046 Lisboa, Portugal',
+    icon: MapPin,
+    tone: 'violet',
+  },
+  { title: 'Telefone', value: '+351 21 000 0000', icon: Phone, tone: 'blue' },
+  { title: 'Email', value: 'info@ciberboxsecur.pt', icon: Mail, tone: 'green' },
+  { title: 'Website', value: 'www.ciberboxsecur.pt', icon: Globe, tone: 'amber' },
 ] as const;
+
+const CONTACT_SERVICE_OPTIONS = [
+  'SOC / Monitorização 24/7',
+  'Conformidade NIS2',
+  'Testes de Penetração',
+  'Avaliação de Risco',
+  'Resposta a Incidentes',
+  'Formação em Sensibilização',
+  'Outro',
+] as const;
+
+const CONTACT_CERTIFICATIONS = ['ISO 27001', 'CNCS', 'NIS2', 'RGPD'] as const;
 
 function PublicFooter({ setPage }: PageProps) {
   const navigateTo = (target: Page) => {
@@ -1204,164 +1223,195 @@ export function ContactPage({ setPage }: PageProps) {
   const [sent, setSent] = useState(false);
 
   return (
-    <main className="public-subpage contact-page" data-public-page="contact">
-      <section className="public-page-hero phase2-public-hero contact-page__hero" aria-labelledby="contact-page-title">
-        <div className="public-page-hero__orb public-page-hero__orb--violet" aria-hidden="true" />
-        <div className="public-page-hero__orb public-page-hero__orb--blue" aria-hidden="true" />
-        <div className="container-xl public-page-hero__container">
-          <div className="row justify-content-center">
-            <div className="col-12 col-lg-10 col-xl-9">
-              <div className="public-page-hero__content">
-                <span className="public-page-kicker">Fale Connosco · Resposta em 1 dia útil</span>
-                <h1 id="contact-page-title" className="public-page-title">
-                  Estamos prontos para proteger a sua empresa.
-                </h1>
-                <p className="public-page-lead">
-                  Contacte a nossa equipa de especialistas para uma avaliação gratuita ou para saber mais sobre os
-                  nossos serviços.
-                </p>
-              </div>
+    <>
+      <main className="public-subpage contact-page contact-v97" data-public-page="contact">
+        <section className="contact-v97__hero" aria-labelledby="contact-page-title">
+          <span className="contact-v97__hero-orb contact-v97__hero-orb--violet" aria-hidden="true" />
+          <span className="contact-v97__hero-orb contact-v97__hero-orb--blue" aria-hidden="true" />
+          <span className="contact-v97__hero-grid" aria-hidden="true" />
+
+          <div className="container-xl contact-v97__hero-container">
+            <div className="contact-v97__hero-content">
+              <span className="contact-v97__badge">
+                <span aria-hidden="true" />
+                Fale Connosco · Resposta em 1 dia útil
+              </span>
+              <h1 id="contact-page-title">
+                Estamos prontos para <span>proteger a sua empresa.</span>
+              </h1>
+              <p>
+                Contacte a nossa equipa de especialistas para uma avaliação gratuita ou para saber mais sobre os
+                nossos serviços.
+              </p>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <div className="container-xl public-subpage__container">
-        <section className="contact-page__content" aria-label="Formulário e contactos" data-page-section="contact-content">
-          <div className="row g-4 g-xl-5 align-items-start">
-            <div className="col-12 col-lg-7">
-              <div className="contact-form-panel">
-                <header className="contact-section-heading">
-                  <h2>Envie-nos uma mensagem</h2>
+        <section className="contact-v97__body" aria-label="Formulário e contactos" data-page-section="contact-content">
+          <div className="container-xl contact-v97__container">
+            <div className="row align-items-start contact-v97__layout">
+              <div className="col-12 col-md-7 contact-v97__form-column">
+                <header className="contact-v97__form-heading">
+                  <span className="contact-v97__form-heading-icon" aria-hidden="true">
+                    <Send />
+                  </span>
+                  <div>
+                    <h2>Envie-nos uma mensagem</h2>
+                    <p>Respondemos em menos de 1 dia útil</p>
+                  </div>
                 </header>
+
                 <form
+                  className="contact-v97__form"
+                  onChange={() => sent && setSent(false)}
                   onSubmit={(event) => {
                     event.preventDefault();
+                    // TODO(API): ligar a POST /api/public/contacto quando o endpoint estiver disponível.
                     setSent(true);
                   }}
-                  className="contact-form"
                 >
                   <div className="row g-3">
-                    <div className="col-12 col-sm-6">
-                      <label className="form-label" htmlFor="contact-name">
-                        Nome completo
-                      </label>
+                    <div className="col-12 col-sm-6 contact-v97__field">
+                      <label htmlFor="contact-first-name">Nome</label>
                       <input
-                        id="contact-name"
-                        name="name"
-                        autoComplete="name"
+                        id="contact-first-name"
+                        name="firstName"
+                        type="text"
+                        autoComplete="given-name"
                         required
-                        className="form-control contact-form__control"
-                        placeholder="Nome Sobrenome"
+                        className="form-control contact-v97__control"
+                        placeholder="João"
                       />
                     </div>
-                    <div className="col-12 col-sm-6">
-                      <label className="form-label" htmlFor="contact-email">
-                        Email profissional
-                      </label>
+
+                    <div className="col-12 col-sm-6 contact-v97__field">
+                      <label htmlFor="contact-last-name">Apelido</label>
+                      <input
+                        id="contact-last-name"
+                        name="lastName"
+                        type="text"
+                        autoComplete="family-name"
+                        required
+                        className="form-control contact-v97__control"
+                        placeholder="Silva"
+                      />
+                    </div>
+
+                    <div className="col-12 contact-v97__field">
+                      <label htmlFor="contact-email">Email</label>
                       <input
                         id="contact-email"
                         name="email"
+                        type="email"
                         autoComplete="email"
                         required
-                        type="email"
-                        className="form-control contact-form__control"
-                        placeholder="nome@empresa.pt"
+                        className="form-control contact-v97__control"
+                        placeholder="joao@empresa.pt"
                       />
                     </div>
-                    <div className="col-12 col-sm-6">
-                      <label className="form-label" htmlFor="contact-company">
-                        Empresa
-                      </label>
+
+                    <div className="col-12 contact-v97__field">
+                      <label htmlFor="contact-organization">Organização</label>
                       <input
-                        id="contact-company"
-                        name="company"
+                        id="contact-organization"
+                        name="organization"
+                        type="text"
                         autoComplete="organization"
-                        className="form-control contact-form__control"
-                        placeholder="Empresa, Lda."
+                        className="form-control contact-v97__control"
+                        placeholder="Empresa, S.A."
                       />
                     </div>
-                    <div className="col-12 col-sm-6">
-                      <label className="form-label" htmlFor="contact-service">
-                        Serviço de interesse
-                      </label>
+
+                    <div className="col-12 contact-v97__field contact-v97__field--mono">
+                      <label htmlFor="contact-service">Serviço de Interesse</label>
                       <select
                         id="contact-service"
                         name="service"
-                        className="form-select contact-form__control"
-                        defaultValue="MDR / SOC 24/7"
+                        className="form-select contact-v97__control contact-v97__select"
+                        defaultValue={CONTACT_SERVICE_OPTIONS[0]}
                       >
-                        <option>MDR / SOC 24/7</option>
-                        <option>Penetration Testing</option>
-                        <option>Consultoria NIS2</option>
-                        <option>Consultoria RGPD</option>
-                        <option>Formação &amp; Phishing</option>
-                        <option>Outro / Preciso de ajuda</option>
+                        {CONTACT_SERVICE_OPTIONS.map((service) => <option key={service}>{service}</option>)}
                       </select>
                     </div>
-                    <div className="col-12">
-                      <label className="form-label" htmlFor="contact-message">
-                        Mensagem
-                      </label>
+
+                    <div className="col-12 contact-v97__field">
+                      <label htmlFor="contact-message">Mensagem</label>
                       <textarea
                         id="contact-message"
                         name="message"
-                        required
-                        rows={5}
-                        className="form-control contact-form__control contact-form__textarea"
-                        placeholder="Conte-nos mais sobre o seu projeto ou desafio..."
+                        rows={4}
+                        className="form-control contact-v97__control contact-v97__textarea"
+                        placeholder="Descreva as suas necessidades de segurança..."
                       />
                     </div>
                   </div>
-                  <button type="submit" className="contact-form__submit" aria-live="polite">
-                    {sent ? '✓ Mensagem enviada!' : 'Enviar mensagem'}
-                    {!sent && <ArrowRight aria-hidden="true" />}
+
+                  <button type="submit" className="contact-v97__submit">
+                    <Send aria-hidden="true" />
+                    Enviar Mensagem
                   </button>
+
+                  <div className="contact-v97__feedback" aria-live="polite" aria-atomic="true">
+                    {sent && (
+                      <p role="status">
+                        <CircleCheckBig aria-hidden="true" />
+                        Mensagem registada com sucesso.
+                      </p>
+                    )}
+                  </div>
                 </form>
               </div>
-            </div>
 
-            <aside className="col-12 col-lg-5 contact-page__aside" aria-label="Canais de contacto">
-              <section className="contact-office" aria-labelledby="contact-office-title">
-                <header className="contact-section-heading">
-                  <h2 id="contact-office-title">O nosso escritório</h2>
-                </header>
+              <aside className="col-12 col-md-5 contact-v97__office" aria-labelledby="contact-office-title">
+                <h2 id="contact-office-title">O nosso escritório</h2>
 
-                <div className="contact-office__map" aria-hidden="true">
-                  <span className="contact-office__map-grid" />
-                  <span className="contact-office__pin"><MapPin /></span>
-                </div>
-
-                <div className="contact-office__channels">
-                  {PUBLIC_CONTACT_CHANNELS.map((channel) => {
+                <div className="contact-v97__channels">
+                  {CONTACT_CHANNELS.map((channel) => {
                     const Icon = channel.icon;
                     return (
-                      <article className="contact-channel-card" key={channel.title}>
-                        <span className="contact-channel-card__icon" aria-hidden="true">
+                      <article className="contact-v97__channel" key={channel.title}>
+                        <span className={`contact-v97__channel-icon contact-v97__channel-icon--${channel.tone}`} aria-hidden="true">
                           <Icon />
                         </span>
                         <div>
                           <h3>{channel.title}</h3>
                           <p>{channel.value}</p>
-                          <span>{channel.detail}</span>
                         </div>
                       </article>
                     );
                   })}
                 </div>
-              </section>
 
-              <div className="contact-login-card">
-                <h2>Já tem conta?</h2>
-                <p>Entre diretamente na plataforma.</p>
-                <button type="button" onClick={() => setPage('login')}>
-                  Iniciar Sessão <ArrowRight aria-hidden="true" />
-                </button>
-              </div>
-            </aside>
+                <section className="contact-v97__schedule" aria-labelledby="contact-hours-title">
+                  <header>
+                    <Clock3 aria-hidden="true" />
+                    <h3 id="contact-hours-title">Horário de Atendimento</h3>
+                  </header>
+                  <div>
+                    <span>Segunda – Sexta</span>
+                    <strong>09:00 – 18:00</strong>
+                  </div>
+                  <div className="contact-v97__schedule-soc">
+                    <span>SOC (clientes ativos)</span>
+                    <strong>24 / 7</strong>
+                  </div>
+                </section>
+
+                <div className="contact-v97__certifications" aria-label="Certificações e conformidade">
+                  {CONTACT_CERTIFICATIONS.map((certification) => (
+                    <span key={certification}>
+                      <Award aria-hidden="true" />
+                      {certification}
+                    </span>
+                  ))}
+                </div>
+              </aside>
+            </div>
           </div>
         </section>
-      </div>
-    </main>
+      </main>
+
+      <PublicFooter setPage={setPage} />
+    </>
   );
 }
