@@ -144,3 +144,6 @@
 *.stl                filter=lfs diff=lfs merge=lfs -text
 *.nc                 filter=lfs diff=lfs merge=lfs -text
 *.mat                filter=lfs diff=lfs merge=lfs -text
+
+# News images must be stored directly in Git for Vercel
+src/assets/news/*.jpg -filter -diff -merge -text
