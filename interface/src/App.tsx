@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Page, UserRole } from './types';
 
 import { PublicNavbar, AppLayout } from './components/Layout';
 import {
-  HomePage, AboutPage, MissionPage, ServicesPage, NewsPage, ContactPage,
+  HomePage, AboutPage, MissionPage, ServicesPage, NewsPage, NewsDetailPage, ContactPage,
 } from './pages/PublicPages';
 import LoginPage from './pages/LoginPage';
 import {
@@ -24,6 +24,7 @@ import {
 export default function App() {
   const [page, setPage] = useState<Page>('home');
   const [role, setRole] = useState<UserRole>(null);
+  const [selectedNewsId, setSelectedNewsId] = useState('nis2-portugal-2025');
 
   // When role is set, go to the appropriate dashboard
   function handleSetRole(r: UserRole) {
@@ -39,8 +40,27 @@ export default function App() {
   }
 
   const dashboardPage = role === 'admin' ? 'admin-dashboard' : role === 'manager' ? 'mgr-dashboard' : 'cli-dashboard';
-  const publicPages = ['home', 'about', 'mission', 'services', 'news', 'contact'] as const;
+  const publicPages = ['home', 'about', 'mission', 'services', 'news', 'news-detail', 'contact'] as const;
   const isPublicPage = (publicPages as readonly string[]).includes(page);
+
+  useEffect(() => {
+    if (page === 'news-detail') {
+      const scrollTimer = window.setTimeout(() => {
+        const root = document.documentElement;
+        const previousScrollBehavior = root.style.scrollBehavior;
+        root.style.scrollBehavior = 'auto';
+        window.scrollTo({ top: 0 });
+        root.style.scrollBehavior = previousScrollBehavior;
+      }, 0);
+
+      return () => window.clearTimeout(scrollTimer);
+    }
+  }, [page, selectedNewsId]);
+
+  function openNewsArticle(articleId: string) {
+    setSelectedNewsId(articleId);
+    setPage('news-detail');
+  }
 
   // ── Public Pages (incluindo quando autenticado) ──────────────────────────────
   if (!role || page === 'login' || (role && isPublicPage)) {
@@ -48,7 +68,7 @@ export default function App() {
       <div className="min-h-screen bg-white">
         {page !== 'login' && (
           <PublicNavbar
-            page={page}
+            page={page === 'news-detail' ? 'news' : page}
             setPage={setPage}
             role={role}
             onBackToPortal={() => setPage(dashboardPage as Page)}
@@ -58,7 +78,15 @@ export default function App() {
         {page === 'about' && <AboutPage setPage={setPage} />}
         {page === 'mission' && <MissionPage setPage={setPage} />}
         {page === 'services' && <ServicesPage setPage={setPage} />}
-        {page === 'news' && <NewsPage setPage={setPage} />}
+        {page === 'news' && <NewsPage setPage={setPage} onSelectArticle={openNewsArticle} />}
+        {page === 'news-detail' && (
+          <NewsDetailPage
+            key={selectedNewsId}
+            setPage={setPage}
+            selectedArticleId={selectedNewsId}
+            onSelectArticle={openNewsArticle}
+          />
+        )}
         {page === 'contact' && <ContactPage setPage={setPage} />}
         {page === 'login' && <LoginPage setRole={handleSetRole} setPage={setPage} />}
       </div>

@@ -1,25 +1,45 @@
 import { useState } from 'react';
 import {
+  ArrowLeft,
   ArrowRight,
-  Award,
+  BarChart3,
   BookOpen,
+  CalendarDays,
   ChevronRight,
+  CircleAlert,
+  CircleCheckBig,
   Clock3,
-  Database,
   Eye,
   FileText,
   Globe,
+  LockKeyhole,
   Mail,
   MapPin,
   Phone,
   Shield,
+  ShieldCheck,
+  Tag,
   Target,
   UserRoundCheck,
+  UsersRound,
 } from 'lucide-react';
+import newsIsoImage from '../assets/news/iso-27001.jpg';
+import newsNis2Image from '../assets/news/nis2-compliance.jpg';
+import newsPentestingImage from '../assets/news/pentesting.jpg';
+import newsRansomwareImage from '../assets/news/ransomware.jpg';
+import { session } from '../apiClient';
 import type { Page } from '../types';
 
 interface PageProps {
   setPage: (p: Page) => void;
+}
+
+interface NewsPageProps extends PageProps {
+  onSelectArticle: (articleId: string) => void;
+}
+
+interface NewsDetailPageProps extends NewsPageProps {
+  selectedArticleId: string;
 }
 
 const HOME_HERO_CONTENT = {
@@ -94,90 +114,357 @@ const HOME_SOCIALS = [
 
 const PUBLIC_SERVICES = [
   {
-    title: 'Managed Detection & Response (MDR)',
-    description:
-      'Monitorização 24/7 por SOC humano, com deteção avançada de ameaças, caça a intrusos e resposta imediata a incidentes.',
-    features: ['SIEM de última geração', 'Threat Intelligence global', 'MTTR < 15 minutos', 'Relatórios semanais'],
-    icon: Shield,
-  },
-  {
-    title: 'Penetration Testing (Pentest)',
-    description:
-      'Testes de intrusão éticos realizados por especialistas OSCP para descobrir vulnerabilidades antes dos atacantes.',
-    features: ['Web & Mobile Apps', 'Infraestrutura On-Prem e Cloud', 'Social Engineering', 'Relatório executivo + técnico'],
+    title: 'Testes de Penetração (Pentesting)',
+    price: 'A partir de 2.800€',
+    features: ['Externo / Interno / Web', 'Aplicações e APIs', 'Engenharia social', 'Relatório detalhado com remediação'],
     icon: Target,
+    accent: 'cyan',
+    nis2: true,
   },
   {
-    title: 'Consultoria NIS2 e RGPD',
-    description:
-      'Aconselhamento jurídico e técnico para implementação e manutenção da conformidade com regulamentos europeus.',
-    features: ['Gap analysis inicial', 'Plano de implementação', 'Políticas e procedimentos', 'Auditorias de manutenção'],
+    title: 'Gestão de Incidentes NIS2',
+    price: 'Retainer 950€/mês',
+    features: ['Resposta de emergência 24/7', 'Notificação às autoridades 24h/72h', 'Análise forense digital', 'Relatório pós-incidente'],
+    icon: Shield,
+    accent: 'rose',
+    nis2: true,
+  },
+  {
+    title: 'Auditoria de Conformidade NIS2',
+    price: 'A partir de 3.500€',
+    features: ['Análise de lacunas', 'Desenvolvimento de políticas', 'Preparação de auditoria', 'Monitorização contínua'],
     icon: FileText,
+    accent: 'violet',
+    nis2: true,
   },
   {
-    title: 'Vulnerability Assessment',
-    description:
-      'Varredura contínua de vulnerabilidades nas suas aplicações, sistemas e superfície de ataque externa.',
-    features: ['Scanner automatizado diário', 'Validação manual', 'Priorização CVSS', 'Remediação guiada'],
+    title: 'SIEM & Monitorização Contínua',
+    price: 'A partir de 1.200€/mês',
+    features: ['Monitorização 24/7', 'Integração SIEM', 'Triagem de alertas em tempo real', 'Relatórios mensais detalhados'],
     icon: Eye,
+    accent: 'teal',
+    nis2: true,
   },
   {
-    title: 'Security Awareness Training',
-    description:
-      'Programas de formação contínua em cibersegurança para colaboradores, com simulações de phishing.',
-    features: ['Biblioteca de 50+ módulos', 'Simulações realistas', 'Dashboards de progresso', 'Certificados individuais'],
+    title: 'Formação e Consciencialização',
+    price: 'A partir de 400€/mês',
+    features: ['Simulações de phishing', 'Cursos e-learning', 'Dashboards de KPI', 'Conteúdo personalizado'],
     icon: BookOpen,
+    accent: 'blue',
+    nis2: false,
   },
   {
-    title: 'Virtual CISO (vCISO)',
-    description:
-      'Diretor de Segurança Informática virtual para organizações que não precisam de um recurso full-time interno.',
-    features: ['Roadmap estratégico', 'Gestão de fornecedores', 'Comité de Segurança', 'Reporting à Administração'],
+    title: 'Segurança Cloud & DevSecOps',
+    price: 'A partir de 1.800€',
+    features: ['Inventário de ativos cloud', 'Integração CI/CD', 'Gestão de vulnerabilidades', 'Plano de remediação priorizado'],
     icon: Globe,
+    accent: 'purple',
+    nis2: false,
   },
 ] as const;
 
 const SERVICE_PROOF_POINTS = [
-  { title: 'Certificado CNCS', detail: 'Autoridade Nacional', icon: Award },
-  { title: 'SLA 24/7', detail: 'Resposta garantida', icon: Clock3 },
-  { title: 'Dados na UE', detail: 'RGPD compliant', icon: Database },
-  { title: 'Gestor Dedicado', detail: 'Por cada cliente', icon: UserRoundCheck },
+  { title: 'Certificado CNCS', detail: 'Autoridade Nacional', icon: Shield, accent: 'violet' },
+  { title: 'SLA 24/7', detail: 'Resposta garantida', icon: Clock3, accent: 'blue' },
+  { title: 'Dados na UE', detail: 'RGPD compliant', icon: Globe, accent: 'green' },
+  { title: 'Gestor Dedicado', detail: 'Por cada cliente', icon: UserRoundCheck, accent: 'orange' },
 ] as const;
 
-const PUBLIC_NEWS_POSTS = [
+const SERVICE_PROCESS_STEPS = [
   {
-    title: 'NIS2: Guia prático de implementação para Entidades Essenciais',
-    description: 'Tudo o que precisa de saber para cumprir os prazos do regulamento europeu.',
-    meta: '15 Jan 2026 • 8 min de leitura',
-    category: 'NIS2',
+    step: '01',
+    title: 'Avaliação',
+    description: 'Diagnóstico inicial do estado de segurança e identificação de lacunas.',
+    icon: Target,
+  },
+  {
+    step: '02',
+    title: 'Planeamento',
+    description: 'Desenvolvimento de plano de ação priorizado por risco e impacto.',
     icon: FileText,
+  },
+  {
+    step: '03',
+    title: 'Implementação',
+    description: 'Execução por especialistas certificados com relatórios contínuos.',
+    icon: ShieldCheck,
+  },
+  {
+    step: '04',
+    title: 'Monitorização',
+    description: 'Acompanhamento contínuo, relatórios periódicos e melhoria contínua.',
+    icon: BarChart3,
+  },
+] as const;
+
+const NIS2_REQUIREMENTS = [
+  {
+    title: 'Quem é abrangido?',
+    description:
+      'Entidades essenciais e importantes em setores como energia, saúde, transportes, banca, infraestruturas digitais e prestadores de serviços TIC com mais de 50 colaboradores ou 10M€ de faturação.',
+    icon: UsersRound,
+    accent: 'blue',
+  },
+  {
+    title: 'O que é obrigatório?',
+    description:
+      'Medidas de gestão de risco, políticas de segurança documentadas, controlo de acesso, criptografia, avaliações de risco regulares, planos de continuidade de negócio e gestão de incidentes.',
+    icon: CircleCheckBig,
+    accent: 'green',
+  },
+  {
+    title: 'Notificação de incidentes',
+    description:
+      'Incidentes significativos devem ser notificados ao CNCS (Centro Nacional de Cibersegurança) em 24 horas (alerta inicial) e 72 horas (relatório detalhado).',
+    icon: CircleAlert,
+    accent: 'orange',
+  },
+  {
+    title: 'Cadeia de abastecimento',
+    description:
+      'As organizações devem avaliar e gerir os riscos de segurança dos seus fornecedores e prestadores de serviços TIC, incluindo cláusulas contratuais de segurança.',
+    icon: Globe,
     accent: 'violet',
   },
   {
-    title: 'Ransomware 2026: novas táticas e como se defender',
-    description: 'Análise das tendências de ataques Ransomware e medidas de mitigação eficazes.',
-    meta: '02 Jan 2026 • 12 min de leitura',
-    category: 'Ameaças',
+    title: 'Responsabilidade de gestão',
+    description:
+      'Os órgãos de gestão são diretamente responsáveis pelo cumprimento da NIS2. A negligência pode resultar em coimas até 10M€ ou 2% do volume de negócios global.',
     icon: Shield,
     accent: 'rose',
   },
   {
-    title: 'Phishing com IA: o que muda e como detetar',
-    description: 'As deepfakes e LLMs estão a revolucionar os ataques de phishing. Saiba proteger-se.',
-    meta: '20 Dez 2025 • 6 min de leitura',
-    category: 'Formação',
-    icon: Eye,
-    accent: 'blue',
-  },
-  {
-    title: 'Estudo: PMEs portuguesas e a maturidade em cibersegurança',
-    description: 'Resultados do estudo anual da CiberBoxSecur sobre segurança digital nas PMEs.',
-    meta: '10 Dez 2025 • 10 min de leitura',
-    category: 'Estudo',
+    title: 'Formação obrigatória',
+    description:
+      'Colaboradores e gestores devem receber formação regular em cibersegurança. A consciencialização é considerada um controlo de segurança obrigatório pela diretiva.',
     icon: BookOpen,
-    accent: 'teal',
+    accent: 'cyan',
   },
 ] as const;
+
+type NewsCategoryTone = 'violet' | 'amber' | 'rose' | 'blue';
+
+type NewsContentBlock =
+  | { type: 'paragraph'; text: string }
+  | { type: 'section'; heading: string; paragraphs?: readonly string[]; items?: readonly string[] }
+  | { type: 'note'; title: string; text: string };
+
+interface NewsArticle {
+  id: string;
+  slug: string;
+  title: string;
+  category: string;
+  categoryTone: NewsCategoryTone;
+  date: string;
+  shortDate: string;
+  dateTime: string;
+  excerpt: string;
+  image: string;
+  featured: boolean;
+  readingTime?: string;
+  content: readonly NewsContentBlock[];
+}
+
+// TODO(CMS): conteúdo editorial provisório. Esta coleção será substituída por GET /api/public/noticias.
+const NEWS_ARTICLES = [
+  {
+    id: 'nis2-portugal-2025',
+    slug: 'nis2-o-que-muda-empresas-portuguesas-2025',
+    title: 'NIS2: O que muda para as empresas portuguesas em 2025',
+    category: 'NIS2 & Compliance',
+    categoryTone: 'violet',
+    date: '10 de março de 2025',
+    shortDate: '10/03/2025',
+    dateTime: '2025-03-10',
+    excerpt:
+      'A Diretiva NIS2 trouxe novas obrigações para entidades essenciais e importantes. Saiba o que precisa de fazer para estar em conformidade.',
+    image: newsNis2Image,
+    featured: true,
+    content: [
+      {
+        type: 'paragraph',
+        text: 'A preparação para a conformidade deve partir de uma leitura clara do contexto da organização, dos seus serviços e dos ativos digitais que sustentam a operação.',
+      },
+      {
+        type: 'section',
+        heading: 'Contexto e Importância',
+        paragraphs: [
+          'Uma abordagem estruturada permite identificar lacunas, organizar responsabilidades e priorizar medidas de segurança de acordo com o risco e o impacto para o negócio.',
+        ],
+      },
+      {
+        type: 'note',
+        title: 'Nota importante',
+        text: 'Este conteúdo apresenta orientação geral. A avaliação de conformidade deve ser adaptada ao setor, à dimensão e ao contexto específico de cada organização.',
+      },
+      {
+        type: 'section',
+        heading: 'Principais Considerações',
+        paragraphs: ['Uma preparação consistente deve articular pessoas, processos e tecnologia.'],
+        items: [
+          'Analisar riscos, ativos e lacunas de segurança.',
+          'Documentar políticas, responsabilidades e controlos aplicáveis.',
+          'Preparar procedimentos de continuidade e resposta a incidentes.',
+          'Manter formação, monitorização e melhoria contínua.',
+        ],
+      },
+      {
+        type: 'section',
+        heading: 'Próximos Passos',
+        paragraphs: [
+          'O passo seguinte é transformar o diagnóstico numa sequência de ações priorizadas, com responsáveis, evidências e acompanhamento regular.',
+          'A equipa CiberBoxSecur pode apoiar a avaliação inicial, o planeamento e a monitorização das medidas definidas para a organização.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'pentesting-2025',
+    slug: 'pentesting-2025-metodologias-boas-praticas',
+    title: 'Pentesting em 2025: Metodologias e Boas Práticas',
+    category: 'Testes de Segurança',
+    categoryTone: 'amber',
+    date: '28 de fevereiro de 2025',
+    shortDate: '28/02/2025',
+    dateTime: '2025-02-28',
+    excerpt:
+      'Uma visão prática sobre avaliações autorizadas de segurança, definição de âmbito e comunicação clara das oportunidades de remediação.',
+    image: newsPentestingImage,
+    featured: false,
+    content: [
+      {
+        type: 'paragraph',
+        text: 'Os testes de penetração ajudam a observar, num âmbito previamente autorizado, como aplicações, APIs e infraestruturas respondem a diferentes cenários de ataque.',
+      },
+      {
+        type: 'section',
+        heading: 'Contexto e Importância',
+        paragraphs: [
+          'O valor da avaliação depende de objetivos claros, regras de execução acordadas e resultados apresentados de forma útil para as equipas responsáveis pela correção.',
+        ],
+      },
+      {
+        type: 'note',
+        title: 'Nota importante',
+        text: 'Qualquer teste de segurança deve ter autorização explícita, âmbito definido e acompanhamento adequado à organização.',
+      },
+      {
+        type: 'section',
+        heading: 'Principais Considerações',
+        items: [
+          'Definir os ativos, aplicações e APIs incluídos no âmbito.',
+          'Alinhar janelas de teste, contactos e critérios de segurança.',
+          'Registar evidências e classificar os resultados por prioridade.',
+          'Validar a remediação das vulnerabilidades identificadas.',
+        ],
+      },
+      {
+        type: 'section',
+        heading: 'Próximos Passos',
+        paragraphs: [
+          'Depois da avaliação, os resultados devem ser convertidos num plano de remediação acompanhado pelas equipas técnicas e de gestão.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'ransomware-tendencias',
+    slug: 'ransomware-tendencias-proteger-organizacao',
+    title: 'Ransomware: Tendências e como proteger a sua organização',
+    category: 'Ameaças & Incidentes',
+    categoryTone: 'rose',
+    date: '15 de fevereiro de 2025',
+    shortDate: '15/02/2025',
+    dateTime: '2025-02-15',
+    excerpt:
+      'Como combinar monitorização, preparação operacional e resposta coordenada para reduzir o impacto de um incidente de ransomware.',
+    image: newsRansomwareImage,
+    featured: false,
+    content: [
+      {
+        type: 'paragraph',
+        text: 'A preparação para ransomware exige visibilidade sobre os ativos, capacidade de detetar sinais relevantes e procedimentos claros para responder quando ocorre um incidente.',
+      },
+      {
+        type: 'section',
+        heading: 'Contexto e Importância',
+        paragraphs: [
+          'A resposta torna-se mais consistente quando as responsabilidades, os canais de comunicação e as prioridades de recuperação são definidos antes de uma situação de crise.',
+        ],
+      },
+      {
+        type: 'note',
+        title: 'Nota importante',
+        text: 'Os procedimentos de resposta devem ser testados e adaptados aos sistemas, equipas e necessidades operacionais de cada organização.',
+      },
+      {
+        type: 'section',
+        heading: 'Principais Considerações',
+        items: [
+          'Manter inventário e monitorização dos ativos críticos.',
+          'Definir triagem, escalamento e responsabilidades de resposta.',
+          'Preparar continuidade, recuperação e comunicação do incidente.',
+          'Rever o ocorrido e acompanhar as ações de melhoria.',
+        ],
+      },
+      {
+        type: 'section',
+        heading: 'Próximos Passos',
+        paragraphs: [
+          'A organização deve rever o seu plano de resposta, confirmar os contactos essenciais e transformar os exercícios realizados em melhorias verificáveis.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'recertificacao-iso-27001',
+    slug: 'ciberboxsecur-recertificacao-iso-27001-2022',
+    title: 'CiberBoxSecur Obtém Recertificação ISO/IEC 27001:2022',
+    category: 'Empresa',
+    categoryTone: 'blue',
+    date: '10 de janeiro de 2025',
+    shortDate: '10/01/2025',
+    dateTime: '2025-01-10',
+    excerpt:
+      'Uma atualização institucional sobre a recertificação ISO/IEC 27001:2022 anunciada pela CiberBoxSecur.',
+    image: newsIsoImage,
+    featured: false,
+    content: [
+      {
+        type: 'paragraph',
+        text: 'Esta publicação reúne a informação introdutória associada ao anúncio de recertificação apresentado no Centro de Conhecimento da CiberBoxSecur.',
+      },
+      {
+        type: 'section',
+        heading: 'Contexto e Importância',
+        paragraphs: [
+          'A versão editorial definitiva deverá apresentar o âmbito, as evidências e os detalhes institucionais validados para publicação pelo Back Office.',
+        ],
+      },
+      {
+        type: 'note',
+        title: 'Conteúdo editorial provisório',
+        text: 'Os detalhes desta publicação devem ser revistos e completados no CMS antes da disponibilização pública definitiva.',
+      },
+      {
+        type: 'section',
+        heading: 'Principais Considerações',
+        items: [
+          'Confirmar o âmbito institucional que pode ser comunicado.',
+          'Validar datas, referências e documentação pública associada.',
+          'Apresentar a informação de forma clara e verificável.',
+        ],
+      },
+      {
+        type: 'section',
+        heading: 'Próximos Passos',
+        paragraphs: [
+          'A publicação será completada com o conteúdo editorial aprovado e os elementos documentais disponibilizados pelo Back Office.',
+        ],
+      },
+    ],
+  },
+] satisfies readonly NewsArticle[];
 
 const PUBLIC_CONTACT_CHANNELS = [
   { title: 'Email', value: 'geral@ciberboxsecur.pt', detail: 'Resposta em até 24h úteis', icon: Mail },
@@ -185,6 +472,83 @@ const PUBLIC_CONTACT_CHANNELS = [
   { title: 'Sede', value: 'Avenida da Liberdade, Lisboa', detail: 'Portugal', icon: MapPin },
   { title: 'Urgências 24/7', value: 'soc@ciberboxsecur.pt', detail: 'Linha SOC permanente', icon: Shield },
 ] as const;
+
+function PublicFooter({ setPage }: PageProps) {
+  const navigateTo = (target: Page) => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+    setPage(target);
+  };
+
+  return (
+    <footer className="home-footer" data-home-section="footer">
+      <div className="container-xl home-footer__container">
+        <div className="row g-4 home-footer__main">
+          <div className="col-12 col-md-4">
+            <div className="home-footer__brand">
+              <span className="home-footer__brand-icon" aria-hidden="true">
+                <Shield />
+              </span>
+              <span>
+                CiberBox<strong>Secur</strong>
+              </span>
+            </div>
+            <p className="home-footer__description">
+              Protegemos organizações portuguesas contra ciberameaças com serviços de nível empresarial e
+              conformidade NIS2.
+            </p>
+            <div className="home-footer__socials" aria-label="Redes sociais">
+              {HOME_SOCIALS.map((social) => (
+                <span className="home-footer__social" role="img" aria-label={social.label} key={social.label}>
+                  {social.mark}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="col-12 col-md-4">
+            <h2 className="home-footer__heading">Links Rápidos</h2>
+            <ul className="home-footer__links">
+              {HOME_FOOTER_LINKS.map((item) => (
+                <li key={item.label}>
+                  <button type="button" onClick={() => navigateTo(item.page)}>
+                    <ChevronRight aria-hidden="true" />
+                    {item.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="col-12 col-md-4">
+            <h2 className="home-footer__heading">Contacto</h2>
+            <ul className="home-footer__contacts">
+              {HOME_FOOTER_CONTACTS.map((contact) => {
+                const Icon = contact.icon;
+                return (
+                  <li key={contact.label}>
+                    <span className="home-footer__contact-icon" aria-hidden="true">
+                      <Icon />
+                    </span>
+                    {contact.label}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </div>
+
+        <div className="home-footer__bottom">
+          <p>© 2025 CiberBoxSecur Lda. Todos os direitos reservados. Lisboa, Portugal.</p>
+          <div className="home-footer__legal" aria-label="Informação legal">
+            <span>Política de Privacidade</span>
+            <span>Termos de Serviço</span>
+            <span>RGPD</span>
+          </div>
+        </div>
+      </div>
+    </footer>
+  );
+}
 
 export function HomePage({ setPage }: PageProps) {
   const navigateTo = (target: Page) => {
@@ -290,73 +654,7 @@ export function HomePage({ setPage }: PageProps) {
         </section>
       </main>
 
-      <footer className="home-footer" data-home-section="footer">
-        <div className="container-xl home-footer__container">
-          <div className="row g-4 home-footer__main">
-            <div className="col-12 col-md-4">
-              <div className="home-footer__brand">
-                <span className="home-footer__brand-icon" aria-hidden="true">
-                  <Shield />
-                </span>
-                <span>
-                  CiberBox<strong>Secur</strong>
-                </span>
-              </div>
-              <p className="home-footer__description">
-                Protegemos organizações portuguesas contra ciberameaças com serviços de nível empresarial e
-                conformidade NIS2.
-              </p>
-              <div className="home-footer__socials" aria-label="Redes sociais">
-                {HOME_SOCIALS.map((social) => (
-                  <span className="home-footer__social" role="img" aria-label={social.label} key={social.label}>
-                    {social.mark}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <div className="col-12 col-md-4">
-              <h2 className="home-footer__heading">Links Rápidos</h2>
-              <ul className="home-footer__links">
-                {HOME_FOOTER_LINKS.map((item) => (
-                  <li key={item.label}>
-                    <button type="button" onClick={() => navigateTo(item.page)}>
-                      <ChevronRight aria-hidden="true" />
-                      {item.label}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="col-12 col-md-4">
-              <h2 className="home-footer__heading">Contacto</h2>
-              <ul className="home-footer__contacts">
-                {HOME_FOOTER_CONTACTS.map((contact) => {
-                  const Icon = contact.icon;
-                  return (
-                    <li key={contact.label}>
-                      <span className="home-footer__contact-icon" aria-hidden="true">
-                        <Icon />
-                      </span>
-                      {contact.label}
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          </div>
-
-          <div className="home-footer__bottom">
-            <p>© 2025 CiberBoxSecur Lda. Todos os direitos reservados. Lisboa, Portugal.</p>
-            <div className="home-footer__legal" aria-label="Informação legal">
-              <span>Política de Privacidade</span>
-              <span>Termos de Serviço</span>
-              <span>RGPD</span>
-            </div>
-          </div>
-        </div>
-      </footer>
+      <PublicFooter setPage={setPage} />
     </>
   );
 }
@@ -462,160 +760,443 @@ export function MissionPage({ setPage }: PageProps) {
 }
 
 export function ServicesPage({ setPage }: PageProps) {
+  const navigateTo = (target: Page) => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+    setPage(target);
+  };
+
+  const navigateToDashboard = () => {
+    const role = session.get().role;
+    const target: Page =
+      role === 'admin'
+        ? 'admin-dashboard'
+        : role === 'manager'
+          ? 'mgr-dashboard'
+          : role === 'client'
+            ? 'cli-dashboard'
+            : 'login';
+    navigateTo(target);
+  };
+
   return (
-    <main className="public-subpage services-page" data-public-page="services">
-      <section
-        className="public-page-hero phase2-public-hero services-page__hero"
-        aria-labelledby="services-page-title"
-      >
-        <div className="public-page-hero__orb public-page-hero__orb--violet" aria-hidden="true" />
-        <div className="public-page-hero__orb public-page-hero__orb--blue" aria-hidden="true" />
-        <div className="container-xl public-page-hero__container">
-          <div className="row justify-content-center">
-            <div className="col-12 col-lg-10 col-xl-9">
-              <div className="public-page-hero__content">
-                <span className="public-page-kicker">Os Nossos Serviços · Equipa Certificada</span>
-                <h1 id="services-page-title" className="public-page-title">
-                  Proteção abrangente para cada ameaça.
-                </h1>
-                <p className="public-page-lead">
-                  Do SOC 24/7 à conformidade NIS2, a nossa equipa certificada cobre todo o ciclo de vida da
-                  cibersegurança empresarial.
-                </p>
-                <div className="public-page-hero__actions">
-                  <button type="button" className="phase2-button phase2-button--primary" onClick={() => setPage('contact')}>
-                    Pedir Proposta
-                    <ArrowRight aria-hidden="true" />
-                  </button>
-                  <button type="button" className="phase2-button phase2-button--secondary" onClick={() => setPage('contact')}>
-                    Falar com um Especialista
-                  </button>
+    <>
+      <main className="public-subpage services-page" data-public-page="services">
+        <section
+          className="public-page-hero phase2-public-hero services-page__hero"
+          aria-labelledby="services-page-title"
+        >
+          <div className="public-page-hero__orb public-page-hero__orb--violet" aria-hidden="true" />
+          <div className="public-page-hero__orb public-page-hero__orb--blue" aria-hidden="true" />
+          <div className="container-xl public-page-hero__container">
+            <div className="row justify-content-center">
+              <div className="col-12 col-lg-10 col-xl-9">
+                <div className="public-page-hero__content">
+                  <span className="public-page-kicker">Os Nossos Serviços · Equipa Certificada</span>
+                  <h1 id="services-page-title" className="public-page-title">
+                    Proteção abrangente para <span>cada ameaça.</span>
+                  </h1>
+                  <p className="public-page-lead">
+                    Do SOC 24/7 à conformidade NIS2, a nossa equipa certificada cobre todo o ciclo de vida da
+                    cibersegurança empresarial.
+                  </p>
+                  <div className="public-page-hero__actions">
+                    <button
+                      type="button"
+                      className="phase2-button phase2-button--primary"
+                      onClick={() => navigateTo('contact')}
+                    >
+                      Pedir Proposta
+                      <ArrowRight aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      className="phase2-button phase2-button--secondary"
+                      onClick={() => navigateTo('contact')}
+                    >
+                      Falar com um Especialista
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section className="service-proof-strip" aria-label="Compromissos do serviço" data-page-section="service-proof">
-        <div className="container-xl">
-          <div className="row g-3 g-lg-0">
-            {SERVICE_PROOF_POINTS.map((point) => {
-              const Icon = point.icon;
-              return (
-                <div className="col-12 col-sm-6 col-lg-3" key={point.title}>
-                  <article className="service-proof-card">
-                    <span className="service-proof-card__icon" aria-hidden="true">
-                      <Icon />
-                    </span>
-                    <div>
-                      <h2>{point.title}</h2>
-                      <p>{point.detail}</p>
-                    </div>
-                  </article>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      <section className="services-page__catalog" aria-label="Catálogo de serviços" data-page-section="services-catalog">
-        <div className="container-xl">
-          <div className="row g-4 g-xl-5">
-            {PUBLIC_SERVICES.map((service, index) => {
-              const Icon = service.icon;
-              return (
-                <div className="col-12 col-lg-6" key={service.title}>
-                  <article className="service-detail-card">
-                    <div className="service-detail-card__topline">
-                      <span className="service-detail-card__icon" aria-hidden="true">
+        <section className="service-proof-strip" aria-label="Compromissos do serviço" data-page-section="service-proof">
+          <div className="container-xl">
+            <div className="row g-3 g-xl-4">
+              {SERVICE_PROOF_POINTS.map((point) => {
+                const Icon = point.icon;
+                return (
+                  <div className="col-12 col-sm-6 col-xl-3" key={point.title}>
+                    <article className="service-proof-card">
+                      <span className={`service-proof-card__icon service-proof-card__icon--${point.accent}`} aria-hidden="true">
                         <Icon />
                       </span>
-                      <span className="service-detail-card__number">{String(index + 1).padStart(2, '0')}</span>
-                    </div>
-                    <h3>{service.title}</h3>
-                    <p>{service.description}</p>
-                    <ul className="row g-2">
-                      {service.features.map((feature) => (
-                        <li className="col-12 col-sm-6" key={feature}>
-                          <span aria-hidden="true">✓</span>
-                          {feature}
-                        </li>
-                      ))}
-                    </ul>
-                    <button type="button" onClick={() => setPage('contact')}>
-                      Pedir Proposta <ArrowRight aria-hidden="true" />
-                    </button>
-                  </article>
-                </div>
-              );
-            })}
+                      <div>
+                        <h2>{point.title}</h2>
+                        <p>{point.detail}</p>
+                      </div>
+                    </article>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      </section>
-    </main>
+        </section>
+
+        <section
+          className="services-page__catalog"
+          aria-labelledby="services-catalog-title"
+          data-page-section="services-catalog"
+        >
+          <div className="container-xl">
+            <header className="services-section-heading">
+              <p className="services-section-heading__eyebrow">Catálogo de Serviços</p>
+              <h2 id="services-catalog-title">O que oferecemos</h2>
+              <p>Todos os serviços são prestados pela nossa equipa certificada com SLAs documentados.</p>
+            </header>
+
+            <div className="row g-4 services-catalog-grid">
+              {PUBLIC_SERVICES.map((service) => {
+                const Icon = service.icon;
+                return (
+                  <div className="col-12 col-md-6 col-xl-4" key={service.title}>
+                    <article className="service-detail-card">
+                      <div className="service-detail-card__topline">
+                        <span
+                          className={`service-detail-card__icon service-detail-card__icon--${service.accent}`}
+                          aria-hidden="true"
+                        >
+                          <Icon />
+                        </span>
+                        {service.nis2 ? <span className={`service-detail-card__badge service-detail-card__badge--${service.accent}`}>NIS2</span> : null}
+                      </div>
+                      <h3>{service.title}</h3>
+                      <p className="service-detail-card__price">{service.price}</p>
+                      <ul>
+                        {service.features.map((feature) => (
+                          <li key={feature}>
+                            <CircleCheckBig aria-hidden="true" />
+                            {feature}
+                          </li>
+                        ))}
+                      </ul>
+                      <span
+                        className="service-detail-card__more"
+                        title="Ainda não existe uma página pública individual para este serviço"
+                      >
+                        Saber mais <ChevronRight aria-hidden="true" />
+                      </span>
+                    </article>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        <section
+          className="services-process"
+          aria-labelledby="services-process-title"
+          data-page-section="services-process"
+        >
+          <div className="container-xl">
+            <header className="services-section-heading">
+              <p className="services-section-heading__eyebrow">Como Trabalhamos</p>
+              <h2 id="services-process-title">O nosso processo</h2>
+              <p>Metodologia estruturada para garantir resultados consistentes em cada projeto.</p>
+            </header>
+
+            <div className="row g-5 g-xl-4">
+              {SERVICE_PROCESS_STEPS.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <div className="col-12 col-sm-6 col-xl-3" key={item.step}>
+                    <article className="service-process-step">
+                      <div className="service-process-step__icon" aria-hidden="true">
+                        <Icon />
+                        <span>{item.step}</span>
+                      </div>
+                      <h3>{item.title}</h3>
+                      <p>{item.description}</p>
+                    </article>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        <section className="services-nis2" aria-labelledby="services-nis2-title" data-page-section="services-nis2">
+          <div className="container-xl">
+            <header className="services-section-heading services-section-heading--nis2">
+              <p className="services-section-heading__eyebrow">Diretiva NIS2</p>
+              <h2 id="services-nis2-title">O que é a NIS2 e o que implica para a sua empresa?</h2>
+              <p>
+                A Diretiva NIS2 (Network and Information Security 2) é a lei europeia de cibersegurança mais
+                abrangente até à data. Entrou em vigor em outubro de 2024 e obriga milhares de organizações
+                portuguesas a adotarem medidas concretas de segurança.
+              </p>
+            </header>
+
+            <div className="row g-4 services-nis2__grid">
+              {NIS2_REQUIREMENTS.map((requirement) => {
+                const Icon = requirement.icon;
+                return (
+                  <div className="col-12 col-md-6 col-xl-4" key={requirement.title}>
+                    <article className="nis2-requirement-card">
+                      <span
+                        className={`nis2-requirement-card__icon nis2-requirement-card__icon--${requirement.accent}`}
+                        aria-hidden="true"
+                      >
+                        <Icon />
+                      </span>
+                      <h3>{requirement.title}</h3>
+                      <p>{requirement.description}</p>
+                    </article>
+                  </div>
+                );
+              })}
+            </div>
+
+            <aside className="nis2-assessment" aria-labelledby="nis2-assessment-title">
+              <span className="nis2-assessment__icon" aria-hidden="true">
+                <Shield />
+              </span>
+              <div className="nis2-assessment__content">
+                <h3 id="nis2-assessment-title">Não tem a certeza se a sua organização é abrangida?</h3>
+                <p>
+                  A CiberBoxSecur realiza gratuitamente uma avaliação inicial de conformidade NIS2 para determinar
+                  as suas obrigações e os passos a seguir.
+                </p>
+                <p>
+                  Consulte também o portal oficial do CNCS em{' '}
+                  <a href="https://www.cncs.gov.pt/" target="_blank" rel="noreferrer">
+                    cncs.gov.pt
+                  </a>
+                  .
+                </p>
+              </div>
+              <button type="button" onClick={() => navigateTo('contact')}>
+                Avaliação Gratuita <ArrowRight aria-hidden="true" />
+              </button>
+            </aside>
+          </div>
+        </section>
+
+        <section className="services-final-cta" aria-labelledby="services-final-cta-title" data-page-section="services-final-cta">
+          <div className="container-xl">
+            <div className="services-final-cta__panel">
+              <p className="services-final-cta__eyebrow">Comece Hoje</p>
+              <h2 id="services-final-cta-title">
+                Pronto para Proteger o
+                <span>Seu Negócio?</span>
+              </h2>
+              <p>Agende uma demonstração gratuita e veja como a CiberBoxSecur pode proteger a sua empresa.</p>
+              <div className="services-final-cta__actions">
+                <button type="button" className="services-final-cta__primary" onClick={() => navigateTo('contact')}>
+                  Pedir Demonstração <ArrowRight aria-hidden="true" />
+                </button>
+                <button type="button" className="services-final-cta__secondary" onClick={navigateToDashboard}>
+                  <LockKeyhole aria-hidden="true" /> Dashboard
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <PublicFooter setPage={setPage} />
+    </>
   );
 }
 
-export function NewsPage(_props: PageProps) {
+function NewsArticleCard({ article, onSelect }: { article: NewsArticle; onSelect: (articleId: string) => void }) {
   return (
-    <main className="public-subpage news-page" data-public-page="news">
-      <section className="public-page-hero phase2-public-hero news-page__hero" aria-labelledby="news-page-title">
-        <div className="public-page-hero__orb public-page-hero__orb--violet" aria-hidden="true" />
-        <div className="public-page-hero__orb public-page-hero__orb--blue" aria-hidden="true" />
-        <div className="container-xl public-page-hero__container">
-          <div className="row justify-content-center">
-            <div className="col-12 col-lg-10 col-xl-9">
-              <div className="public-page-hero__content">
-                <span className="public-page-kicker">Centro de Conhecimento · Artigos &amp; Análises</span>
-                <h1 id="news-page-title" className="public-page-title">Notícias de Cibersegurança</h1>
-                <p className="public-page-lead">
-                  Mantenha-se informado sobre as últimas tendências, ameaças e boas práticas em segurança digital e
-                  conformidade regulamentar.
-                </p>
+    <article className="news-v97-card">
+      <div className="news-v97-card__media">
+        <img src={article.image} alt={article.title} />
+        <time className="news-v97-card__date" dateTime={article.dateTime}>
+          {article.shortDate}
+        </time>
+      </div>
+      <div className="news-v97-card__content">
+        <span className={`news-v97-card__category news-v97-card__category--${article.categoryTone}`}>
+          {article.category}
+        </span>
+        <h3>{article.title}</h3>
+      </div>
+      <button
+        type="button"
+        className="news-v97-card__link"
+        onClick={() => onSelect(article.id)}
+        aria-label={`Ler artigo: ${article.title}`}
+      />
+    </article>
+  );
+}
+
+export function NewsPage({ setPage, onSelectArticle }: NewsPageProps) {
+  const featuredArticle = NEWS_ARTICLES.find((article) => article.featured) ?? NEWS_ARTICLES[0];
+  const remainingArticles = NEWS_ARTICLES.filter((article) => article.id !== featuredArticle.id);
+
+  return (
+    <>
+      <main className="public-subpage news-page news-v97" data-public-page="news">
+        <section className="public-page-hero phase2-public-hero news-page__hero" aria-labelledby="news-page-title">
+          <div className="container-xl public-page-hero__container">
+            <div className="row justify-content-center">
+              <div className="col-12 col-lg-8">
+                <div className="public-page-hero__content">
+                  <span className="public-page-kicker">Centro de Conhecimento · Artigos &amp; Análises</span>
+                  <h1 id="news-page-title" className="public-page-title">
+                    Notícias de <span>Cibersegurança</span>
+                  </h1>
+                  <p className="public-page-lead">
+                    Mantenha-se informado sobre as últimas tendências, ameaças e boas práticas em segurança digital e
+                    conformidade regulamentar.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <div className="container-xl public-subpage__container">
-        <section className="news-page__articles" aria-label="Artigos recentes" data-page-section="news-articles">
-          <div className="row g-4">
-            {PUBLIC_NEWS_POSTS.map((post, index) => {
-              const Icon = post.icon;
-              return (
-                <div className={index === 0 ? 'col-12' : 'col-12 col-md-6 col-xl-4'} key={post.title}>
-                  <article className={`public-news-card${index === 0 ? ' is-featured' : ''}`}>
-                    <div className={`public-news-card__visual public-news-card__visual--${post.accent}`} aria-hidden="true">
-                      <span className="public-news-card__visual-grid" />
-                      <span className="public-news-card__visual-icon">
-                        <Icon />
-                      </span>
-                    </div>
-                    <div className="public-news-card__content">
-                      <div className="public-news-card__meta">
-                        <span className="public-news-card__category">{post.category}</span>
-                        <span>{post.meta}</span>
-                      </div>
-                      <h3>{post.title}</h3>
-                      <p>{post.description}</p>
-                      <span
-                        className="public-news-card__read-more"
-                        title="O detalhe de notícia ainda não tem uma rota pública implementada"
-                      >
-                        Ler artigo completo <ArrowRight aria-hidden="true" />
-                      </span>
-                    </div>
-                  </article>
+        <section className="news-v97__feed" aria-label="Artigos recentes" data-page-section="news-articles">
+          <div className="container-xl news-v97__container">
+            <article className="news-v97-featured">
+              <div className="news-v97-featured__media">
+                <img src={featuredArticle.image} alt={featuredArticle.title} />
+              </div>
+              <div className="news-v97-featured__content">
+                <span className="news-v97-featured__category">{featuredArticle.category}</span>
+                <h2>{featuredArticle.title}</h2>
+                <p>{featuredArticle.excerpt}</p>
+                <div className="news-v97-featured__date">
+                  <CalendarDays aria-hidden="true" />
+                  <time dateTime={featuredArticle.dateTime}>{featuredArticle.date}</time>
                 </div>
-              );
-            })}
+                <button
+                  type="button"
+                  className="news-v97-featured__read"
+                  onClick={() => onSelectArticle(featuredArticle.id)}
+                >
+                  Ler artigo <ArrowRight aria-hidden="true" />
+                </button>
+              </div>
+            </article>
+
+            <div className="row g-4 news-v97-grid">
+              {remainingArticles.map((article) => (
+                <div className="col-12 col-md-4" key={article.id}>
+                  <NewsArticleCard article={article} onSelect={onSelectArticle} />
+                </div>
+              ))}
+            </div>
           </div>
         </section>
-      </div>
-    </main>
+      </main>
+
+      <PublicFooter setPage={setPage} />
+    </>
+  );
+}
+
+export function NewsDetailPage({ setPage, selectedArticleId, onSelectArticle }: NewsDetailPageProps) {
+  const article = NEWS_ARTICLES.find((item) => item.id === selectedArticleId) ?? NEWS_ARTICLES[0];
+  const latestArticles = NEWS_ARTICLES.filter((item) => item.id !== article.id).slice(0, 3);
+
+  const returnToNews = () => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+    setPage('news');
+  };
+
+  return (
+    <>
+      <main className="news-detail" data-public-page="news-detail">
+        <article className="news-detail__article" aria-labelledby="news-detail-title">
+          <div className="container-xl news-detail__container">
+            <div className="news-detail__heading-wrap">
+              <button type="button" className="news-detail__back" onClick={returnToNews}>
+                <ArrowLeft aria-hidden="true" /> Voltar às notícias
+              </button>
+
+              <header className="news-detail__header">
+                <div className="news-detail__meta" aria-label="Informação do artigo">
+                  <span className={`news-detail__category news-detail__category--${article.categoryTone}`}>
+                    <Tag aria-hidden="true" /> {article.category}
+                  </span>
+                  <span>
+                    <CalendarDays aria-hidden="true" />
+                    <time dateTime={article.dateTime}>{article.date}</time>
+                  </span>
+                  {article.readingTime && (
+                    <span>
+                      <Clock3 aria-hidden="true" /> {article.readingTime}
+                    </span>
+                  )}
+                </div>
+
+                <h1 id="news-detail-title">{article.title}</h1>
+                <p>{article.excerpt}</p>
+              </header>
+            </div>
+
+            <figure className="news-detail__figure">
+              <img src={article.image} alt={article.title} />
+            </figure>
+
+            <div className="news-detail__body">
+              {article.content.map((block, index) => {
+                if (block.type === 'paragraph') {
+                  return <p key={`paragraph-${index}`}>{block.text}</p>;
+                }
+
+                if (block.type === 'note') {
+                  return (
+                    <aside className="news-detail__note" key={`note-${index}`}>
+                      <strong>{block.title}</strong>
+                      <p>{block.text}</p>
+                    </aside>
+                  );
+                }
+
+                return (
+                  <section className="news-detail__section" key={`${block.heading}-${index}`}>
+                    <h2>{block.heading}</h2>
+                    {block.paragraphs?.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+                    {block.items && (
+                      <ul>
+                        {block.items.map((item) => <li key={item}>{item}</li>)}
+                      </ul>
+                    )}
+                  </section>
+                );
+              })}
+            </div>
+          </div>
+        </article>
+
+        <section className="news-detail__latest" aria-labelledby="latest-news-title">
+          <div className="container-xl news-v97__container">
+            <header className="news-detail__latest-heading">
+              <span>Centro de Conhecimento</span>
+              <h2 id="latest-news-title">Últimas Publicações</h2>
+            </header>
+            <div className="row g-4 news-detail__latest-grid">
+              {latestArticles.map((latestArticle) => (
+                <div className="col-12 col-md-6 col-xl-4" key={latestArticle.id}>
+                  <NewsArticleCard article={latestArticle} onSelect={onSelectArticle} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <PublicFooter setPage={setPage} />
+    </>
   );
 }
 

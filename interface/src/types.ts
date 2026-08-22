@@ -2,7 +2,7 @@ export type UserRole = 'admin' | 'manager' | 'client' | null;
 
 export type Page =
   // Public
-  | 'home' | 'about' | 'mission' | 'services' | 'news' | 'contact' | 'login'
+  | 'home' | 'about' | 'mission' | 'services' | 'news' | 'news-detail' | 'contact' | 'login'
   // Admin
   | 'admin-dashboard' | 'admin-analytics' | 'admin-users' | 'admin-clients' | 'admin-documents'
   | 'admin-incidents' | 'admin-logs' | 'admin-site-content' | 'admin-permissions'
