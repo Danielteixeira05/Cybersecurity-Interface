@@ -155,16 +155,14 @@ export interface ApiMeResponse {
   role?: UserRole;
 }
 
-const DEV_MODE = typeof import.meta !== 'undefined' && !!import.meta.dev;
+const DEV_MODE = typeof import.meta !== 'undefined' && !!import.meta.env?.DEV;
 
 export function getApiBaseUrl(): string {
   const env = (typeof import.meta !== 'undefined' && import.meta.env) || ({} as Record<string, string | undefined>);
   const explicit = env.VITE_API_BASE_URL;
   if (typeof explicit === 'string' && explicit.length > 0) return explicit.replace(/\/$/, '');
-  if (!DEV_MODE) {
-    return 'https://cybersecurity-api.vercel.app';
-  }
-  return `http://localhost:${(import.meta.env as any)?.VITE_DJANGO_PORT || '8000'}`;
+  if (DEV_MODE) return '';
+  return 'https://cybersecurity-api.vercel.app';
 }
 
 let csrfToken = '';
