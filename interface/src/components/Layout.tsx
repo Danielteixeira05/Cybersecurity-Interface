@@ -1,4 +1,16 @@
 import { useState } from 'react';
+import {
+  Building2,
+  ChartNoAxesCombined,
+  FileText,
+  Globe2,
+  LayoutDashboard,
+  LogOut,
+  ScrollText,
+  Settings,
+  TriangleAlert,
+  Users,
+} from 'lucide-react';
 import type { Page, UserRole } from '../types';
 import { session, logoutApi } from '../apiClient';
 
@@ -274,15 +286,14 @@ const ICON = {
 };
 
 const ADMIN_ITEMS: SideItem[] = [
-  { key: 'admin-dashboard', label: 'Dashboard', icon: ICON.dashboard },
-  { key: 'admin-analytics', label: 'Análises', icon: ICON.analytics },
-  { key: 'admin-users', label: 'Utilizadores', icon: ICON.users },
-  { key: 'admin-clients', label: 'Clientes', icon: ICON.clients },
-  { key: 'admin-documents', label: 'Documentos', icon: ICON.documents },
-  { key: 'admin-incidents', label: 'Incidentes', icon: ICON.incidents },
-  { key: 'admin-logs', label: 'Logs', icon: ICON.logs },
-  { key: 'admin-site-content', label: 'Conteúdo', icon: ICON.content },
-  { key: 'admin-permissions', label: 'Permissões', icon: ICON.permissions },
+  { key: 'admin-dashboard', label: 'Dashboard', icon: <LayoutDashboard /> },
+  { key: 'admin-analytics', label: 'Análises & Gráficos', icon: <ChartNoAxesCombined /> },
+  { key: 'admin-users', label: 'Utilizadores', icon: <Users /> },
+  { key: 'admin-clients', label: 'Clientes', icon: <Building2 /> },
+  { key: 'admin-documents', label: 'Documentos', icon: <FileText /> },
+  { key: 'admin-incidents', label: 'Incidentes', icon: <TriangleAlert /> },
+  { key: 'admin-logs', label: 'Logs de Atividade', icon: <ScrollText /> },
+  { key: 'admin-site-content', label: 'Conteúdo do Site', icon: <Globe2 /> },
 ];
 
 const MANAGER_ITEMS: SideItem[] = [
@@ -319,6 +330,7 @@ const CLIENT_ITEMS: SideItem[] = [
 export function AppLayout({ role, page, setPage, setRole, onHome, children }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const sess = session.get();
+  const isAdmin = role === 'admin';
   const items =
     role === 'admin' ? ADMIN_ITEMS : role === 'manager' ? MANAGER_ITEMS : CLIENT_ITEMS;
   const title =
@@ -340,77 +352,176 @@ export function AppLayout({ role, page, setPage, setRole, onHome, children }: Ap
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-64 transform bg-gradient-to-b from-slate-900 via-slate-900 to-slate-800 text-white transition-transform lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 transform text-white transition-transform lg:static lg:translate-x-0 ${
+          isAdmin
+            ? 'admin-sidebar-v97 w-[min(360px,90vw)] lg:w-[360px]'
+            : 'w-64 bg-gradient-to-b from-slate-900 via-slate-900 to-slate-800'
+        } ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="flex h-16 items-center justify-between border-b border-white/10 px-5">
-          <button onClick={onHome} className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-violet-500">
-              <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 text-white" stroke="currentColor" strokeWidth="2">
-                <path d="M12 2L3 7v6c0 5 3.8 9.4 9 10 5.2-.6 9-5 9-10V7l-9-5z" strokeLinejoin="round" />
-              </svg>
+        {isAdmin ? (
+          <div className="flex h-full min-h-0 flex-col">
+            <div className="admin-sidebar-v97__brand flex shrink-0 items-center justify-between">
+              <button onClick={onHome} className="flex min-w-0 items-center gap-3" aria-label="CiberBoxSecur — início">
+                <span className="admin-sidebar-v97__logo" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M12 2L3 7v6c0 5 3.8 9.4 9 10 5.2-.6 9-5 9-10V7l-9-5z" strokeLinejoin="round" />
+                    <path d="M8.5 12.2l2.2 2.2 4.8-5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </span>
+                <span className="admin-sidebar-v97__brand-name">
+                  CiberBox<span>Secur</span>
+                </span>
+              </button>
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className="rounded p-1 text-slate-300 hover:bg-white/10 lg:hidden"
+                aria-label="Fechar menu"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+                  <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
+                </svg>
+              </button>
             </div>
-            <span className="font-display text-lg font-bold">
-              CiberBox<span className="text-blue-400">Secur</span>
-            </span>
-          </button>
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="rounded p-1 text-slate-300 hover:bg-white/10 lg:hidden"
-            aria-label="Fechar"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
-              <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
-            </svg>
-          </button>
-        </div>
 
-        <nav className="flex h-[calc(100%-8rem)] flex-col gap-0.5 overflow-y-auto p-3">
-          {items.map((it) => (
-            <button
-              key={it.key}
-              onClick={() => {
-                setPage(it.key);
-                setSidebarOpen(false);
-              }}
-              className={`sidebar-link flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-300 ${
-                page === it.key ? 'active' : ''
-              }`}
-            >
-              <span className="text-slate-400 [.active_&]:text-blue-300">{it.icon}</span>
-              <span>{it.label}</span>
-            </button>
-          ))}
-        </nav>
-
-        <div className="absolute bottom-0 left-0 right-0 border-t border-white/10 p-3">
-          <div className="flex items-center gap-3 rounded-lg bg-white/5 p-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-500 text-sm font-semibold text-white">
-              {(sess.utilizador?.nome || 'U').charAt(0).toUpperCase()}
+            <div className="admin-sidebar-v97__role shrink-0">
+              <span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                  <path d="M12 3l7 4v5c0 4.2-2.8 7.8-7 9-4.2-1.2-7-4.8-7-9V7l7-4z" strokeLinejoin="round" />
+                </svg>
+                Administrador
+              </span>
             </div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold text-white">
-                {sess.utilizador?.nome || 'Utilizador'}
+
+            <nav className="admin-sidebar-v97__nav min-h-0 flex-1 overflow-y-auto" aria-label="Navegação de administrador">
+              {ADMIN_ITEMS.map((it) => (
+                <button
+                  key={it.key}
+                  type="button"
+                  onClick={() => {
+                    setPage(it.key);
+                    setSidebarOpen(false);
+                  }}
+                  className={`admin-sidebar-v97__link ${page === it.key ? 'active' : ''}`}
+                  aria-current={page === it.key ? 'page' : undefined}
+                >
+                  <span className="admin-sidebar-v97__link-icon" aria-hidden="true">{it.icon}</span>
+                  <span>{it.label}</span>
+                </button>
+              ))}
+            </nav>
+
+            <div className="admin-sidebar-v97__account shrink-0">
+              <div className="admin-sidebar-v97__identity">
+                <div className="admin-sidebar-v97__avatar">
+                  {(sess.utilizador?.nome || 'U').charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[15px] font-semibold text-white">
+                    {sess.utilizador?.nome || 'Utilizador'}
+                  </div>
+                  <div className="truncate text-[13px] text-[#8fb2df]">Administrador</div>
+                </div>
               </div>
-              <div className="truncate text-xs text-slate-400">
-                {sess.utilizador?.email || 'email@exemplo.pt'}
+              <div className="admin-sidebar-v97__account-actions">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPage('admin-permissions');
+                    setSidebarOpen(false);
+                  }}
+                  className={page === 'admin-permissions' ? 'active' : ''}
+                  aria-label="Configurações e permissões"
+                  title="Configurações e permissões"
+                >
+                  <Settings aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await logoutApi();
+                    setRole(null);
+                  }}
+                  aria-label="Terminar sessão"
+                  title="Terminar sessão"
+                >
+                  <LogOut aria-hidden="true" />
+                </button>
               </div>
             </div>
           </div>
-          <button
-            onClick={async () => {
-              await logoutApi();
-              setRole(null);
-            }}
-            className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm font-medium text-slate-300 hover:bg-white/5"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            Terminar Sessão
-          </button>
-        </div>
+        ) : (
+          <>
+            <div className="flex h-16 items-center justify-between border-b border-white/10 px-5">
+              <button onClick={onHome} className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-violet-500">
+                  <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 text-white" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 2L3 7v6c0 5 3.8 9.4 9 10 5.2-.6 9-5 9-10V7l-9-5z" strokeLinejoin="round" />
+                  </svg>
+                </div>
+                <span className="font-display text-lg font-bold">
+                  CiberBox<span className="text-blue-400">Secur</span>
+                </span>
+              </button>
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className="rounded p-1 text-slate-300 hover:bg-white/10 lg:hidden"
+                aria-label="Fechar"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+                  <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+
+            <nav className="flex h-[calc(100%-8rem)] flex-col gap-0.5 overflow-y-auto p-3">
+              {items.map((it) => (
+                <button
+                  key={it.key}
+                  onClick={() => {
+                    setPage(it.key);
+                    setSidebarOpen(false);
+                  }}
+                  className={`sidebar-link flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-300 ${
+                    page === it.key ? 'active' : ''
+                  }`}
+                >
+                  <span className="text-slate-400 [.active_&]:text-blue-300">{it.icon}</span>
+                  <span>{it.label}</span>
+                </button>
+              ))}
+            </nav>
+
+            <div className="absolute bottom-0 left-0 right-0 border-t border-white/10 p-3">
+              <div className="flex items-center gap-3 rounded-lg bg-white/5 p-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-500 text-sm font-semibold text-white">
+                  {(sess.utilizador?.nome || 'U').charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold text-white">
+                    {sess.utilizador?.nome || 'Utilizador'}
+                  </div>
+                  <div className="truncate text-xs text-slate-400">
+                    {sess.utilizador?.email || 'email@exemplo.pt'}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={async () => {
+                  await logoutApi();
+                  setRole(null);
+                }}
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm font-medium text-slate-300 hover:bg-white/5"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                  <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Terminar Sessão
+              </button>
+            </div>
+          </>
+        )}
       </aside>
 
       <div className="flex min-h-screen flex-1 flex-col">

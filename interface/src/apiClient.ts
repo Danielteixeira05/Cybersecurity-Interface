@@ -24,6 +24,15 @@ export interface ApiUtilizador {
   cliente_id?: number | null;
 }
 
+export interface ApiUtilizadorPayload {
+  nome: string;
+  email: string;
+  telefone?: string;
+  nif?: string;
+  password?: string;
+  ativo?: boolean;
+}
+
 export interface ApiCliente {
   id: number;
   nome: string;
@@ -37,9 +46,57 @@ export interface ApiCliente {
   ativo?: boolean;
   criado_em?: string;
   atualizado_em?: string | null;
-  conformidade?: string | null;
-  numero_ativos?: number;
-  numero_incidentes?: number;
+  estado_conformidade?: string | null;
+  nivel_risco?: string | null;
+  pontuacao?: string | number | null;
+  data_avaliacao?: string | null;
+  resumo_avaliacao?: string | null;
+  recomendacoes?: string | null;
+  total_ativos?: number;
+  total_incidentes?: number;
+}
+
+export interface ApiContactoCliente {
+  id: number;
+  cliente_id: number;
+  tipo: 'RESPONSAVEL_SEGURANCA' | 'CONTACTO_PERMANENTE' | 'OUTRO';
+  nome: string;
+  cargo?: string | null;
+  email: string;
+  telefone?: string | null;
+  comunicado_cncs?: boolean;
+  ativo?: boolean;
+}
+
+export interface ApiContactoClientePayload {
+  nome: string;
+  cargo?: string;
+  email: string;
+  telefone?: string;
+  comunicado_cncs?: boolean;
+}
+
+export interface ApiClientePayload {
+  nome: string;
+  nif: string;
+  email: string;
+  telefone?: string;
+  morada?: string;
+  setor_atividade?: string;
+  numero_colaboradores?: number | null;
+  volume_negocios?: number | null;
+  responsavel_seguranca?: ApiContactoClientePayload;
+  contacto_permanente?: ApiContactoClientePayload;
+}
+
+export interface ApiClienteDetalhe {
+  cliente: ApiCliente;
+  contactos: ApiContactoCliente[];
+  ativos: ApiAtivo[];
+  incidentes: ApiIncidente[];
+  documentos: ApiDocumento[];
+  avaliacoes: ApiAvaliacao[];
+  pedidos: ApiPedido[];
 }
 
 export interface ApiAtivo {
@@ -59,13 +116,52 @@ export interface ApiIncidente {
   id: number;
   cliente_id: number;
   cliente_nome?: string;
-  titulo: string;
-  tipo?: string | null;
-  severidade?: string | null;
+  codigo: string;
+  data_hora_incidente: string;
+  registado_por?: string | null;
+  departamento?: string | null;
+  tipo_incidente: string;
   descricao?: string | null;
-  detetado_em?: string | null;
-  resolvido_em?: string | null;
+  utilizadores_afetados?: number;
+  dados_comprometidos?: boolean;
+  sistemas_afetados?: string | null;
+  origem_ataque?: string | null;
+  ip_atacante?: string | null;
+  analise_log?: string | null;
+  resposta_imediata?: string | null;
+  medidas_corretivas?: string | null;
+  gravidade?: string | null;
+  probabilidade_reincidencia?: string | null;
+  recomendacoes?: string | null;
+  estado?: 'ABERTO' | 'EM_ANALISE' | 'ENCERRADO' | string;
+  encerrado_em?: string | null;
+  responsavel_encerramento?: string | null;
   criado_em?: string;
+  atualizado_em?: string;
+}
+
+export interface ApiIncidentePayload {
+  cliente_id: number;
+  codigo: string;
+  data_hora_incidente: string;
+  registado_por?: string;
+  departamento?: string;
+  tipo_incidente: string;
+  descricao: string;
+  utilizadores_afetados?: number;
+  dados_comprometidos?: boolean;
+  sistemas_afetados?: string;
+  origem_ataque?: string;
+  ip_atacante?: string;
+  analise_log?: string;
+  resposta_imediata?: string;
+  medidas_corretivas?: string;
+  gravidade: string;
+  probabilidade_reincidencia?: string;
+  recomendacoes?: string;
+  estado: string;
+  encerrado_em?: string | null;
+  responsavel_encerramento?: string;
 }
 
 export interface ApiDocumento {
@@ -73,10 +169,14 @@ export interface ApiDocumento {
   cliente_id: number;
   cliente_nome?: string;
   titulo: string;
-  tipo?: string | null;
-  formato?: string | null;
+  categoria?: string | null;
+  descricao?: string | null;
+  nome_ficheiro_original?: string | null;
+  tipo_mime?: string | null;
   tamanho_bytes?: number | null;
   submetido_em?: string;
+  submetido_por_nome?: string | null;
+  privado?: boolean;
 }
 
 export interface ApiPedido {
@@ -104,6 +204,71 @@ export interface ApiAvaliacao {
   nivel_risco?: string | null;
   score?: number | null;
   observacoes?: string | null;
+}
+
+export interface ApiConteudoSite {
+  id: number;
+  chave: string;
+  titulo: string;
+  subtitulo?: string | null;
+  corpo?: string | null;
+  imagem_url?: string | null;
+  ativo: boolean;
+  ordem: number;
+  atualizado_por?: number | null;
+  atualizado_por_nome?: string | null;
+  criado_em?: string;
+  atualizado_em?: string;
+}
+
+export type ApiConteudoSitePayload = Pick<
+  ApiConteudoSite,
+  'chave' | 'titulo' | 'subtitulo' | 'corpo' | 'imagem_url' | 'ativo' | 'ordem'
+>;
+
+export interface ApiNoticia {
+  id: number;
+  titulo: string;
+  resumo: string;
+  corpo: string;
+  imagem_url?: string | null;
+  autor_id?: number | null;
+  autor_nome?: string | null;
+  publicada: boolean;
+  publicada_em?: string | null;
+  criado_em?: string;
+  atualizado_em?: string;
+}
+
+export type ApiNoticiaPayload = Pick<
+  ApiNoticia,
+  'titulo' | 'resumo' | 'corpo' | 'imagem_url' | 'publicada'
+>;
+
+export type EstadoMensagemContacto = 'NOVA' | 'EM_ANALISE' | 'RESPONDIDA' | 'ARQUIVADA';
+
+export interface ApiMensagemContacto {
+  id: number;
+  nome: string;
+  email: string;
+  telefone?: string | null;
+  empresa?: string | null;
+  assunto: string;
+  mensagem: string;
+  estado: EstadoMensagemContacto;
+  respondida_por?: number | null;
+  respondida_por_nome?: string | null;
+  criado_em?: string;
+  respondida_em?: string | null;
+}
+
+export interface ApiMensagemContactoPayload {
+  nome: string;
+  email: string;
+  telefone?: string;
+  empresa?: string;
+  assunto: string;
+  mensagem: string;
 }
 
 export interface ApiLoginResponse {
@@ -318,12 +483,54 @@ export async function clientesApi(q?: string): Promise<ApiCliente[]> {
   const qs = q ? `?q=${encodeURIComponent(q)}` : '';
   return apiFetch<ApiCliente[]>(`/api/clientes/${qs}`);
 }
-export async function clienteDetalheApi(id: number): Promise<any> {
-  return apiFetch<any>(`/api/clientes/${id}/`);
+export async function clienteDetalheApi(id: number): Promise<ApiClienteDetalhe> {
+  return apiFetch<ApiClienteDetalhe>(`/api/clientes/${id}/`);
+}
+export async function criarClienteApi(payload: ApiClientePayload): Promise<ApiClienteDetalhe> {
+  await ensureCsrfToken();
+  return apiFetch<ApiClienteDetalhe>('/api/clientes/', {
+    method: 'POST', body: JSON.stringify(payload),
+  });
+}
+export async function atualizarClienteApi(id: number, payload: ApiClientePayload): Promise<ApiClienteDetalhe> {
+  await ensureCsrfToken();
+  return apiFetch<ApiClienteDetalhe>(`/api/clientes/${id}/`, {
+    method: 'PATCH', body: JSON.stringify(payload),
+  });
+}
+export async function alterarEstadoClienteApi(id: number, ativo: boolean): Promise<ApiCliente> {
+  await ensureCsrfToken();
+  return apiFetch<ApiCliente>(`/api/clientes/${id}/estado/`, {
+    method: 'PATCH', body: JSON.stringify({ ativo }),
+  });
 }
 export async function utilizadoresApi(perfil?: string): Promise<ApiUtilizador[]> {
   const qs = perfil ? `?perfil=${encodeURIComponent(perfil)}` : '';
   return apiFetch<ApiUtilizador[]>(`/api/utilizadores/${qs}`);
+}
+export async function utilizadorDetalheApi(id: number): Promise<ApiUtilizador> {
+  return apiFetch<ApiUtilizador>(`/api/utilizadores/${id}/`);
+}
+export async function criarGestorApi(payload: ApiUtilizadorPayload): Promise<ApiUtilizador> {
+  await ensureCsrfToken();
+  return apiFetch<ApiUtilizador>('/api/utilizadores/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+export async function atualizarUtilizadorApi(id: number, payload: ApiUtilizadorPayload): Promise<ApiUtilizador> {
+  await ensureCsrfToken();
+  return apiFetch<ApiUtilizador>(`/api/utilizadores/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+export async function alterarEstadoUtilizadorApi(id: number, ativo: boolean): Promise<ApiUtilizador> {
+  await ensureCsrfToken();
+  return apiFetch<ApiUtilizador>(`/api/utilizadores/${id}/estado/`, {
+    method: 'PATCH',
+    body: JSON.stringify({ ativo }),
+  });
 }
 export async function ativosApi(clienteId?: number): Promise<ApiAtivo[]> {
   const qs = clienteId ? `?cliente_id=${clienteId}` : '';
@@ -333,9 +540,48 @@ export async function incidentesApi(clienteId?: number): Promise<ApiIncidente[]>
   const qs = clienteId ? `?cliente_id=${clienteId}` : '';
   return apiFetch<ApiIncidente[]>(`/api/incidentes/${qs}`);
 }
+export async function incidenteDetalheApi(id: number): Promise<ApiIncidente> {
+  return apiFetch<ApiIncidente>(`/api/incidentes/${id}/`);
+}
+export async function criarIncidenteApi(payload: ApiIncidentePayload): Promise<ApiIncidente> {
+  await ensureCsrfToken();
+  return apiFetch<ApiIncidente>('/api/incidentes/', { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function atualizarIncidenteApi(id: number, payload: ApiIncidentePayload): Promise<ApiIncidente> {
+  await ensureCsrfToken();
+  return apiFetch<ApiIncidente>(`/api/incidentes/${id}/`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
 export async function documentosApi(clienteId?: number): Promise<ApiDocumento[]> {
   const qs = clienteId ? `?cliente_id=${clienteId}` : '';
   return apiFetch<ApiDocumento[]>(`/api/documentos/${qs}`);
+}
+export async function submeterDocumentoApi(payload: {
+  clienteId: number; categoria: string; titulo: string; descricao?: string; ficheiro: File;
+}): Promise<ApiDocumento> {
+  await ensureCsrfToken();
+  const body = new FormData();
+  body.set('cliente_id', String(payload.clienteId));
+  body.set('categoria', payload.categoria);
+  body.set('titulo', payload.titulo);
+  body.set('descricao', payload.descricao || '');
+  body.set('ficheiro', payload.ficheiro);
+  return apiFetch<ApiDocumento>('/api/documentos/', { method: 'POST', body });
+}
+export async function atualizarDocumentoApi(id: number, payload: { categoria: string; titulo: string; descricao?: string }): Promise<ApiDocumento> {
+  await ensureCsrfToken();
+  return apiFetch<ApiDocumento>(`/api/documentos/${id}/`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+export async function descarregarDocumentoApi(id: number): Promise<{ blob: Blob; filename: string }> {
+  const response = await fetch(`${getApiBaseUrl()}/api/documentos/${id}/download/`, { credentials: 'include' });
+  if (!response.ok) {
+    let message = `HTTP ${response.status}`;
+    try { const data = await response.json(); message = data?.erro || message; } catch { /* resposta não JSON */ }
+    throw new Error(message);
+  }
+  const disposition = response.headers.get('Content-Disposition') || '';
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1];
+  const plain = /filename="?([^";]+)"?/i.exec(disposition)?.[1];
+  return { blob: await response.blob(), filename: encoded ? decodeURIComponent(encoded) : plain || `documento-${id}` };
 }
 export async function pedidosApi(clienteId?: number): Promise<ApiPedido[]> {
   const qs = clienteId ? `?cliente_id=${clienteId}` : '';
@@ -350,4 +596,74 @@ export async function logsApi(limit = 200): Promise<any[]> {
 }
 export async function opcoesApi(): Promise<any> {
   return apiFetch<any>('/api/opcoes/');
+}
+
+export async function conteudosPublicosApi(chave?: string): Promise<ApiConteudoSite[]> {
+  const qs = chave ? `?chave=${encodeURIComponent(chave)}` : '';
+  return apiFetch<ApiConteudoSite[]>(`/api/public/conteudos/${qs}`);
+}
+
+export async function noticiasPublicasApi(): Promise<ApiNoticia[]> {
+  return apiFetch<ApiNoticia[]>('/api/public/noticias/');
+}
+
+export async function noticiaPublicaDetalheApi(id: number): Promise<ApiNoticia> {
+  return apiFetch<ApiNoticia>(`/api/public/noticias/${id}/`);
+}
+
+export async function enviarMensagemContactoApi(payload: ApiMensagemContactoPayload): Promise<{ mensagem: string; id: number }> {
+  await ensureCsrfToken();
+  return apiFetch<{ mensagem: string; id: number }>('/api/public/contacto/', {
+    method: 'POST', body: JSON.stringify(payload),
+  });
+}
+
+export async function conteudosAdminApi(): Promise<ApiConteudoSite[]> {
+  return apiFetch<ApiConteudoSite[]>('/api/admin/conteudos/');
+}
+
+export async function criarConteudoAdminApi(payload: ApiConteudoSitePayload): Promise<ApiConteudoSite> {
+  await ensureCsrfToken();
+  return apiFetch<ApiConteudoSite>('/api/admin/conteudos/', {
+    method: 'POST', body: JSON.stringify(payload),
+  });
+}
+
+export async function atualizarConteudoAdminApi(id: number, payload: ApiConteudoSitePayload): Promise<ApiConteudoSite> {
+  await ensureCsrfToken();
+  return apiFetch<ApiConteudoSite>(`/api/admin/conteudos/${id}/`, {
+    method: 'PATCH', body: JSON.stringify(payload),
+  });
+}
+
+export async function noticiasAdminApi(): Promise<ApiNoticia[]> {
+  return apiFetch<ApiNoticia[]>('/api/admin/noticias/');
+}
+
+export async function criarNoticiaAdminApi(payload: ApiNoticiaPayload): Promise<ApiNoticia> {
+  await ensureCsrfToken();
+  return apiFetch<ApiNoticia>('/api/admin/noticias/', {
+    method: 'POST', body: JSON.stringify(payload),
+  });
+}
+
+export async function atualizarNoticiaAdminApi(id: number, payload: ApiNoticiaPayload): Promise<ApiNoticia> {
+  await ensureCsrfToken();
+  return apiFetch<ApiNoticia>(`/api/admin/noticias/${id}/`, {
+    method: 'PATCH', body: JSON.stringify(payload),
+  });
+}
+
+export async function contactosAdminApi(): Promise<ApiMensagemContacto[]> {
+  return apiFetch<ApiMensagemContacto[]>('/api/admin/contactos/');
+}
+
+export async function atualizarEstadoContactoAdminApi(
+  id: number,
+  estado: EstadoMensagemContacto,
+): Promise<ApiMensagemContacto> {
+  await ensureCsrfToken();
+  return apiFetch<ApiMensagemContacto>(`/api/admin/contactos/${id}/`, {
+    method: 'PATCH', body: JSON.stringify({ estado }),
+  });
 }

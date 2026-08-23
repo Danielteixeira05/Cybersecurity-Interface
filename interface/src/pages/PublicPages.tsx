@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -29,7 +29,14 @@ import newsIsoImage from '../assets/news/iso-27001.jpg';
 import newsNis2Image from '../assets/news/nis2-compliance.jpg';
 import newsPentestingImage from '../assets/news/pentesting.jpg';
 import newsRansomwareImage from '../assets/news/ransomware.jpg';
-import { session } from '../apiClient';
+import {
+  conteudosPublicosApi,
+  enviarMensagemContactoApi,
+  noticiasPublicasApi,
+  session,
+  type ApiConteudoSite,
+  type ApiNoticia,
+} from '../apiClient';
 import type { Page } from '../types';
 
 interface PageProps {
@@ -267,8 +274,8 @@ interface NewsArticle {
   content: readonly NewsContentBlock[];
 }
 
-// TODO(CMS): conteúdo editorial provisório. Esta coleção será substituída por GET /api/public/noticias.
-const NEWS_ARTICLES = [
+// Fallback editorial: só é utilizado quando a API ainda não tem notícias publicadas.
+const FALLBACK_NEWS_ARTICLES = [
   {
     id: 'nis2-portugal-2025',
     slug: 'nis2-o-que-muda-empresas-portuguesas-2025',
@@ -468,6 +475,57 @@ const NEWS_ARTICLES = [
   },
 ] satisfies readonly NewsArticle[];
 
+function usePublicContents() {
+  const [contents, setContents] = useState<ApiConteudoSite[]>([]);
+  useEffect(() => {
+    let active = true;
+    conteudosPublicosApi()
+      .then((rows) => { if (active) setContents(rows); })
+      .catch(() => { if (active) setContents([]); });
+    return () => { active = false; };
+  }, []);
+  return (key: string) => contents.find((item) => item.chave === key);
+}
+
+function publicNewsImage(item: ApiNoticia, index: number): string {
+  if (item.imagem_url) return item.imagem_url;
+  return [newsNis2Image, newsPentestingImage, newsRansomwareImage, newsIsoImage][index % 4];
+}
+
+function apiNewsArticle(item: ApiNoticia, index: number): NewsArticle {
+  const publishedAt = item.publicada_em || item.criado_em || new Date().toISOString();
+  const date = new Date(publishedAt);
+  const validDate = !Number.isNaN(date.getTime());
+  return {
+    id: String(item.id),
+    slug: String(item.id),
+    title: item.titulo,
+    category: 'Notícias',
+    categoryTone: 'violet',
+    date: validDate ? date.toLocaleDateString('pt-PT', { day: 'numeric', month: 'long', year: 'numeric' }) : '—',
+    shortDate: validDate ? date.toLocaleDateString('pt-PT') : '—',
+    dateTime: validDate ? date.toISOString() : '',
+    excerpt: item.resumo,
+    image: publicNewsImage(item, index),
+    featured: index === 0,
+    content: [{ type: 'paragraph', text: item.corpo }],
+  };
+}
+
+function usePublicNews(): readonly NewsArticle[] {
+  const [articles, setArticles] = useState<readonly NewsArticle[]>(FALLBACK_NEWS_ARTICLES);
+  useEffect(() => {
+    let active = true;
+    noticiasPublicasApi()
+      .then((rows) => {
+        if (active) setArticles(rows.length > 0 ? rows.map(apiNewsArticle) : FALLBACK_NEWS_ARTICLES);
+      })
+      .catch(() => { if (active) setArticles(FALLBACK_NEWS_ARTICLES); });
+    return () => { active = false; };
+  }, []);
+  return articles;
+}
+
 const CONTACT_CHANNELS = [
   {
     title: 'Morada',
@@ -570,6 +628,8 @@ function PublicFooter({ setPage }: PageProps) {
 }
 
 export function HomePage({ setPage }: PageProps) {
+  const content = usePublicContents();
+  const servicesIntro = content('SERVICOS_INTRO');
   const navigateTo = (target: Page) => {
     window.scrollTo({ top: 0, behavior: 'auto' });
     setPage(target);
@@ -621,10 +681,9 @@ export function HomePage({ setPage }: PageProps) {
           <div className="container-xl">
             <header className="home-section-heading">
               <p className="home-section-heading__eyebrow">O Que Fazemos</p>
-              <h2 id="home-services-title">Serviços de Cibersegurança Completos</h2>
+              <h2 id="home-services-title">{servicesIntro?.titulo || 'Serviços de Cibersegurança Completos'}</h2>
               <p>
-                Proteção de ponta a ponta para a sua infraestrutura digital, desde a deteção de ameaças à
-                conformidade regulatória.
+                {servicesIntro?.corpo || 'Proteção de ponta a ponta para a sua infraestrutura digital, desde a deteção de ameaças à conformidade regulatória.'}
               </p>
             </header>
 
@@ -679,6 +738,12 @@ export function HomePage({ setPage }: PageProps) {
 }
 
 export function AboutPage({ setPage }: PageProps) {
+  const content = usePublicContents();
+  const institutionalValues = [
+    { t: content('MISSAO')?.titulo || 'Missão', d: content('MISSAO')?.corpo || 'Proteger organizações de todos os tamanhos contra ameaças cibernéticas modernas, com tecnologia acessível e equipa especializada.' },
+    { t: content('VISAO')?.titulo || 'Visão', d: content('VISAO')?.corpo || 'Ser a plataforma de referência de cibersegurança em língua portuguesa, reconhecida pela inovação e excelência operacional.' },
+    { t: content('VALORES')?.titulo || 'Valores', d: content('VALORES')?.corpo || 'Integridade, transparência, resiliência e melhoria contínua. A segurança é um processo, não um destino.' },
+  ];
   return (
     <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
       <span className="badge bg-blue-100 text-blue-700">Sobre Nós</span>
@@ -691,11 +756,7 @@ export function AboutPage({ setPage }: PageProps) {
       </p>
 
       <div className="mt-16 grid gap-8 sm:grid-cols-3">
-        {[
-          { t: 'Missão', d: 'Proteger organizações de todos os tamanhos contra ameaças cibernéticas modernas, com tecnologia acessível e equipa especializada.' },
-          { t: 'Visão', d: 'Ser a plataforma de referência de cibersegurança em língua portuguesa, reconhecida pela inovação e excelência operacional.' },
-          { t: 'Valores', d: 'Integridade, transparência, resiliência e melhoria contínua. A segurança é um processo, não um destino.' },
-        ].map((v) => (
+        {institutionalValues.map((v) => (
           <div key={v.t} className="rounded-2xl border border-slate-200 bg-white p-7">
             <h3 className="font-display text-xl font-semibold text-slate-900">{v.t}</h3>
             <p className="mt-3 text-sm leading-relaxed text-slate-600">{v.d}</p>
@@ -736,6 +797,7 @@ export function AboutPage({ setPage }: PageProps) {
 }
 
 export function MissionPage({ setPage }: PageProps) {
+  const mission = usePublicContents()('MISSAO');
   return (
     <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
       <span className="badge bg-violet-100 text-violet-700">Missão & Propósito</span>
@@ -744,6 +806,7 @@ export function MissionPage({ setPage }: PageProps) {
         <br />
         <span className="text-violet-600">É um direito fundamental.</span>
       </h1>
+      {mission?.corpo && <p className="mt-6 max-w-3xl text-xl leading-relaxed text-slate-600">{mission.corpo}</p>}
 
       <div className="mt-12 space-y-8">
         {[
@@ -779,6 +842,7 @@ export function MissionPage({ setPage }: PageProps) {
 }
 
 export function ServicesPage({ setPage }: PageProps) {
+  const servicesIntro = usePublicContents()('SERVICOS_INTRO');
   const navigateTo = (target: Page) => {
     window.scrollTo({ top: 0, behavior: 'auto' });
     setPage(target);
@@ -872,8 +936,8 @@ export function ServicesPage({ setPage }: PageProps) {
           <div className="container-xl">
             <header className="services-section-heading">
               <p className="services-section-heading__eyebrow">Catálogo de Serviços</p>
-              <h2 id="services-catalog-title">O que oferecemos</h2>
-              <p>Todos os serviços são prestados pela nossa equipa certificada com SLAs documentados.</p>
+              <h2 id="services-catalog-title">{servicesIntro?.titulo || 'O que oferecemos'}</h2>
+              <p>{servicesIntro?.corpo || 'Todos os serviços são prestados pela nossa equipa certificada com SLAs documentados.'}</p>
             </header>
 
             <div className="row g-4 services-catalog-grid">
@@ -1057,8 +1121,9 @@ function NewsArticleCard({ article, onSelect }: { article: NewsArticle; onSelect
 }
 
 export function NewsPage({ setPage, onSelectArticle }: NewsPageProps) {
-  const featuredArticle = NEWS_ARTICLES.find((article) => article.featured) ?? NEWS_ARTICLES[0];
-  const remainingArticles = NEWS_ARTICLES.filter((article) => article.id !== featuredArticle.id);
+  const articles = usePublicNews();
+  const featuredArticle = articles.find((article) => article.featured) ?? articles[0];
+  const remainingArticles = articles.filter((article) => article.id !== featuredArticle.id);
 
   return (
     <>
@@ -1123,8 +1188,9 @@ export function NewsPage({ setPage, onSelectArticle }: NewsPageProps) {
 }
 
 export function NewsDetailPage({ setPage, selectedArticleId, onSelectArticle }: NewsDetailPageProps) {
-  const article = NEWS_ARTICLES.find((item) => item.id === selectedArticleId) ?? NEWS_ARTICLES[0];
-  const latestArticles = NEWS_ARTICLES.filter((item) => item.id !== article.id).slice(0, 3);
+  const articles = usePublicNews();
+  const article = articles.find((item) => item.id === selectedArticleId) ?? articles[0];
+  const latestArticles = articles.filter((item) => item.id !== article.id).slice(0, 3);
 
   const returnToNews = () => {
     window.scrollTo({ top: 0, behavior: 'auto' });
@@ -1221,6 +1287,29 @@ export function NewsDetailPage({ setPage, selectedArticleId, onSelectArticle }: 
 
 export function ContactPage({ setPage }: PageProps) {
   const [sent, setSent] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+
+  const submitContact = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const fields = new FormData(form);
+    setSubmitting(true); setSent(false); setSubmitError('');
+    try {
+      await enviarMensagemContactoApi({
+        nome: `${String(fields.get('firstName') || '').trim()} ${String(fields.get('lastName') || '').trim()}`.trim(),
+        email: String(fields.get('email') || '').trim(),
+        empresa: String(fields.get('organization') || '').trim(),
+        assunto: String(fields.get('service') || '').trim(),
+        mensagem: String(fields.get('message') || '').trim(),
+      });
+      form.reset(); setSent(true);
+    } catch (error: any) {
+      setSubmitError(error?.message || 'Não foi possível enviar a mensagem. Tente novamente.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <>
@@ -1263,12 +1352,8 @@ export function ContactPage({ setPage }: PageProps) {
 
                 <form
                   className="contact-v97__form"
-                  onChange={() => sent && setSent(false)}
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    // TODO(API): ligar a POST /api/public/contacto quando o endpoint estiver disponível.
-                    setSent(true);
-                  }}
+                  onChange={() => { if (sent) setSent(false); if (submitError) setSubmitError(''); }}
+                  onSubmit={submitContact}
                 >
                   <div className="row g-3">
                     <div className="col-12 col-sm-6 contact-v97__field">
@@ -1340,15 +1425,16 @@ export function ContactPage({ setPage }: PageProps) {
                         id="contact-message"
                         name="message"
                         rows={4}
+                        required
                         className="form-control contact-v97__control contact-v97__textarea"
                         placeholder="Descreva as suas necessidades de segurança..."
                       />
                     </div>
                   </div>
 
-                  <button type="submit" className="contact-v97__submit">
+                  <button type="submit" className="contact-v97__submit" disabled={submitting}>
                     <Send aria-hidden="true" />
-                    Enviar Mensagem
+                    {submitting ? 'A enviar...' : 'Enviar Mensagem'}
                   </button>
 
                   <div className="contact-v97__feedback" aria-live="polite" aria-atomic="true">
@@ -1358,6 +1444,7 @@ export function ContactPage({ setPage }: PageProps) {
                         Mensagem registada com sucesso.
                       </p>
                     )}
+                    {submitError && <p className="contact-v97__feedback-error" role="alert"><CircleAlert aria-hidden="true" />{submitError}</p>}
                   </div>
                 </form>
               </div>

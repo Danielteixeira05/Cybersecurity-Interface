@@ -8,7 +8,7 @@ import {
 import LoginPage from './pages/LoginPage';
 import {
   AdminDashboard, AdminAnalytics, AdminUsers, AdminClients, AdminDocuments,
-  AdminIncidents, AdminLogs, AdminSiteContent, AdminManagerDetail, AdminPermissions,
+  AdminIncidents, AdminLogs, AdminSiteContent, AdminClientDetail, AdminManagerDetail, AdminPermissions,
 } from './pages/AdminPages';
 import {
   MgrDashboard, MgrAnalytics, MgrClients, MgrClientDetail, MgrIncidents, MgrDocuments,
@@ -105,8 +105,8 @@ export default function App() {
       {page === 'admin-incidents' && <AdminIncidents />}
       {page === 'admin-logs' && <AdminLogs />}
       {page === 'admin-site-content' && <AdminSiteContent />}
-      {page === 'admin-permissions' && <AdminPermissions />}
-      {page === 'admin-client-detail' && <MgrClientDetail setPage={setPage} backPage="admin-clients" backLabel="Administrador" />}
+      {page === 'admin-permissions' && <AdminPermissions setPage={setPage} />}
+      {page === 'admin-client-detail' && <AdminClientDetail setPage={setPage} />}
       {page === 'admin-user-client' && <MgrClientDetail setPage={setPage} backPage="admin-users" backLabel="Utilizadores" />}
       {page === 'admin-user-manager' && <AdminManagerDetail setPage={setPage} />}
 
