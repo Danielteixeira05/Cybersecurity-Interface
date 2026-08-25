@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -29,7 +29,10 @@ import newsIsoImage from '../assets/news/iso-27001.jpg';
 import newsNis2Image from '../assets/news/nis2-compliance.jpg';
 import newsPentestingImage from '../assets/news/pentesting.jpg';
 import newsRansomwareImage from '../assets/news/ransomware.jpg';
-import { session } from '../apiClient';
+import {
+  enviarContactoPublicoApi, noticiaPublicaDetalheApi, noticiasPublicasApi, session,
+  type ApiNoticia,
+} from '../apiClient';
 import type { Page } from '../types';
 
 interface PageProps {
@@ -261,14 +264,48 @@ interface NewsArticle {
   shortDate: string;
   dateTime: string;
   excerpt: string;
-  image: string;
+  image?: string | null;
   featured: boolean;
   readingTime?: string;
   content: readonly NewsContentBlock[];
 }
 
+function formatNewsDate(value?: string | null) {
+  if (!value) return 'Data não disponível';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Data não disponível';
+  return new Intl.DateTimeFormat('pt-PT', { day: 'numeric', month: 'long', year: 'numeric' }).format(date);
+}
+
+function formatNewsShortDate(value?: string | null) {
+  if (!value) return '—';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('pt-PT').format(date);
+}
+
+function apiNewsToArticle(news: ApiNoticia): NewsArticle {
+  const publishedAt = news.publicada_em ?? news.criado_em ?? null;
+  const paragraphs = news.corpo.split(/\n\s*\n/).map((text) => text.trim()).filter(Boolean);
+  return {
+    id: String(news.id),
+    slug: String(news.id),
+    title: news.titulo,
+    // O modelo atual não tem categoria. Este rótulo é puramente de interface,
+    // sem classificar ou inventar dados editoriais.
+    category: 'Publicação',
+    categoryTone: 'blue',
+    date: formatNewsDate(publishedAt),
+    shortDate: formatNewsShortDate(publishedAt),
+    dateTime: publishedAt ?? '',
+    excerpt: news.resumo,
+    image: news.imagem_url ?? null,
+    featured: false,
+    content: (paragraphs.length ? paragraphs : [news.corpo]).map((text) => ({ type: 'paragraph', text })),
+  };
+}
+
 // TODO(CMS): conteúdo editorial provisório. Esta coleção será substituída por GET /api/public/noticias.
-const NEWS_ARTICLES = [
+const NEWS_ARTICLES: readonly NewsArticle[] = [
   {
     id: 'nis2-portugal-2025',
     slug: 'nis2-o-que-muda-empresas-portuguesas-2025',
@@ -1035,7 +1072,7 @@ function NewsArticleCard({ article, onSelect }: { article: NewsArticle; onSelect
   return (
     <article className="news-v97-card">
       <div className="news-v97-card__media">
-        <img src={article.image} alt={article.title} />
+        {article.image && <img src={article.image} alt={article.title} />}
         <time className="news-v97-card__date" dateTime={article.dateTime}>
           {article.shortDate}
         </time>
@@ -1057,8 +1094,20 @@ function NewsArticleCard({ article, onSelect }: { article: NewsArticle; onSelect
 }
 
 export function NewsPage({ setPage, onSelectArticle }: NewsPageProps) {
-  const featuredArticle = NEWS_ARTICLES.find((article) => article.featured) ?? NEWS_ARTICLES[0];
-  const remainingArticles = NEWS_ARTICLES.filter((article) => article.id !== featuredArticle.id);
+  const [articles, setArticles] = useState<NewsArticle[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    noticiasPublicasApi()
+      .then((rows) => { if (active) setArticles(rows.map(apiNewsToArticle)); })
+      .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : 'Não foi possível carregar as publicações.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+
+  const [featuredArticle, ...remainingArticles] = articles;
 
   return (
     <>
@@ -1084,35 +1133,35 @@ export function NewsPage({ setPage, onSelectArticle }: NewsPageProps) {
 
         <section className="news-v97__feed" aria-label="Artigos recentes" data-page-section="news-articles">
           <div className="container-xl news-v97__container">
-            <article className="news-v97-featured">
-              <div className="news-v97-featured__media">
-                <img src={featuredArticle.image} alt={featuredArticle.title} />
-              </div>
-              <div className="news-v97-featured__content">
-                <span className="news-v97-featured__category">{featuredArticle.category}</span>
-                <h2>{featuredArticle.title}</h2>
-                <p>{featuredArticle.excerpt}</p>
-                <div className="news-v97-featured__date">
-                  <CalendarDays aria-hidden="true" />
-                  <time dateTime={featuredArticle.dateTime}>{featuredArticle.date}</time>
+            {loading && <p className="text-center text-slate-500">A carregar publicações...</p>}
+            {error && <p className="text-center text-rose-700" role="alert">{error}</p>}
+            {!loading && !error && !featuredArticle && <p className="text-center text-slate-500">Ainda não existem publicações disponíveis.</p>}
+            {featuredArticle && <>
+              <article className="news-v97-featured">
+                <div className="news-v97-featured__media">
+                  {featuredArticle.image && <img src={featuredArticle.image} alt={featuredArticle.title} />}
                 </div>
-                <button
-                  type="button"
-                  className="news-v97-featured__read"
-                  onClick={() => onSelectArticle(featuredArticle.id)}
-                >
-                  Ler artigo <ArrowRight aria-hidden="true" />
-                </button>
-              </div>
-            </article>
-
-            <div className="row g-4 news-v97-grid">
-              {remainingArticles.map((article) => (
-                <div className="col-12 col-md-4" key={article.id}>
-                  <NewsArticleCard article={article} onSelect={onSelectArticle} />
+                <div className="news-v97-featured__content">
+                  <span className="news-v97-featured__category">{featuredArticle.category}</span>
+                  <h2>{featuredArticle.title}</h2>
+                  <p>{featuredArticle.excerpt}</p>
+                  <div className="news-v97-featured__date">
+                    <CalendarDays aria-hidden="true" />
+                    <time dateTime={featuredArticle.dateTime}>{featuredArticle.date}</time>
+                  </div>
+                  <button type="button" className="news-v97-featured__read" onClick={() => onSelectArticle(featuredArticle.id)}>
+                    Ler artigo <ArrowRight aria-hidden="true" />
+                  </button>
                 </div>
-              ))}
-            </div>
+              </article>
+              <div className="row g-4 news-v97-grid">
+                {remainingArticles.map((article) => (
+                  <div className="col-12 col-md-4" key={article.id}>
+                    <NewsArticleCard article={article} onSelect={onSelectArticle} />
+                  </div>
+                ))}
+              </div>
+            </>}
           </div>
         </section>
       </main>
@@ -1123,13 +1172,41 @@ export function NewsPage({ setPage, onSelectArticle }: NewsPageProps) {
 }
 
 export function NewsDetailPage({ setPage, selectedArticleId, onSelectArticle }: NewsDetailPageProps) {
-  const article = NEWS_ARTICLES.find((item) => item.id === selectedArticleId) ?? NEWS_ARTICLES[0];
-  const latestArticles = NEWS_ARTICLES.filter((item) => item.id !== article.id).slice(0, 3);
+  const [article, setArticle] = useState<NewsArticle | null>(null);
+  const [latestArticles, setLatestArticles] = useState<NewsArticle[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const id = Number(selectedArticleId);
+    if (!Number.isSafeInteger(id) || id < 1) {
+      setArticle(null);
+      setLatestArticles([]);
+      setError('Publicação não encontrada.');
+      setLoading(false);
+      return;
+    }
+    let active = true;
+    setLoading(true);
+    setError(null);
+    Promise.all([noticiaPublicaDetalheApi(id), noticiasPublicasApi()])
+      .then(([item, all]) => {
+        if (!active) return;
+        setArticle(apiNewsToArticle(item));
+        setLatestArticles(all.filter((news) => news.id !== id).slice(0, 3).map(apiNewsToArticle));
+      })
+      .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : 'Não foi possível carregar a publicação.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [selectedArticleId]);
 
   const returnToNews = () => {
     window.scrollTo({ top: 0, behavior: 'auto' });
     setPage('news');
   };
+
+  if (loading) return <main className="news-detail"><p className="py-16 text-center text-slate-500">A carregar publicação...</p></main>;
+  if (error || !article) return <main className="news-detail"><p className="py-16 text-center text-rose-700" role="alert">{error || 'Publicação não encontrada.'}</p></main>;
 
   return (
     <>
@@ -1163,7 +1240,7 @@ export function NewsDetailPage({ setPage, selectedArticleId, onSelectArticle }: 
             </div>
 
             <figure className="news-detail__figure">
-              <img src={article.image} alt={article.title} />
+              {article.image && <img src={article.image} alt={article.title} />}
             </figure>
 
             <div className="news-detail__body">
@@ -1220,7 +1297,32 @@ export function NewsDetailPage({ setPage, selectedArticleId, onSelectArticle }: 
 }
 
 export function ContactPage({ setPage }: PageProps) {
-  const [sent, setSent] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [error, setError] = useState<string | null>(null);
+
+  async function submitContact(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = new FormData(form);
+    const firstName = String(values.get('firstName') ?? '').trim();
+    const lastName = String(values.get('lastName') ?? '').trim();
+    setStatus('sending');
+    setError(null);
+    try {
+      await enviarContactoPublicoApi({
+        nome: [firstName, lastName].filter(Boolean).join(' '),
+        email: String(values.get('email') ?? '').trim(),
+        empresa: String(values.get('organization') ?? '').trim(),
+        assunto: String(values.get('service') ?? '').trim(),
+        mensagem: String(values.get('message') ?? '').trim(),
+      });
+      form.reset();
+      setStatus('sent');
+    } catch (cause) {
+      setStatus('error');
+      setError(cause instanceof Error ? cause.message : 'Não foi possível enviar a mensagem.');
+    }
+  }
 
   return (
     <>
@@ -1263,12 +1365,8 @@ export function ContactPage({ setPage }: PageProps) {
 
                 <form
                   className="contact-v97__form"
-                  onChange={() => sent && setSent(false)}
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    // TODO(API): ligar a POST /api/public/contacto quando o endpoint estiver disponível.
-                    setSent(true);
-                  }}
+                  onChange={() => status !== 'idle' && setStatus('idle')}
+                  onSubmit={submitContact}
                 >
                   <div className="row g-3">
                     <div className="col-12 col-sm-6 contact-v97__field">
@@ -1340,24 +1438,26 @@ export function ContactPage({ setPage }: PageProps) {
                         id="contact-message"
                         name="message"
                         rows={4}
+                        required
                         className="form-control contact-v97__control contact-v97__textarea"
                         placeholder="Descreva as suas necessidades de segurança..."
                       />
                     </div>
                   </div>
 
-                  <button type="submit" className="contact-v97__submit">
+                  <button type="submit" className="contact-v97__submit" disabled={status === 'sending'}>
                     <Send aria-hidden="true" />
-                    Enviar Mensagem
+                    {status === 'sending' ? 'A enviar...' : 'Enviar Mensagem'}
                   </button>
 
                   <div className="contact-v97__feedback" aria-live="polite" aria-atomic="true">
-                    {sent && (
+                    {status === 'sent' && (
                       <p role="status">
                         <CircleCheckBig aria-hidden="true" />
                         Mensagem registada com sucesso.
                       </p>
                     )}
+                    {status === 'error' && <p role="alert">{error || 'Não foi possível enviar a mensagem.'}</p>}
                   </div>
                 </form>
               </div>

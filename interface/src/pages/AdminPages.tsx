@@ -7,8 +7,9 @@ import type { Page } from '../types';
 import {
   dashboardApi, clientesApi, utilizadoresApi, documentosApi,
   incidentesApi, logsApi, clienteDetalheApi,
+  atualizarConteudoAdminApi, conteudosAdminApi, criarConteudoAdminApi,
   type ApiDashboardAdmin, type ApiCliente, type ApiUtilizador,
-  type ApiIncidente, type ApiDocumento, session,
+  type ApiConteudoSite, type ApiIncidente, type ApiDocumento, session,
 } from '../apiClient';
 
 // ========== UI HELPERS ==========
@@ -151,10 +152,10 @@ export function AdminDashboard({ setPage }: PageProps) {
       <PageHeader title="Dashboard Administrador" subtitle="Visão global da plataforma CiberBoxSecur" />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Clientes" value={s.clientes ?? 0} icon="🏢" color="bg-blue-50" delta="+12% vs mês anterior" />
-        <StatCard label="Utilizadores" value={s.utilizadores ?? 0} icon="👥" color="bg-violet-50" />
-        <StatCard label="Ativos Registados" value={s.ativos ?? 0} icon="💻" color="bg-emerald-50" />
-        <StatCard label="Incidentes Abertos" value={s.incidentes_abertos ?? 0} icon="🚨" color="bg-rose-50" delta={`${s.incidentes ?? 0} total`} />
+        <StatCard label="Clientes" value={s.clientes ?? '—'} icon="🏢" color="bg-blue-50" />
+        <StatCard label="Utilizadores" value={s.utilizadores ?? '—'} icon="👥" color="bg-violet-50" />
+        <StatCard label="Ativos Registados" value={s.ativos ?? '—'} icon="💻" color="bg-emerald-50" />
+        <StatCard label="Incidentes Abertos" value={s.incidentes_abertos ?? '—'} icon="🚨" color="bg-rose-50" />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
@@ -190,7 +191,10 @@ export function AdminDashboard({ setPage }: PageProps) {
                   dataKey="total_utilizadores"
                   nameKey="perfil"
                   outerRadius={90}
-                  label={(p) => `${p.perfil}: ${p.total_utilizadores}`}
+                  label={(p) => {
+                    const item = p.payload as { perfil?: string; total_utilizadores?: number } | undefined;
+                    return `${item?.perfil ?? ''}: ${item?.total_utilizadores ?? p.value ?? ''}`;
+                  }}
                   labelLine={false}
                 >
                   {(data.utilizadores_perfil || []).map((_, i) => (
@@ -264,38 +268,71 @@ export function AdminDashboard({ setPage }: PageProps) {
 
 // ========== ADMIN ANALYTICS ==========
 export function AdminAnalytics() {
-  const trendData = [
-    { mes: 'Jul', incidentes: 18, ativos: 120, clientes: 42 },
-    { mes: 'Ago', incidentes: 25, ativos: 148, clientes: 45 },
-    { mes: 'Set', incidentes: 30, ativos: 172, clientes: 49 },
-    { mes: 'Out', incidentes: 22, ativos: 198, clientes: 52 },
-    { mes: 'Nov', incidentes: 40, ativos: 225, clientes: 56 },
-    { mes: 'Dez', incidentes: 35, ativos: 260, clientes: 62 },
-  ];
+  const [data, setData] = useState<ApiDashboardAdmin | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    dashboardApi()
+      .then((response) => setData(response as ApiDashboardAdmin))
+      .catch((cause) => setError(cause instanceof Error ? cause.message : 'Erro ao carregar as análises.'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <Loader />;
+  if (error) return <ErrorCard msg={error} />;
+  if (!data) return null;
+  const stats = data.stats;
+  const timeSamples = data.pedidos_estado.filter((item) => item.tempo_medio_resolucao_horas !== null && item.total_pedidos > 0);
+  const totalTimedRequests = timeSamples.reduce((total, item) => total + item.total_pedidos, 0);
+  const weightedMttr = totalTimedRequests > 0
+    ? timeSamples.reduce((total, item) => total + (item.tempo_medio_resolucao_horas ?? 0) * item.total_pedidos, 0) / totalTimedRequests
+    : null;
+  const ChartEmpty = ({ text }: { text: string }) => <div className="flex h-full items-center justify-center text-sm text-slate-500">{text}</div>;
+
   return (
     <div>
-      <PageHeader title="Análises & Relatórios" subtitle="Tendências e métricas da plataforma" />
+      <PageHeader title="Análises & Relatórios" subtitle="Indicadores calculados a partir dos dados registados" />
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="MTTR (horas)" value="4.2" icon="⏱️" color="bg-amber-50" delta="-8% vs Q anterior" />
-        <StatCard label="MTTD (min)" value="12.7" icon="🔎" color="bg-cyan-50" />
-        <StatCard label="Taxa de Resolução" value="94.8%" icon="✅" color="bg-emerald-50" delta="+2.3%" />
+        <StatCard label="MTTR (horas)" value={weightedMttr === null ? '—' : weightedMttr.toFixed(1)} icon="⏱️" color="bg-amber-50" />
+        <StatCard label="Documentos" value={stats.documentos ?? '—'} icon="📄" color="bg-cyan-50" />
+        <StatCard label="Pedidos" value={stats.pedidos ?? '—'} icon="✅" color="bg-emerald-50" />
       </div>
-      <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
-        <h3 className="mb-4 font-display text-lg font-semibold text-slate-900">Tendências Plataforma (6 meses)</h3>
-        <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={trendData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="mes" stroke="#64748b" />
-              <YAxis stroke="#64748b" />
-              <Tooltip />
-              <Legend />
-              <Line type="monotone" dataKey="incidentes" stroke="#ef4444" strokeWidth={2.5} dot={{ r: 4 }} />
-              <Line type="monotone" dataKey="ativos" stroke="#2563eb" strokeWidth={2.5} dot={{ r: 4 }} />
-              <Line type="monotone" dataKey="clientes" stroke="#10b981" strokeWidth={2.5} dot={{ r: 4 }} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <section className="rounded-2xl border border-slate-200 bg-white p-6">
+          <h3 className="font-display text-lg font-semibold text-slate-900">Clientes por Conformidade NIS2</h3>
+          <div className="mt-4 h-72">
+            {data.conformidade.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={data.conformidade}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis dataKey="estado" tick={{ fontSize: 11 }} stroke="#64748b" /><YAxis tick={{ fontSize: 11 }} stroke="#64748b" /><Tooltip /><Bar dataKey="numero_clientes" fill="#2563eb" radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer> : <ChartEmpty text="Sem dados de conformidade disponíveis." />}
+          </div>
+        </section>
+        <section className="rounded-2xl border border-slate-200 bg-white p-6">
+          <h3 className="font-display text-lg font-semibold text-slate-900">Utilizadores por Perfil</h3>
+          <div className="mt-4 h-72">
+            {data.utilizadores_perfil.length ? <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={data.utilizadores_perfil} dataKey="total_utilizadores" nameKey="perfil" outerRadius={90}>{data.utilizadores_perfil.map((_, index) => <Cell key={index} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}</Pie><Tooltip /><Legend /></PieChart></ResponsiveContainer> : <ChartEmpty text="Sem dados de perfis disponíveis." />}
+          </div>
+        </section>
+        <section className="rounded-2xl border border-slate-200 bg-white p-6">
+          <h3 className="font-display text-lg font-semibold text-slate-900">Top Clientes por Incidentes</h3>
+          <div className="mt-4 h-72">
+            {data.top_incidentes.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={data.top_incidentes} layout="vertical"><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis type="number" tick={{ fontSize: 11 }} stroke="#64748b" /><YAxis dataKey="nome" type="category" width={130} tick={{ fontSize: 11 }} stroke="#64748b" /><Tooltip /><Bar dataKey="total_incidentes" fill="#ef4444" radius={[0, 8, 8, 0]} /></BarChart></ResponsiveContainer> : <ChartEmpty text="Sem incidentes disponíveis." />}
+          </div>
+        </section>
+        <section className="rounded-2xl border border-slate-200 bg-white p-6">
+          <h3 className="font-display text-lg font-semibold text-slate-900">Documentos Submetidos</h3>
+          <div className="mt-4 h-72">
+            {data.documentos_mes.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={data.documentos_mes}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis dataKey="mes" tick={{ fontSize: 11 }} stroke="#64748b" /><YAxis tick={{ fontSize: 11 }} stroke="#64748b" /><Tooltip /><Bar dataKey="total_documentos" fill="#8b5cf6" radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer> : <ChartEmpty text="Sem documentos submetidos disponíveis." />}
+          </div>
+        </section>
+        <section className="rounded-2xl border border-slate-200 bg-white p-6">
+          <h3 className="font-display text-lg font-semibold text-slate-900">Pedidos por Estado</h3>
+          <div className="mt-4 h-72">
+            {data.pedidos_estado.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={data.pedidos_estado}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis dataKey="estado" tick={{ fontSize: 11 }} stroke="#64748b" /><YAxis tick={{ fontSize: 11 }} stroke="#64748b" /><Tooltip /><Bar dataKey="total_pedidos" fill="#10b981" radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer> : <ChartEmpty text="Sem pedidos disponíveis." />}
+          </div>
+        </section>
+        <section className="rounded-2xl border border-slate-200 bg-white p-6">
+          <h3 className="font-display text-lg font-semibold text-slate-900">Incidentes — Tendência</h3>
+          <div className="mt-4 h-72"><ChartEmpty text="Sem série histórica de incidentes disponível." /></div>
+        </section>
       </div>
     </div>
   );
@@ -675,33 +712,103 @@ export function AdminLogs() {
 
 // ========== ADMIN SITE CONTENT & PERMISSIONS ==========
 export function AdminSiteContent() {
-  const items = [
-    { p: 'home', t: 'Página Inicial', s: 'Conteúdo hero, secções serviços e call-to-action', ok: true },
-    { p: 'about', t: 'Sobre Nós', s: 'Missão, valores, equipa e certificações', ok: true },
-    { p: 'services', t: 'Serviços', s: '6 serviços principais com features e preços', ok: true },
-    { p: 'news', t: 'Novidades / Blog', s: '4 artigos de demonstração publicados', ok: true },
-    { p: 'contact', t: 'Contacto', s: 'Formulário e contactos da empresa', ok: true },
-  ];
+  type ContentDraft = Pick<ApiConteudoSite, 'chave' | 'titulo' | 'subtitulo' | 'corpo' | 'imagem_url' | 'ativo' | 'ordem'>;
+  const emptyDraft = (): ContentDraft => ({ chave: '', titulo: '', subtitulo: '', corpo: '', imagem_url: '', ativo: true, ordem: 0 });
+  const [items, setItems] = useState<ApiConteudoSite[]>([]);
+  const [editing, setEditing] = useState<ApiConteudoSite | null>(null);
+  const [draft, setDraft] = useState<ContentDraft>(emptyDraft);
+  const [formOpen, setFormOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const load = () => {
+    setLoading(true);
+    setLoadError(null);
+    conteudosAdminApi()
+      .then(setItems)
+      .catch((cause) => setLoadError(cause instanceof Error ? cause.message : 'Erro ao carregar conteúdos.'))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(load, []);
+
+  const openNew = () => {
+    setEditing(null);
+    setDraft(emptyDraft());
+    setFormOpen(true);
+    setFormError(null);
+  };
+
+  const openEdit = (item: ApiConteudoSite) => {
+    setEditing(item);
+    setDraft({
+      chave: item.chave, titulo: item.titulo, subtitulo: item.subtitulo ?? '', corpo: item.corpo ?? '',
+      imagem_url: item.imagem_url ?? '', ativo: item.ativo, ordem: item.ordem,
+    });
+    setFormOpen(true);
+    setFormError(null);
+  };
+
+  const save = async () => {
+    setSaving(true);
+    setFormError(null);
+    try {
+      if (editing) await atualizarConteudoAdminApi(editing.id, draft);
+      else await criarConteudoAdminApi(draft);
+      setEditing(null);
+      setDraft(emptyDraft());
+      setFormOpen(false);
+      load();
+    } catch (cause) {
+      setFormError(cause instanceof Error ? cause.message : 'Não foi possível guardar o conteúdo.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div>
-      <PageHeader title="Gestão de Conteúdo do Site" subtitle="Conteúdos das páginas públicas" />
+      <PageHeader
+        title="Gestão de Conteúdo do Site"
+        subtitle="Conteúdos persistidos das páginas públicas"
+        actions={<button type="button" onClick={openNew} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">+ Novo Conteúdo</button>}
+      />
+      {formOpen && (
+        <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm" aria-label={editing ? 'Editar conteúdo' : 'Novo conteúdo'}>
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="text-sm font-medium text-slate-700">Chave<input value={draft.chave} onChange={(event) => setDraft({ ...draft, chave: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" required /></label>
+            <label className="text-sm font-medium text-slate-700">Ordem<input value={draft.ordem} type="number" min="0" onChange={(event) => setDraft({ ...draft, ordem: Number(event.target.value) })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" required /></label>
+            <label className="text-sm font-medium text-slate-700 md:col-span-2">Título<input value={draft.titulo} onChange={(event) => setDraft({ ...draft, titulo: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" required /></label>
+            <label className="text-sm font-medium text-slate-700 md:col-span-2">Subtítulo<input value={draft.subtitulo ?? ''} onChange={(event) => setDraft({ ...draft, subtitulo: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+            <label className="text-sm font-medium text-slate-700 md:col-span-2">Imagem URL<input value={draft.imagem_url ?? ''} onChange={(event) => setDraft({ ...draft, imagem_url: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" type="url" /></label>
+            <label className="text-sm font-medium text-slate-700 md:col-span-2">Corpo<textarea value={draft.corpo ?? ''} onChange={(event) => setDraft({ ...draft, corpo: event.target.value })} className="mt-1 min-h-32 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+          </div>
+          <label className="mt-4 inline-flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={draft.ativo} onChange={(event) => setDraft({ ...draft, ativo: event.target.checked })} />Publicado</label>
+          {formError && <p className="mt-3 text-sm text-rose-700" role="alert">{formError}</p>}
+          <div className="mt-5 flex gap-3"><button type="button" disabled={saving} onClick={save} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'A guardar...' : 'Guardar'}</button><button type="button" onClick={() => { setEditing(null); setDraft(emptyDraft()); setFormOpen(false); setFormError(null); }} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700">Cancelar</button></div>
+        </section>
+      )}
+      {loading ? <Loader /> : loadError ? <ErrorCard msg={loadError} /> : items.length === 0 ? <DataTable data={[]} columns={[]} emptyText="Sem conteúdos institucionais disponíveis" /> : (
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {items.map((it) => (
-          <div key={it.p} className="rounded-2xl border border-slate-200 bg-white p-6">
+        {items.map((item) => (
+          <div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-6">
             <div className="flex items-start justify-between">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-2xl">📄</div>
-              <span className={`badge ${it.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                {it.ok ? 'Publicado' : 'Rascunho'}
+              <span className={`badge ${item.ativo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700'}`}>
+                {item.ativo ? 'Publicado' : 'Inativo'}
               </span>
             </div>
-            <h3 className="mt-4 font-display font-semibold text-slate-900">{it.t}</h3>
-            <p className="mt-1 text-xs text-slate-500">{it.s}</p>
-            <button className="mt-4 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+            <h3 className="mt-4 font-display font-semibold text-slate-900">{item.titulo}</h3>
+            <p className="mt-1 text-xs text-slate-500">{item.subtitulo || item.chave}</p>
+            <button type="button" onClick={() => openEdit(item)} className="mt-4 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
               Editar Conteúdo
             </button>
           </div>
         ))}
       </div>
+      )}
     </div>
   );
 }

@@ -111,6 +111,701 @@ img, video, canvas, svg {
   transition: all 0.2s ease;
 }
 
+/* Manager dashboard — Figma Make v97. Scoped to the manager shell only. */
+.mgr-shell {
+  background: #f8fafc;
+}
+
+.mgr-shell .mgr-shell__sidebar {
+  width: 18rem;
+  background: #0f172a;
+}
+
+.mgr-shell__sidebar > div:first-child {
+  height: 5rem;
+  padding: 0 1.5rem;
+}
+
+.mgr-shell__sidebar > div:first-child > button > div {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  background: transparent;
+}
+
+.mgr-shell__sidebar > div:first-child > button > div svg {
+  width: 1.65rem;
+  height: 1.65rem;
+  color: #2563eb;
+}
+
+.mgr-shell__sidebar > div:first-child > button > span {
+  font-size: 1.15rem;
+  letter-spacing: -0.025em;
+}
+
+.mgr-shell__role-wrap {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  padding: 1.15rem 1.5rem 1rem;
+}
+
+.mgr-shell__role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 999px;
+  background: #dbeafe;
+  padding: 0.34rem 0.68rem;
+  color: #2563eb;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.mgr-shell__role-badge svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.mgr-shell .mgr-shell__nav {
+  height: calc(100% - 15.75rem);
+  gap: 0.15rem;
+  padding: 0.65rem 0;
+}
+
+.mgr-shell .mgr-shell__nav .sidebar-link {
+  min-height: 2.95rem;
+  border-radius: 0;
+  padding: 0.7rem 1.5rem;
+  color: #94a3b8;
+  font-size: 0.94rem;
+}
+
+.mgr-shell .mgr-shell__nav .sidebar-link:hover {
+  background: rgba(148, 163, 184, 0.1);
+  color: #fff;
+}
+
+.mgr-shell .mgr-shell__nav .sidebar-link.active {
+  border-right: 2px solid #3b82f6;
+  background: rgba(100, 116, 139, 0.4);
+  color: #fff;
+}
+
+.mgr-shell .mgr-shell__nav .sidebar-link > span:first-child {
+  color: #94a3b8;
+}
+
+.mgr-shell .mgr-shell__nav .sidebar-link.active > span:first-child {
+  color: #fff;
+}
+
+.mgr-shell__user-area {
+  min-height: 8rem;
+  padding: 1.2rem 1.5rem 1rem;
+}
+
+.mgr-shell__user {
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.mgr-shell__user > div:first-child {
+  width: 2.4rem;
+  height: 2.4rem;
+  background: #2563eb;
+}
+
+.mgr-shell__user-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1.35rem;
+  margin-top: 0.9rem;
+  color: #94a3b8;
+}
+
+.mgr-shell__user-actions svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.mgr-shell__settings,
+.mgr-shell__logout {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+.mgr-shell__logout {
+  cursor: pointer;
+}
+
+.mgr-shell__logout:hover,
+.mgr-shell__logout:focus-visible {
+  color: #fff;
+}
+
+.mgr-shell__header {
+  height: 4.5rem;
+  padding-right: 1.75rem;
+  padding-left: 1.25rem;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.mgr-shell__system-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #64748b;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+}
+
+.mgr-shell__system-status svg {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+  color: #22c55e;
+}
+
+.mgr-shell__header-actions {
+  gap: 0.85rem;
+  color: #94a3b8;
+}
+
+.mgr-shell__header-icon,
+.mgr-shell__notification {
+  display: inline-flex;
+  position: relative;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: #94a3b8;
+}
+
+.mgr-shell__header-icon {
+  cursor: pointer;
+}
+
+.mgr-shell__header-icon:hover,
+.mgr-shell__header-icon:focus-visible {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.mgr-shell__header-icon svg,
+.mgr-shell__notification svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.mgr-shell__header-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.mgr-shell__header-name {
+  color: #334155;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.mgr-shell .mgr-shell__content {
+  padding: 1.5rem;
+}
+
+.mgr-dashboard-v97 {
+  width: 100%;
+  max-width: 90rem;
+  margin: 0 auto;
+}
+
+.mgr-dashboard-v97__heading {
+  margin: 0 0 1.5rem;
+}
+
+.mgr-dashboard-v97__heading h1,
+.mgr-dashboard-v97 h2,
+.mgr-dashboard-v97 h3 {
+  color: #0f172a;
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+
+.mgr-dashboard-v97__heading h1 {
+  margin: 0;
+  font-size: 1.55rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.25;
+}
+
+.mgr-dashboard-v97__heading p {
+  margin: 0.25rem 0 0;
+  color: #94a3b8;
+  font-size: 0.88rem;
+}
+
+.mgr-dashboard-v97__summary {
+  margin-bottom: 1.5rem;
+  border-radius: 1rem;
+  background: linear-gradient(135deg, #1e40af 0%, #2563eb 60%, #3b82f6 100%);
+  padding: 1.5rem;
+  color: #fff;
+}
+
+.mgr-dashboard-v97__summary-copy {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.mgr-dashboard-v97__summary h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.mgr-dashboard-v97__summary-copy svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  color: #fbbf24;
+  transform: rotate(-18deg);
+}
+
+.mgr-dashboard-v97__summary > p {
+  margin: 0.3rem 0 1.25rem;
+  color: #dbeafe;
+  font-size: 0.9rem;
+}
+
+.mgr-dashboard-v97__metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.mgr-dashboard-v97__metric {
+  min-height: 6.2rem;
+  border: 0;
+  border-radius: 0.75rem;
+  background: rgba(191, 219, 254, 0.27);
+  padding: 0.9rem 0.5rem;
+  color: #fff;
+  cursor: pointer;
+  text-align: center;
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.mgr-dashboard-v97__metric:hover {
+  background: rgba(219, 234, 254, 0.36);
+  transform: translateY(-1px);
+}
+
+.mgr-dashboard-v97__metric:focus-visible,
+.mgr-dashboard-v97__card-heading button:focus-visible,
+.mgr-dashboard-v97__incident-row:focus-visible,
+.mgr-dashboard-v97__client-row:focus-visible,
+.mgr-dashboard-v97__alert-row:focus-visible,
+.mgr-dashboard-v97__activity-row:focus-visible {
+  outline: 3px solid rgba(59, 130, 246, 0.38);
+  outline-offset: 2px;
+}
+
+.mgr-dashboard-v97__metric strong {
+  display: block;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 1.7rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.mgr-dashboard-v97__metric span {
+  display: block;
+  margin-top: 0.45rem;
+  color: #dbeafe;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.mgr-dashboard-v97__charts,
+.mgr-dashboard-v97__lists {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.mgr-dashboard-v97__charts {
+  margin-bottom: 1.5rem;
+}
+
+.mgr-dashboard-v97__card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  background: #fff;
+  padding: 1.25rem;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1), 0 1px 2px -1px rgba(15, 23, 42, 0.1);
+}
+
+.mgr-dashboard-v97__card > h2,
+.mgr-dashboard-v97__card-heading h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.mgr-dashboard-v97__pie,
+.mgr-dashboard-v97__bar-chart {
+  height: 14.5rem;
+  margin-top: 0.75rem;
+}
+
+.mgr-dashboard-v97__legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.45rem 1.1rem;
+  margin-top: 0.15rem;
+  color: #64748b;
+  font-size: 0.74rem;
+}
+
+.mgr-dashboard-v97__legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.mgr-dashboard-v97__legend i {
+  width: 0.52rem;
+  height: 0.52rem;
+  border-radius: 999px;
+}
+
+.mgr-dashboard-v97__empty-chart {
+  display: flex;
+  min-height: 14.5rem;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.75rem;
+  border: 1px dashed #cbd5e1;
+  border-radius: 0.5rem;
+  background: #f8fafc;
+  padding: 1rem;
+  color: #64748b;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.mgr-dashboard-v97__card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.65rem;
+}
+
+.mgr-dashboard-v97__card-heading button {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: #2563eb;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.mgr-dashboard-v97__card-heading button:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+.mgr-dashboard-v97__rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.mgr-dashboard-v97__incident-row,
+.mgr-dashboard-v97__client-row,
+.mgr-dashboard-v97__alert-row,
+.mgr-dashboard-v97__activity-row {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.mgr-dashboard-v97__incident-row,
+.mgr-dashboard-v97__client-row {
+  display: flex;
+  min-height: 3.85rem;
+  align-items: center;
+  gap: 0.6rem;
+  border-top: 1px solid #eef2f7;
+  padding: 0.55rem 0;
+}
+
+.mgr-dashboard-v97__rows > :first-child {
+  border-top: 0;
+}
+
+.mgr-dashboard-v97__incident-row:hover,
+.mgr-dashboard-v97__client-row:hover,
+.mgr-dashboard-v97__alert-row:hover,
+.mgr-dashboard-v97__activity-row:hover {
+  background: #f8fafc;
+}
+
+.mgr-dashboard-v97__row-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.18rem;
+}
+
+.mgr-dashboard-v97__row-copy strong {
+  overflow: hidden;
+  color: #334155;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mgr-dashboard-v97__row-copy small {
+  align-self: flex-start;
+  color: #94a3b8;
+  font-size: 0.68rem;
+}
+
+.mgr-dashboard-v97__status {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 0.2rem 0.48rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.mgr-dashboard-v97__client-mark {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #2563eb;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.mgr-dashboard-v97__client-row .mgr-dashboard-v97__row-copy small {
+  border-radius: 999px;
+  padding: 0.12rem 0.4rem;
+}
+
+.mgr-dashboard-v97__client-value {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  color: #2563eb;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.mgr-dashboard-v97__client-value small {
+  color: #94a3b8;
+  font-size: 0.6rem;
+  font-weight: 500;
+}
+
+.mgr-dashboard-v97__empty-list {
+  margin: 1rem 0 0;
+  color: #94a3b8;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.mgr-dashboard-v97__alerts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+}
+
+.mgr-dashboard-v97__alert-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  border-radius: 0.5rem;
+  background: #fff7ed;
+  padding: 0.7rem;
+  color: #c2410c;
+}
+
+.mgr-dashboard-v97__alert-row svg {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+  margin-top: 0.05rem;
+}
+
+.mgr-dashboard-v97__alert-row span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.16rem;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.mgr-dashboard-v97__alert-row b {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+}
+
+.mgr-dashboard-v97__upcoming {
+  margin-top: 1rem;
+  border-top: 1px solid #eef2f7;
+  padding-top: 0.85rem;
+}
+
+.mgr-dashboard-v97__upcoming h3 {
+  margin: 0 0 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.mgr-dashboard-v97__activity-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 2.75rem;
+  border-top: 1px solid #f1f5f9;
+  padding: 0.42rem 0;
+}
+
+.mgr-dashboard-v97__activity-row svg {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+  color: #2563eb;
+}
+
+.mgr-dashboard-v97__activity-row span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.mgr-dashboard-v97__activity-row small {
+  margin-top: 0.15rem;
+  color: #94a3b8;
+  font-size: 0.63rem;
+  font-weight: 400;
+}
+
+@media (min-width: 768px) {
+  .mgr-dashboard-v97__metrics {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .mgr-dashboard-v97__charts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mgr-dashboard-v97__lists {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .mgr-dashboard-v97__card {
+    min-height: 21rem;
+  }
+
+  .mgr-dashboard-v97__list-card,
+  .mgr-dashboard-v97__activity-card {
+    min-height: 22rem;
+  }
+}
+
+@media (max-width: 1023.98px) {
+  .mgr-shell__header-name {
+    display: none;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .mgr-shell .mgr-shell__content {
+    padding: 1rem;
+  }
+
+  .mgr-shell__header {
+    height: 4rem;
+    padding-right: 1rem;
+    padding-left: 0.75rem;
+  }
+
+  .mgr-shell__header-actions {
+    gap: 0.45rem;
+  }
+
+  .mgr-shell__system-status {
+    font-size: 0.68rem;
+  }
+
+  .mgr-dashboard-v97__summary {
+    padding: 1.15rem;
+  }
+
+  .mgr-dashboard-v97__metric {
+    min-height: 5.6rem;
+  }
+
+  .mgr-dashboard-v97__card {
+    padding: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mgr-dashboard-v97__metric {
+    transition: none;
+  }
+}
+
 /* Public hero */
 .hero-gradient {
   background: linear-gradient(160deg, #ffffff 0%, #ede9fe 40%, #dbeafe 100%);

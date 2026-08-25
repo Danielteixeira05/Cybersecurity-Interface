@@ -3,6 +3,9 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, Legend,
 } from 'recharts';
+import {
+  AlertTriangle, FileText, Hand,
+} from 'lucide-react';
 import type { Page } from '../types';
 import {
   dashboardApi, clientesApi, ativosApi, incidentesApi, documentosApi,
@@ -18,6 +21,7 @@ interface PageProps {
 interface DetailProps extends PageProps {
   backPage?: Page;
   backLabel?: string;
+  clientId?: number;
 }
 
 const PIE_COLORS = ['#2563eb', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899'];
@@ -132,7 +136,7 @@ function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: st
   );
 }
 
-function severityColor(s: string | undefined) {
+function severityColor(s: string | null | undefined) {
   const v = (s || 'MEDIA').toLowerCase();
   if (v.includes('alta') || v.includes('crit')) return 'bg-rose-100 text-rose-700';
   if (v.includes('media') || v.includes('mod')) return 'bg-amber-100 text-amber-700';
@@ -150,102 +154,233 @@ function conformidadeColor(c: string | null | undefined) {
 
 export function MgrDashboard({ setPage }: PageProps) {
   const [data, setData] = useState<ApiDashboardAdmin | null>(null);
+  const [clientes, setClientes] = useState<ApiCliente[]>([]);
+  const [incidentes, setIncidentes] = useState<ApiIncidente[]>([]);
+  const [documentos, setDocumentos] = useState<ApiDocumento[]>([]);
+  const [available, setAvailable] = useState({ clientes: false, incidentes: false, documentos: false });
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    dashboardApi()
-      .then((r) => setData(r as ApiDashboardAdmin))
-      .catch((e) => setErr(e?.message || 'Erro ao carregar dashboard'))
-      .finally(() => setLoading(false));
+    let active = true;
+
+    Promise.allSettled([
+      dashboardApi() as Promise<ApiDashboardAdmin>,
+      clientesApi(),
+      incidentesApi(),
+      documentosApi(),
+    ])
+      .then(([dashboardResult, clientesResult, incidentesResult, documentosResult]) => {
+        if (!active) return;
+        if (dashboardResult.status === 'rejected') {
+          setErr(dashboardResult.reason?.message || 'Erro ao carregar dashboard');
+          return;
+        }
+
+        setData(dashboardResult.value);
+        if (clientesResult.status === 'fulfilled') setClientes(clientesResult.value);
+        if (incidentesResult.status === 'fulfilled') setIncidentes(incidentesResult.value);
+        if (documentosResult.status === 'fulfilled') setDocumentos(documentosResult.value);
+        setAvailable({
+          clientes: clientesResult.status === 'fulfilled',
+          incidentes: incidentesResult.status === 'fulfilled',
+          documentos: documentosResult.status === 'fulfilled',
+        });
+      })
+      .catch((e) => {
+        if (active) setErr(e?.message || 'Erro ao carregar dashboard');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   if (loading) return <Loader />;
   if (err) return <ErrorCard msg={err} />;
   if (!data) return null;
-  const s = data.stats || ({} as any);
+  const sessionName = session.get().utilizador?.nome || 'Gestor';
+  const numberValue = (value: unknown) => typeof value === 'number' && Number.isFinite(value) ? value : null;
+  const formatDate = (value?: string | null) => {
+    if (!value) return 'Sem data';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat('pt-PT', { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
+  };
+  const severityKey = (value?: string | null) => {
+    const normalized = (value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    if (normalized.includes('critic')) return 'critical';
+    if (normalized.includes('alt')) return 'high';
+    if (normalized.includes('baix')) return 'low';
+    return 'medium';
+  };
+  const severityDefinitions = [
+    { key: 'critical', label: 'Crítico', color: '#dc2626' },
+    { key: 'high', label: 'Alto', color: '#f97316' },
+    { key: 'medium', label: 'Médio', color: '#2563eb' },
+    { key: 'low', label: 'Baixo', color: '#16a34a' },
+  ] as const;
+  const severityData = severityDefinitions.map((definition) => ({
+    ...definition,
+    value: incidentes.filter((incidente) => severityKey(incidente.severidade) === definition.key).length,
+  }));
+  const hasSeverityData = severityData.some((item) => item.value > 0);
+  const recentIncidents = [...incidentes]
+    .sort((a, b) => new Date(b.detetado_em || b.criado_em || 0).getTime() - new Date(a.detetado_em || a.criado_em || 0).getTime())
+    .slice(0, 5);
+  const clientRows = clientes.slice(0, 7);
+  const findingsData = (data.top_incidentes || []).map((item) => ({
+    nome: item.nome || 'Cliente',
+    total: numberValue(item.total_incidentes) || 0,
+  }));
+  const criticalAlerts = recentIncidents.filter((incidente) => {
+    const severity = severityKey(incidente.severidade);
+    return severity === 'critical' || severity === 'high';
+  }).slice(0, 2);
+  const recentDocuments = [...documentos]
+    .sort((a, b) => new Date(b.submetido_em || 0).getTime() - new Date(a.submetido_em || 0).getTime())
+    .slice(0, 3);
+  const metrics = [
+    { label: 'Clientes Ativos', value: available.clientes ? clientes.filter((cliente) => cliente.ativo !== false).length : '—', page: 'mgr-clients' as Page },
+    { label: 'Incidentes Abertos', value: available.incidentes ? incidentes.filter((incidente) => incidente.estado === 'ABERTO').length : '—', page: 'mgr-incidents' as Page },
+    { label: 'Pentests Ativos', value: '—', page: 'mgr-pentests' as Page },
+    { label: 'Documentos', value: available.documentos ? documentos.length : '—', page: 'mgr-documents' as Page },
+  ];
 
   return (
-    <div>
-      <PageHeader title="Painel de Colaborador" subtitle="Visão operacional dos clientes e incidentes" />
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Clientes Ativos" value={s.clientes ?? 0} icon="🏢" color="bg-blue-50" />
-        <StatCard label="Ativos Geridos" value={s.ativos ?? 0} icon="💻" color="bg-emerald-50" />
-        <StatCard label="Incidentes Abertos" value={s.incidentes_abertos ?? 0} icon="🚨" color="bg-rose-50" delta={`${s.incidentes ?? 0} total`} />
-        <StatCard label="Pedidos Pendentes" value={s.pedidos_abertos ?? 0} icon="📨" color="bg-amber-50" delta={`${s.pedidos ?? 0} total`} />
-      </div>
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 lg:col-span-2">
-          <h3 className="mb-4 font-display text-lg font-semibold text-slate-900">Conformidade por Cliente</h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data.conformidade || []}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="estado" tick={{ fontSize: 11 }} stroke="#64748b" />
-                <YAxis tick={{ fontSize: 11 }} stroke="#64748b" />
-                <Tooltip />
-                <Bar dataKey="numero_clientes" fill="#2563eb" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+    <div className="mgr-dashboard-v97">
+      <header className="mgr-dashboard-v97__heading">
+        <h1>Dashboard</h1>
+        <p>CyberBoxSecur — Área Gestor</p>
+      </header>
+
+      <section className="mgr-dashboard-v97__summary" aria-labelledby="mgr-dashboard-summary-title">
+        <div className="mgr-dashboard-v97__summary-copy">
+          <h2 id="mgr-dashboard-summary-title">Olá, {sessionName}</h2>
+          <Hand aria-hidden="true" />
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-6">
-          <h3 className="mb-4 font-display text-lg font-semibold text-slate-900">Pedidos por Estado</h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={data.pedidos_estado || []} dataKey="total_pedidos" nameKey="estado" outerRadius={90} label={(p) => p.estado}>
-                  {(data.pedidos_estado || []).map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+        <p>Aqui está o resumo dos seus clientes e atividades.</p>
+        <div className="mgr-dashboard-v97__metrics">
+          {metrics.map(({ label, value, page }) => (
+            <button key={label} type="button" onClick={() => setPage(page)} className="mgr-dashboard-v97__metric">
+              <strong>{value}</strong>
+              <span>{label}</span>
+            </button>
+          ))}
         </div>
-      </div>
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6">
-          <div className="mb-4 flex justify-between items-center">
-            <h3 className="font-display text-lg font-semibold text-slate-900">Top Incidentes por Cliente</h3>
-            <button onClick={() => setPage('mgr-incidents')} className="text-xs text-blue-600 hover:underline">Ver todos →</button>
+      </section>
+
+      <section className="mgr-dashboard-v97__charts" aria-label="Indicadores operacionais">
+        <article className="mgr-dashboard-v97__card">
+          <h2>Incidentes por Severidade</h2>
+          {hasSeverityData ? (
+            <>
+              <div className="mgr-dashboard-v97__pie">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={severityData.filter((item) => item.value > 0)} dataKey="value" nameKey="label" cx="50%" cy="50%" outerRadius="78%" stroke="#fff" strokeWidth={1}>
+                      {severityData.filter((item) => item.value > 0).map((item) => <Cell key={item.key} fill={item.color} />)}
+                    </Pie>
+                    <Tooltip formatter={(value) => [value ?? 0, 'Incidentes']} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="mgr-dashboard-v97__legend" aria-label="Legenda de severidade">
+                {severityData.map((item) => (
+                  <span key={item.key}><i style={{ backgroundColor: item.color }} aria-hidden="true" />{item.label}: {item.value}</span>
+                ))}
+              </div>
+            </>
+          ) : <div className="mgr-dashboard-v97__empty-chart">Sem dados de incidentes disponíveis</div>}
+        </article>
+
+        <article className="mgr-dashboard-v97__card">
+          <h2>Incidentes por Cliente</h2>
+          {findingsData.length > 0 ? (
+            <div className="mgr-dashboard-v97__bar-chart">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={findingsData} layout="vertical" margin={{ top: 4, right: 8, bottom: 0, left: 4 }}>
+                  <CartesianGrid horizontal={false} stroke="#e2e8f0" strokeDasharray="3 3" />
+                  <XAxis type="number" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <YAxis type="category" dataKey="nome" width={104} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                  <Tooltip cursor={{ fill: '#f8fafc' }} formatter={(value) => [value ?? 0, 'Incidentes']} />
+                  <Bar dataKey="total" fill="#2563eb" radius={[0, 4, 4, 0]} maxBarSize={18} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : <div className="mgr-dashboard-v97__empty-chart">Sem dados por cliente disponíveis</div>}
+        </article>
+      </section>
+
+      <section className="mgr-dashboard-v97__lists" aria-label="Atividade operacional">
+        <article className="mgr-dashboard-v97__card mgr-dashboard-v97__list-card">
+          <div className="mgr-dashboard-v97__card-heading">
+            <h2>Incidentes Recentes</h2>
+            <button type="button" onClick={() => setPage('mgr-incidents')}>Ver todos <span aria-hidden="true">→</span></button>
           </div>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data.top_incidentes || []} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis type="number" tick={{ fontSize: 11 }} stroke="#64748b" />
-                <YAxis dataKey="nome" type="category" width={140} tick={{ fontSize: 11 }} stroke="#64748b" />
-                <Tooltip />
-                <Bar dataKey="total_incidentes" fill="#8b5cf6" radius={[0, 8, 8, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          {recentIncidents.length > 0 ? (
+            <div className="mgr-dashboard-v97__rows">
+              {recentIncidents.map((incidente) => (
+                <button key={incidente.id} type="button" onClick={() => setPage('mgr-incidents')} className="mgr-dashboard-v97__incident-row">
+                  <span className="mgr-dashboard-v97__row-copy">
+                    <strong>{incidente.titulo}</strong>
+                    <small>{formatDate(incidente.detetado_em || incidente.criado_em)}</small>
+                  </span>
+                  <span className={`mgr-dashboard-v97__status ${severityColor(incidente.severidade)}`}>{incidente.severidade || 'Sem severidade'}</span>
+                </button>
+              ))}
+            </div>
+          ) : <p className="mgr-dashboard-v97__empty-list">Sem incidentes recentes disponíveis.</p>}
+        </article>
+
+        <article className="mgr-dashboard-v97__card mgr-dashboard-v97__list-card">
+          <div className="mgr-dashboard-v97__card-heading">
+            <h2>Os Meus Clientes</h2>
+            <button type="button" onClick={() => setPage('mgr-clients')}>Ver todos <span aria-hidden="true">→</span></button>
           </div>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-6">
-          <div className="mb-4 flex justify-between items-center">
-            <h3 className="font-display text-lg font-semibold text-slate-900">Ações Rápidas</h3>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { p: 'mgr-clients', l: 'Clientes', i: '🏢' },
-              { p: 'mgr-incidents', l: 'Incidentes', i: '🚨' },
-              { p: 'mgr-assets', l: 'Ativos', i: '💻' },
-              { p: 'mgr-documents', l: 'Documentos', i: '📄' },
-              { p: 'mgr-requests', l: 'Pedidos', i: '📨' },
-              { p: 'mgr-excel', l: 'Importar', i: '📊' },
-            ].map((x) => (
-              <button
-                key={x.p}
-                onClick={() => setPage(x.p as Page)}
-                className="rounded-xl border border-slate-200 bg-slate-50 hover:bg-blue-50 hover:border-blue-200 p-4 text-left transition"
-              >
-                <div className="text-2xl">{x.i}</div>
-                <div className="mt-1 font-semibold text-sm text-slate-800">{x.l}</div>
+          {clientRows.length > 0 ? (
+            <div className="mgr-dashboard-v97__rows">
+              {clientRows.map((cliente) => (
+                <button key={cliente.id} type="button" onClick={() => {
+                  session.set({ ...session.get(), cliente: { id: cliente.id, nome: cliente.nome } });
+                  setPage('mgr-client-detail');
+                }} className="mgr-dashboard-v97__client-row">
+                  <span className="mgr-dashboard-v97__client-mark" aria-hidden="true">{cliente.nome.charAt(0).toUpperCase()}</span>
+                  <span className="mgr-dashboard-v97__row-copy">
+                    <strong>{cliente.nome}</strong>
+                    <small className={conformidadeColor(cliente.conformidade)}>{cliente.conformidade || 'Sem avaliação'}</small>
+                  </span>
+                  <span className="mgr-dashboard-v97__client-value">{numberValue(cliente.numero_ativos) ?? '—'}<small> ativos</small></span>
+                </button>
+              ))}
+            </div>
+          ) : <p className="mgr-dashboard-v97__empty-list">Sem clientes disponíveis.</p>}
+        </article>
+
+        <article className="mgr-dashboard-v97__card mgr-dashboard-v97__activity-card">
+          <h2>Alertas &amp; Atividades</h2>
+          <div className="mgr-dashboard-v97__alerts">
+            {criticalAlerts.length > 0 ? criticalAlerts.map((incidente) => (
+              <button key={incidente.id} type="button" onClick={() => setPage('mgr-incidents')} className="mgr-dashboard-v97__alert-row">
+                <AlertTriangle aria-hidden="true" />
+                <span><b>{incidente.severidade || 'Alerta'}</b>{incidente.titulo}</span>
               </button>
-            ))}
+            )) : <p className="mgr-dashboard-v97__empty-list">Sem alertas urgentes disponíveis.</p>}
           </div>
-        </div>
-      </div>
+          <div className="mgr-dashboard-v97__upcoming">
+            <h3>Atividade recente</h3>
+            {recentDocuments.length > 0 ? recentDocuments.map((documento) => (
+              <button key={documento.id} type="button" onClick={() => setPage('mgr-documents')} className="mgr-dashboard-v97__activity-row">
+                <FileText aria-hidden="true" />
+                <span>{documento.titulo}<small>{formatDate(documento.submetido_em)}</small></span>
+              </button>
+            )) : <p className="mgr-dashboard-v97__empty-list">Sem atividade recente disponível.</p>}
+          </div>
+        </article>
+      </section>
     </div>
   );
 }
@@ -253,7 +388,7 @@ export function MgrDashboard({ setPage }: PageProps) {
 export function MgrAnalytics({ setPage }: PageProps) {
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState<any>({});
+  const [dashboard, setDashboard] = useState<ApiDashboardAdmin | null>(null);
   const [clientes, setClientes] = useState<ApiCliente[]>([]);
 
   useEffect(() => {
@@ -262,50 +397,37 @@ export function MgrAnalytics({ setPage }: PageProps) {
       clientesApi(),
     ])
       .then(([d, c]) => {
-        setStats(d.stats || {});
+        setDashboard(d);
         setClientes(c);
       })
       .catch((e) => setErr(e?.message || 'Erro'))
       .finally(() => setLoading(false));
   }, []);
 
-  const trendData = [
-    { mes: 'Jul', incidentes: 12, ativos: 80, clientes: 30 },
-    { mes: 'Ago', incidentes: 18, ativos: 100, clientes: 34 },
-    { mes: 'Set', incidentes: 22, ativos: 120, clientes: 38 },
-    { mes: 'Out', incidentes: 16, ativos: 140, clientes: 42 },
-    { mes: 'Nov', incidentes: 28, ativos: 165, clientes: 48 },
-    { mes: 'Dez', incidentes: 24, ativos: 190, clientes: 52 },
-  ];
-
   if (loading) return <Loader />;
   if (err) return <ErrorCard msg={err} />;
+  if (!dashboard) return null;
+  const timedStates = dashboard.pedidos_estado.filter((item) => item.tempo_medio_resolucao_horas !== null && item.total_pedidos > 0);
+  const timedRequests = timedStates.reduce((total, item) => total + item.total_pedidos, 0);
+  const mttr = timedRequests ? timedStates.reduce((total, item) => total + (item.tempo_medio_resolucao_horas ?? 0) * item.total_pedidos, 0) / timedRequests : null;
+  const sectors = Array.from(clientes.reduce((groups, client) => {
+    const sector = client.setor_atividade?.trim() || 'Setor não indicado';
+    groups.set(sector, (groups.get(sector) ?? 0) + 1);
+    return groups;
+  }, new Map<string, number>()).entries()).map(([setor, n]) => ({ setor, n }));
 
   return (
     <div>
-      <PageHeader title="Análises Operacionais" subtitle="Métricas de desempenho e tendências" />
+      <PageHeader title="Análises Operacionais" subtitle="Métricas calculadas a partir dos clientes associados" />
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="MTTR (horas)" value="5.1" icon="⏱️" color="bg-amber-50" delta="-6% vs Q anterior" />
-        <StatCard label="MTTD (min)" value="14.3" icon="🔎" color="bg-cyan-50" />
-        <StatCard label="Taxa de Resolução" value="92.4%" icon="✅" color="bg-emerald-50" />
+        <StatCard label="MTTR (horas)" value={mttr === null ? '—' : mttr.toFixed(1)} icon="⏱️" color="bg-amber-50" />
+        <StatCard label="Clientes" value={clientes.length} icon="🔎" color="bg-cyan-50" />
+        <StatCard label="Incidentes" value={dashboard.stats.incidentes ?? '—'} icon="✅" color="bg-emerald-50" />
       </div>
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 bg-white p-6">
           <h3 className="mb-4 font-display text-lg font-semibold text-slate-900">Tendências (6 meses)</h3>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={trendData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="mes" stroke="#64748b" />
-                <YAxis stroke="#64748b" />
-                <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="incidentes" stroke="#ef4444" strokeWidth={2.5} dot={{ r: 4 }} />
-                <Line type="monotone" dataKey="ativos" stroke="#2563eb" strokeWidth={2.5} dot={{ r: 4 }} />
-                <Line type="monotone" dataKey="clientes" stroke="#10b981" strokeWidth={2.5} dot={{ r: 4 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          <div className="flex h-80 items-center justify-center text-sm text-slate-500">Sem série histórica disponível.</div>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-6">
           <h3 className="mb-4 font-display text-lg font-semibold text-slate-900">Distribuição de Clientes por Setor</h3>
@@ -313,16 +435,16 @@ export function MgrAnalytics({ setPage }: PageProps) {
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={[
-                    { setor: 'Saúde', n: Math.round(clientes.length * 0.28) },
-                    { setor: 'Finanças', n: Math.round(clientes.length * 0.22) },
-                    { setor: 'Energia', n: Math.round(clientes.length * 0.18) },
-                    { setor: 'Tecnologia', n: Math.round(clientes.length * 0.2) },
-                    { setor: 'Outros', n: Math.round(clientes.length * 0.12) },
-                  ].filter(x => x.n > 0)}
-                  dataKey="n" nameKey="setor" outerRadius={110} label={(p) => `${p.setor}: ${p.n}`}
+                  data={sectors}
+                  dataKey="n"
+                  nameKey="setor"
+                  outerRadius={110}
+                  label={(p) => {
+                    const item = p.payload as { setor?: string; n?: number } | undefined;
+                    return `${item?.setor ?? ''}: ${item?.n ?? p.value ?? ''}`;
+                  }}
                 >
-                  {Array.from({ length: 10 }).map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                  {sectors.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                 </Pie>
                 <Tooltip />
               </PieChart>
@@ -433,9 +555,9 @@ export function MgrClients({ setPage }: PageProps) {
   );
 }
 
-export function MgrClientDetail({ setPage, backPage = 'mgr-clients', backLabel = 'Clientes' }: DetailProps) {
+export function MgrClientDetail({ setPage, backPage = 'mgr-clients', backLabel = 'Clientes', clientId }: DetailProps) {
   const sess = session.get();
-  const cid = (sess.cliente as any)?.id;
+  const cid = clientId ?? (sess.cliente as any)?.id;
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -877,7 +999,16 @@ export function MgrNIS2({ setPage }: PageProps) {
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={dist} dataKey="n" nameKey="estado" outerRadius={110} label={(p) => `${p.estado}: ${p.n}`}>
+                <Pie
+                  data={dist}
+                  dataKey="n"
+                  nameKey="estado"
+                  outerRadius={110}
+                  label={(p) => {
+                    const item = p.payload as { estado?: string; n?: number } | undefined;
+                    return `${item?.estado ?? ''}: ${item?.n ?? p.value ?? ''}`;
+                  }}
+                >
                   {dist.map((d, i) => <Cell key={i} fill={d.c} />)}
                 </Pie>
                 <Tooltip />

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import type { Page, UserRole } from './types';
 
 import { PublicNavbar, AppLayout } from './components/Layout';
@@ -20,11 +21,103 @@ import {
   ClientProfile, ClientAssets, ClientIncidents,
   ClientNIS2, ClientRisk, ClientRequests, ClientCommunication, ClientPentests,
 } from './pages/ClientPages';
+import { AUTH_EXPIRED_EVENT, defaultHomePageForRole, meApi, session } from './apiClient';
+
+const PAGE_PATHS: Partial<Record<Page, string>> = {
+  home: '/',
+  about: '/sobre',
+  mission: '/missao',
+  services: '/servicos',
+  news: '/noticias',
+  contact: '/contacto',
+  login: '/login',
+  'admin-dashboard': '/administrador',
+  'admin-analytics': '/administrador/analises',
+  'admin-users': '/administrador/utilizadores',
+  'admin-clients': '/administrador/clientes',
+  'admin-client-detail': '/administrador/clientes/detalhe',
+  'admin-user-client': '/administrador/utilizadores/cliente',
+  'admin-user-manager': '/administrador/utilizadores/gestor',
+  'admin-documents': '/administrador/documentos',
+  'admin-incidents': '/administrador/incidentes',
+  'admin-logs': '/administrador/logs',
+  'admin-site-content': '/administrador/conteudo',
+  'admin-permissions': '/administrador/permissoes',
+  'mgr-dashboard': '/gestor',
+  'mgr-analytics': '/gestor/analises',
+  'mgr-clients': '/gestor/clientes',
+  'mgr-documents': '/gestor/documentos',
+  'mgr-incidents': '/gestor/incidentes',
+  'mgr-assets': '/gestor/ativos',
+  'mgr-requests': '/gestor/pedidos',
+  'mgr-risk': '/gestor/riscos',
+  'mgr-nis2': '/gestor/nis2',
+  'mgr-reports': '/gestor/relatorios',
+  'mgr-pentests': '/gestor/pentests',
+  'mgr-evidence': '/gestor/evidencias',
+  'mgr-excel': '/gestor/importar-excel',
+  'cli-dashboard': '/cliente',
+  'cli-workspace': '/cliente/espaco',
+  'cli-documents': '/cliente/documentos',
+  'cli-reports': '/cliente/relatorios',
+  'cli-profile': '/cliente/perfil',
+  'cli-assets': '/cliente/ativos',
+  'cli-incidents': '/cliente/incidentes',
+  'cli-nis2': '/cliente/nis2',
+  'cli-risk': '/cliente/riscos',
+  'cli-requests': '/cliente/pedidos',
+  'cli-communication': '/cliente/comunicacao',
+  'cli-pentests': '/cliente/pentests',
+};
+
+const PUBLIC_PAGE_KEYS = new Set<Page>(['home', 'about', 'mission', 'services', 'news', 'news-detail', 'contact', 'login']);
+
+function pageFromPathname(pathname: string): Page {
+  const path = pathname.replace(/\/+$/, '') || '/';
+  if (/^\/gestor\/clientes\/\d+$/.test(path)) return 'mgr-client-detail';
+  if (/^\/noticias\/[^/]+$/.test(path)) return 'news-detail';
+  const entry = Object.entries(PAGE_PATHS).find(([, value]) => value === path);
+  return (entry?.[0] as Page | undefined) ?? 'home';
+}
+
+function clientIdFromPathname(pathname: string): number | undefined {
+  const match = /^\/gestor\/clientes\/(\d+)\/?$/.exec(pathname);
+  return match ? Number(match[1]) : undefined;
+}
+
+function newsIdFromPathname(pathname: string): string | undefined {
+  const match = /^\/noticias\/([^/]+)\/?$/.exec(pathname);
+  return match ? decodeURIComponent(match[1]) : undefined;
+}
+
+function pageAllowedForRole(page: Page, role: Exclude<UserRole, null>) {
+  if (PUBLIC_PAGE_KEYS.has(page)) return true;
+  if (role === 'admin') return page.startsWith('admin-');
+  if (role === 'manager') return page.startsWith('mgr-');
+  return page.startsWith('cli-');
+}
 
 export default function App() {
-  const [page, setPage] = useState<Page>('home');
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [page, setPageState] = useState<Page>(() => pageFromPathname(location.pathname));
   const [role, setRole] = useState<UserRole>(null);
-  const [selectedNewsId, setSelectedNewsId] = useState('nis2-portugal-2025');
+  const [authReady, setAuthReady] = useState(false);
+  const [selectedNewsId, setSelectedNewsId] = useState('');
+
+  const setPage = useCallback((nextPage: Page) => {
+    setPageState(nextPage);
+    if (nextPage === 'mgr-client-detail') {
+      const clientId = clientIdFromPathname(location.pathname) ?? session.get().cliente?.id;
+      navigate(clientId ? `/gestor/clientes/${clientId}` : PAGE_PATHS['mgr-clients']!);
+      return;
+    }
+    if (nextPage === 'news-detail') {
+      navigate(`/noticias/${selectedNewsId}`);
+      return;
+    }
+    navigate(PAGE_PATHS[nextPage] ?? '/');
+  }, [location.pathname, navigate, selectedNewsId]);
 
   // When role is set, go to the appropriate dashboard
   function handleSetRole(r: UserRole) {
@@ -44,6 +137,56 @@ export default function App() {
   const isPublicPage = (publicPages as readonly string[]).includes(page);
 
   useEffect(() => {
+    setPageState(pageFromPathname(location.pathname));
+    const newsId = newsIdFromPathname(location.pathname);
+    if (newsId) setSelectedNewsId(newsId);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const handleExpiredSession = () => {
+      setRole(null);
+      setPageState('login');
+      navigate(PAGE_PATHS.login!, { replace: true });
+    };
+    window.addEventListener(AUTH_EXPIRED_EVENT, handleExpiredSession);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleExpiredSession);
+  }, [navigate]);
+
+  useEffect(() => {
+    let active = true;
+
+    meApi()
+      .then((response) => {
+        if (!active || !response.autenticado || !response.role) return;
+        setRole(response.role);
+        const requestedPage = pageFromPathname(location.pathname);
+        if (location.pathname === '/' || requestedPage === 'login' || !pageAllowedForRole(requestedPage, response.role)) {
+          setPageState(defaultHomePageForRole(response.role));
+          navigate(PAGE_PATHS[defaultHomePageForRole(response.role)]!, { replace: true });
+          return;
+        }
+        setPageState(requestedPage);
+      })
+      .catch(() => {
+        // A sessão local não é uma fonte de autenticação; apenas a API decide.
+        if (!active) return;
+        session.clear();
+        const requestedPage = pageFromPathname(location.pathname);
+        if (!PUBLIC_PAGE_KEYS.has(requestedPage)) {
+          setPageState('login');
+          navigate(PAGE_PATHS.login!, { replace: true });
+        }
+      })
+      .finally(() => {
+        if (active) setAuthReady(true);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [location.pathname, navigate]);
+
+  useEffect(() => {
     if (page === 'news-detail') {
       const scrollTimer = window.setTimeout(() => {
         const root = document.documentElement;
@@ -59,7 +202,12 @@ export default function App() {
 
   function openNewsArticle(articleId: string) {
     setSelectedNewsId(articleId);
-    setPage('news-detail');
+    setPageState('news-detail');
+    navigate(`/noticias/${articleId}`);
+  }
+
+  if (!authReady) {
+    return <div className="min-h-screen bg-slate-50" aria-busy="true" aria-label="A validar sessão" />;
   }
 
   // ── Public Pages (incluindo quando autenticado) ──────────────────────────────
@@ -114,7 +262,7 @@ export default function App() {
       {page === 'mgr-dashboard' && <MgrDashboard setPage={setPage} />}
       {page === 'mgr-analytics' && <MgrAnalytics setPage={setPage} />}
       {page === 'mgr-clients' && <MgrClients setPage={setPage} />}
-      {page === 'mgr-client-detail' && <MgrClientDetail setPage={setPage} />}
+      {page === 'mgr-client-detail' && <MgrClientDetail setPage={setPage} clientId={clientIdFromPathname(location.pathname)} />}
 
       {page === 'mgr-incidents' && <MgrIncidents setPage={setPage} />}
       {page === 'mgr-documents' && <MgrDocuments />}

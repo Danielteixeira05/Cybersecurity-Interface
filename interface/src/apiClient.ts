@@ -1,6 +1,8 @@
+import axios, { type AxiosRequestConfig } from 'axios';
 import type { Page, UserRole } from './types';
 
 export type PerfilCodigo = 'ADMINISTRADOR' | 'COLABORADOR' | 'CLIENTE';
+export const AUTH_EXPIRED_EVENT = 'ciberbox:auth-expired';
 
 export interface LoginPayload {
   email: string;
@@ -20,7 +22,7 @@ export interface ApiUtilizador {
   ultimo_acesso_em?: string | null;
   criado_em?: string;
   role?: UserRole;
-  clientes?: string | null;
+  clientes?: Array<{ id: number; nome: string; principal?: boolean }> | string | null;
   cliente_id?: number | null;
 }
 
@@ -40,6 +42,10 @@ export interface ApiCliente {
   conformidade?: string | null;
   numero_ativos?: number;
   numero_incidentes?: number;
+  // Campos canónicos devolvidos pelo Django atual. Os aliases acima mantêm as páginas existentes compatíveis.
+  estado_conformidade?: string | null;
+  total_ativos?: number;
+  total_incidentes?: number;
 }
 
 export interface ApiAtivo {
@@ -51,6 +57,8 @@ export interface ApiAtivo {
   descricao?: string | null;
   endereco_ip?: string | null;
   criticalidade?: string | null;
+  tipo_equipamento?: string | null;
+  criticidade?: string | null;
   data_aquisicao?: string | null;
   criado_em?: string;
 }
@@ -66,6 +74,12 @@ export interface ApiIncidente {
   detetado_em?: string | null;
   resolvido_em?: string | null;
   criado_em?: string;
+  codigo?: string;
+  tipo_incidente?: string;
+  gravidade?: string | null;
+  data_hora_incidente?: string | null;
+  encerrado_em?: string | null;
+  estado?: string | null;
 }
 
 export interface ApiDocumento {
@@ -77,6 +91,9 @@ export interface ApiDocumento {
   formato?: string | null;
   tamanho_bytes?: number | null;
   submetido_em?: string;
+  categoria?: string | null;
+  nome_ficheiro_original?: string;
+  tipo_mime?: string | null;
 }
 
 export interface ApiPedido {
@@ -103,6 +120,7 @@ export interface ApiAvaliacao {
   estado_conformidade_nome?: string;
   nivel_risco?: string | null;
   score?: number | null;
+  pontuacao?: number | null;
   observacoes?: string | null;
 }
 
@@ -115,14 +133,14 @@ export interface ApiLoginResponse {
 export interface ApiDashboardAdmin {
   tipo: 'admin';
   stats: {
-    clientes: number;
-    utilizadores: number;
-    ativos: number;
-    incidentes: number;
-    documentos: number;
-    pedidos: number;
-    incidentes_abertos: number;
-    pedidos_abertos: number;
+    clientes?: number;
+    utilizadores?: number;
+    ativos?: number;
+    incidentes?: number;
+    documentos?: number;
+    pedidos?: number;
+    incidentes_abertos?: number;
+    pedidos_abertos?: number;
   };
   conformidade: Array<{ codigo: string; estado: string; numero_clientes: number }>;
   top_incidentes: Array<{ id: number; nome: string; total_incidentes: number }>;
@@ -143,6 +161,20 @@ export interface ApiDashboardAdmin {
 
 export interface ApiDashboardCliente {
   tipo: 'cliente';
+  total_ativos?: number;
+  total_incidentes?: number;
+  total_documentos?: number;
+  total_pedidos?: number;
+  estado_conformidade?: string | null;
+  nivel_risco?: string | null;
+  pontuacao?: number | null;
+  // Aliases legados consumidos pelos componentes atuais.
+  numero_ativos?: number;
+  numero_incidentes?: number;
+  numero_documentos?: number;
+  numero_pedidos?: number;
+  conformidade_estado?: string | null;
+  score_risco?: number | null;
 }
 
 export type ApiDashboard = ApiDashboardAdmin | ApiDashboardCliente;
@@ -155,16 +187,67 @@ export interface ApiMeResponse {
   role?: UserRole;
 }
 
-const DEV_MODE = typeof import.meta !== 'undefined' && !!import.meta.dev;
+const DEV_MODE = typeof import.meta !== 'undefined' && !!import.meta.env?.DEV;
 
 export function getApiBaseUrl(): string {
   const env = (typeof import.meta !== 'undefined' && import.meta.env) || ({} as Record<string, string | undefined>);
-  const explicit = env.VITE_API_BASE_URL;
+  const explicit = env.VITE_API_URL;
   if (typeof explicit === 'string' && explicit.length > 0) return explicit.replace(/\/$/, '');
-  if (!DEV_MODE) {
-    return 'https://cybersecurity-api.vercel.app';
-  }
-  return `http://localhost:${(import.meta.env as any)?.VITE_DJANGO_PORT || '8000'}`;
+  if (DEV_MODE) return '';
+  return 'https://cybersecurity-api.vercel.app';
+}
+
+export interface ApiConteudoSite {
+  id: number;
+  chave: string;
+  titulo: string;
+  subtitulo?: string | null;
+  corpo?: string | null;
+  imagem_url?: string | null;
+  ativo: boolean;
+  ordem: number;
+  atualizado_por?: number | null;
+  atualizado_por_nome?: string | null;
+  criado_em?: string;
+  atualizado_em?: string;
+}
+
+export interface ApiNoticia {
+  id: number;
+  titulo: string;
+  resumo: string;
+  corpo: string;
+  imagem_url?: string | null;
+  autor_id?: number | null;
+  autor_nome?: string | null;
+  publicada: boolean;
+  publicada_em?: string | null;
+  criado_em?: string;
+  atualizado_em?: string;
+}
+
+export interface ApiMensagemContacto {
+  id: number;
+  nome: string;
+  email: string;
+  telefone?: string | null;
+  empresa?: string | null;
+  assunto: string;
+  mensagem: string;
+  estado: 'NOVA' | 'EM_ANALISE' | 'RESPONDIDA' | 'ARQUIVADA';
+  respondida_por?: number | null;
+  respondida_por_nome?: string | null;
+  criado_em?: string;
+  respondida_em?: string | null;
+}
+
+export interface ContactoPublicoPayload {
+  nome: string;
+  email: string;
+  telefone?: string;
+  empresa?: string;
+  assunto: string;
+  mensagem: string;
 }
 
 let csrfToken = '';
@@ -176,6 +259,27 @@ export function getCsrfToken(): string {
   const m = /csrftoken=([^;]+)/.exec(document.cookie || '');
   return m ? decodeURIComponent(m[1]) : '';
 }
+
+/**
+ * Cliente HTTP único da aplicação. Durante a transição para o backend Node,
+ * mantém o contrato de sessão/CSRF do Django para não interromper o login atual.
+ */
+export const api = axios.create({
+  baseURL: getApiBaseUrl(),
+  withCredentials: true,
+  headers: {
+    Accept: 'application/json',
+  },
+});
+
+api.interceptors.request.use((config) => {
+  const method = (config.method || 'get').toUpperCase();
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+    const token = getCsrfToken();
+    if (token) config.headers.set('X-CSRFToken', token);
+  }
+  return config;
+});
 
 export async function ensureCsrfToken(): Promise<void> {
   try {
@@ -222,7 +326,7 @@ export const session = new SessionStore();
 export function defaultHomePageForRole(role: UserRole): Page {
   if (role === 'admin') return 'admin-dashboard';
   if (role === 'manager') return 'mgr-dashboard';
-  if (role === 'cliente') return 'cli-dashboard';
+  if (role === 'client') return 'cli-dashboard';
   return 'home';
 }
 
@@ -230,41 +334,37 @@ export async function apiFetch<T = any>(
   endpoint: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const base = getApiBaseUrl();
-  const url = endpoint.startsWith('http') ? endpoint : `${base}${endpoint}`;
   const headers = new Headers(init.headers || {});
-  if (init.body && typeof init.body === 'string' && !headers.has('Content-Type')) {
-    headers.set('Content-Type', 'application/json');
-  }
-  const method = (init.method || 'GET').toUpperCase();
-  if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
-    const t = getCsrfToken();
-    if (t) headers.set('X-CSRFToken', t);
-  }
-  const res = await fetch(url, {
-    ...init,
-    headers,
-    credentials: 'include',
-  });
-  const contentType = res.headers.get('Content-Type') || '';
-  let data: any = null;
-  if (contentType.includes('application/json')) {
-    try {
-      data = await res.json();
-    } catch {
-      data = null;
+  const isJson = typeof init.body === 'string';
+  if (isJson && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+
+  const request: AxiosRequestConfig = {
+    url: endpoint,
+    method: init.method || 'GET',
+    headers: Object.fromEntries(headers.entries()),
+    data: init.body,
+  };
+
+  try {
+    const response = await api.request<T>(request);
+    return response.data;
+  } catch (cause) {
+    if (axios.isAxiosError(cause)) {
+      const data = cause.response?.data;
+      const message = typeof data === 'object' && data && 'erro' in data
+        ? String(data.erro)
+        : cause.message || `HTTP ${cause.response?.status ?? 0}`;
+      const error = new Error(message);
+      (error as Error & { status?: number; data?: unknown }).status = cause.response?.status;
+      (error as Error & { status?: number; data?: unknown }).data = data;
+      if (cause.response?.status === 401) {
+        session.clear();
+        window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+      }
+      throw error;
     }
-  } else {
-    data = await res.text();
+    throw cause;
   }
-  if (!res.ok) {
-    const msg = typeof data === 'object' && data && 'erro' in data ? data.erro : `HTTP ${res.status}`;
-    const err = new Error(msg);
-    (err as any).status = res.status;
-    (err as any).data = data;
-    throw err;
-  }
-  return data as T;
 }
 
 export async function loginApi(payload: LoginPayload): Promise<ApiLoginResponse> {
@@ -309,19 +409,190 @@ export async function meApi(): Promise<ApiMeResponse> {
 export function mapPerfilToRole(p?: PerfilCodigo | string | null): UserRole {
   if (p === 'ADMINISTRADOR') return 'admin';
   if (p === 'COLABORADOR') return 'manager';
-  if (p === 'CLIENTE') return 'cliente';
+  if (p === 'CLIENTE') return 'client';
   return null;
 }
 
+type ApiRecord = Record<string, unknown>;
+
+function asRecord(value: unknown): ApiRecord {
+  return value && typeof value === 'object' ? value as ApiRecord : {};
+}
+
+function numericValue(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value))) return Number(value);
+  return undefined;
+}
+
+function requiredNumber(value: unknown, field: string): number {
+  const parsed = numericValue(value);
+  if (parsed === undefined) throw new Error(`Resposta da API sem o campo numérico obrigatório: ${field}.`);
+  return parsed;
+}
+
+function requiredString(value: unknown, field: string): string {
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new Error(`Resposta da API sem o campo obrigatório: ${field}.`);
+  }
+  return value;
+}
+
+/**
+ * Adaptadores temporários do contrato Django atual para o contrato de leitura
+ * das páginas React. Não introduzem dados demonstrativos: quando um campo não
+ * existe, o valor continua ausente e a página deve representar o estado vazio.
+ */
+export function normaliseCliente(value: unknown): ApiCliente {
+  const raw = asRecord(value);
+  const totalAtivos = numericValue(raw.total_ativos ?? raw.totalAtivos ?? raw.numero_ativos);
+  const totalIncidentes = numericValue(raw.total_incidentes ?? raw.totalIncidentes ?? raw.numero_incidentes);
+  const estadoConformidade = (raw.estado_conformidade ?? raw.estadoConformidade ?? raw.conformidade) as string | null | undefined;
+  return {
+    ...(raw as unknown as ApiCliente),
+    id: requiredNumber(raw.id, 'cliente.id'),
+    nome: requiredString(raw.nome, 'cliente.nome'),
+    estado_conformidade: estadoConformidade ?? null,
+    conformidade: estadoConformidade ?? null,
+    total_ativos: totalAtivos,
+    numero_ativos: totalAtivos,
+    total_incidentes: totalIncidentes,
+    numero_incidentes: totalIncidentes,
+  };
+}
+
+export function normaliseAtivo(value: unknown): ApiAtivo {
+  const raw = asRecord(value);
+  const tipo = (raw.tipo ?? raw.tipo_equipamento) as string | null | undefined;
+  const criticidade = (raw.criticalidade ?? raw.criticidade) as string | null | undefined;
+  return {
+    ...(raw as unknown as ApiAtivo),
+    id: requiredNumber(raw.id, 'ativo.id'),
+    cliente_id: requiredNumber(raw.cliente_id, 'ativo.cliente_id'),
+    nome: requiredString(raw.nome, 'ativo.nome'),
+    tipo_equipamento: tipo ?? null,
+    tipo: tipo ?? null,
+    criticidade: criticidade ?? null,
+    criticalidade: criticidade ?? null,
+  };
+}
+
+export function normaliseIncidente(value: unknown): ApiIncidente {
+  const raw = asRecord(value);
+  const titulo = (raw.titulo ?? raw.tipo_incidente ?? raw.codigo) as string | undefined;
+  const severidade = (raw.severidade ?? raw.gravidade) as string | null | undefined;
+  const detetadoEm = (raw.detetado_em ?? raw.data_hora_incidente) as string | null | undefined;
+  const resolvidoEm = (raw.resolvido_em ?? raw.encerrado_em) as string | null | undefined;
+  return {
+    ...(raw as unknown as ApiIncidente),
+    id: requiredNumber(raw.id, 'incidente.id'),
+    cliente_id: requiredNumber(raw.cliente_id, 'incidente.cliente_id'),
+    titulo: requiredString(titulo, 'incidente.tipo_incidente ou incidente.codigo'),
+    tipo: (raw.tipo ?? raw.tipo_incidente) as string | null | undefined,
+    tipo_incidente: typeof raw.tipo_incidente === 'string' ? raw.tipo_incidente : undefined,
+    codigo: typeof raw.codigo === 'string' ? raw.codigo : undefined,
+    gravidade: severidade ?? null,
+    severidade: severidade ?? null,
+    data_hora_incidente: detetadoEm ?? null,
+    detetado_em: detetadoEm ?? null,
+    encerrado_em: resolvidoEm ?? null,
+    resolvido_em: resolvidoEm ?? null,
+  };
+}
+
+export function normaliseDocumento(value: unknown): ApiDocumento {
+  const raw = asRecord(value);
+  const tipo = (raw.tipo ?? raw.categoria ?? raw.tipo_mime) as string | null | undefined;
+  return {
+    ...(raw as unknown as ApiDocumento),
+    id: requiredNumber(raw.id, 'documento.id'),
+    cliente_id: requiredNumber(raw.cliente_id, 'documento.cliente_id'),
+    titulo: requiredString(raw.titulo ?? raw.nome_ficheiro_original, 'documento.titulo ou documento.nome_ficheiro_original'),
+    categoria: typeof raw.categoria === 'string' ? raw.categoria : null,
+    tipo: tipo ?? null,
+    formato: (raw.formato ?? raw.tipo_mime) as string | null | undefined,
+    tamanho_bytes: numericValue(raw.tamanho_bytes) ?? null,
+  };
+}
+
+export function normaliseAvaliacao(value: unknown): ApiAvaliacao {
+  const raw = asRecord(value);
+  const score = numericValue(raw.score ?? raw.pontuacao);
+  return {
+    ...(raw as unknown as ApiAvaliacao),
+    id: requiredNumber(raw.id, 'avaliacao.id'),
+    cliente_id: requiredNumber(raw.cliente_id, 'avaliacao.cliente_id'),
+    pontuacao: score ?? null,
+    score: score ?? null,
+  };
+}
+
+function normaliseDashboard(value: unknown): ApiDashboard {
+  const raw = asRecord(value);
+  if (raw.tipo === 'cliente') {
+    const totalAtivos = numericValue(raw.total_ativos);
+    const totalIncidentes = numericValue(raw.total_incidentes);
+    const totalDocumentos = numericValue(raw.total_documentos);
+    const totalPedidos = numericValue(raw.total_pedidos);
+    const pontuacao = numericValue(raw.pontuacao);
+    return {
+      ...(raw as unknown as ApiDashboardCliente),
+      tipo: 'cliente',
+      total_ativos: totalAtivos,
+      total_incidentes: totalIncidentes,
+      total_documentos: totalDocumentos,
+      total_pedidos: totalPedidos,
+      numero_ativos: totalAtivos,
+      numero_incidentes: totalIncidentes,
+      numero_documentos: totalDocumentos,
+      numero_pedidos: totalPedidos,
+      estado_conformidade: raw.estado_conformidade as string | null | undefined,
+      conformidade_estado: raw.estado_conformidade as string | null | undefined,
+      pontuacao: pontuacao ?? null,
+      score_risco: pontuacao ?? null,
+    };
+  }
+
+  const stats = asRecord(raw.stats);
+  return {
+    ...(raw as unknown as ApiDashboardAdmin),
+    tipo: 'admin',
+    stats: {
+      clientes: numericValue(stats.clientes),
+      utilizadores: numericValue(stats.utilizadores),
+      ativos: numericValue(stats.ativos),
+      incidentes: numericValue(stats.incidentes),
+      documentos: numericValue(stats.documentos),
+      pedidos: numericValue(stats.pedidos),
+      incidentes_abertos: numericValue(stats.incidentes_abertos),
+      pedidos_abertos: numericValue(stats.pedidos_abertos),
+    },
+    conformidade: Array.isArray(raw.conformidade) ? raw.conformidade as ApiDashboardAdmin['conformidade'] : [],
+    top_incidentes: Array.isArray(raw.top_incidentes) ? raw.top_incidentes as ApiDashboardAdmin['top_incidentes'] : [],
+    documentos_mes: Array.isArray(raw.documentos_mes) ? raw.documentos_mes as ApiDashboardAdmin['documentos_mes'] : [],
+    utilizadores_perfil: Array.isArray(raw.utilizadores_perfil) ? raw.utilizadores_perfil as ApiDashboardAdmin['utilizadores_perfil'] : [],
+    pedidos_estado: Array.isArray(raw.pedidos_estado) ? raw.pedidos_estado as ApiDashboardAdmin['pedidos_estado'] : [],
+  };
+}
+
 export async function dashboardApi(): Promise<ApiDashboard> {
-  return apiFetch<ApiDashboard>('/api/dashboard/');
+  return normaliseDashboard(await apiFetch('/api/dashboard/'));
 }
 export async function clientesApi(q?: string): Promise<ApiCliente[]> {
   const qs = q ? `?q=${encodeURIComponent(q)}` : '';
-  return apiFetch<ApiCliente[]>(`/api/clientes/${qs}`);
+  const result = await apiFetch<unknown>(`/api/clientes/${qs}`);
+  return Array.isArray(result) ? result.map(normaliseCliente) : [];
 }
 export async function clienteDetalheApi(id: number): Promise<any> {
-  return apiFetch<any>(`/api/clientes/${id}/`);
+  const result = asRecord(await apiFetch<unknown>(`/api/clientes/${id}/`));
+  return {
+    ...result,
+    cliente: result.cliente ? normaliseCliente(result.cliente) : null,
+    ativos: Array.isArray(result.ativos) ? result.ativos.map(normaliseAtivo) : [],
+    incidentes: Array.isArray(result.incidentes) ? result.incidentes.map(normaliseIncidente) : [],
+    documentos: Array.isArray(result.documentos) ? result.documentos.map(normaliseDocumento) : [],
+    avaliacoes: Array.isArray(result.avaliacoes) ? result.avaliacoes.map(normaliseAvaliacao) : [],
+  };
 }
 export async function utilizadoresApi(perfil?: string): Promise<ApiUtilizador[]> {
   const qs = perfil ? `?perfil=${encodeURIComponent(perfil)}` : '';
@@ -329,15 +600,18 @@ export async function utilizadoresApi(perfil?: string): Promise<ApiUtilizador[]>
 }
 export async function ativosApi(clienteId?: number): Promise<ApiAtivo[]> {
   const qs = clienteId ? `?cliente_id=${clienteId}` : '';
-  return apiFetch<ApiAtivo[]>(`/api/ativos/${qs}`);
+  const result = await apiFetch<unknown>(`/api/ativos/${qs}`);
+  return Array.isArray(result) ? result.map(normaliseAtivo) : [];
 }
 export async function incidentesApi(clienteId?: number): Promise<ApiIncidente[]> {
   const qs = clienteId ? `?cliente_id=${clienteId}` : '';
-  return apiFetch<ApiIncidente[]>(`/api/incidentes/${qs}`);
+  const result = await apiFetch<unknown>(`/api/incidentes/${qs}`);
+  return Array.isArray(result) ? result.map(normaliseIncidente) : [];
 }
 export async function documentosApi(clienteId?: number): Promise<ApiDocumento[]> {
   const qs = clienteId ? `?cliente_id=${clienteId}` : '';
-  return apiFetch<ApiDocumento[]>(`/api/documentos/${qs}`);
+  const result = await apiFetch<unknown>(`/api/documentos/${qs}`);
+  return Array.isArray(result) ? result.map(normaliseDocumento) : [];
 }
 export async function pedidosApi(clienteId?: number): Promise<ApiPedido[]> {
   const qs = clienteId ? `?cliente_id=${clienteId}` : '';
@@ -345,11 +619,72 @@ export async function pedidosApi(clienteId?: number): Promise<ApiPedido[]> {
 }
 export async function avaliacoesApi(clienteId?: number): Promise<ApiAvaliacao[]> {
   const qs = clienteId ? `?cliente_id=${clienteId}` : '';
-  return apiFetch<ApiAvaliacao[]>(`/api/avaliacoes/${qs}`);
+  const result = await apiFetch<unknown>(`/api/avaliacoes/${qs}`);
+  return Array.isArray(result) ? result.map(normaliseAvaliacao) : [];
 }
 export async function logsApi(limit = 200): Promise<any[]> {
   return apiFetch<any[]>(`/api/logs/?limit=${limit}`);
 }
 export async function opcoesApi(): Promise<any> {
   return apiFetch<any>('/api/opcoes/');
+}
+
+// Conteúdo público e CMS. As rotas já existem no Django e têm o mesmo
+// contrato nas rotas Node equivalentes, para uma transição incremental.
+export async function conteudosPublicosApi(chave?: string): Promise<ApiConteudoSite[]> {
+  const qs = chave ? `?chave=${encodeURIComponent(chave)}` : '';
+  return apiFetch<ApiConteudoSite[]>(`/api/public/conteudos/${qs}`);
+}
+
+export async function noticiasPublicasApi(): Promise<ApiNoticia[]> {
+  return apiFetch<ApiNoticia[]>('/api/public/noticias/');
+}
+
+export async function noticiaPublicaDetalheApi(id: number): Promise<ApiNoticia> {
+  return apiFetch<ApiNoticia>(`/api/public/noticias/${id}/`);
+}
+
+export async function enviarContactoPublicoApi(payload: ContactoPublicoPayload): Promise<{ mensagem: string; id: number }> {
+  await ensureCsrfToken();
+  return apiFetch<{ mensagem: string; id: number }>('/api/public/contacto/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function conteudosAdminApi(): Promise<ApiConteudoSite[]> {
+  return apiFetch<ApiConteudoSite[]>('/api/admin/conteudos/');
+}
+
+export async function criarConteudoAdminApi(payload: Omit<ApiConteudoSite, 'id' | 'atualizado_por' | 'atualizado_por_nome' | 'criado_em' | 'atualizado_em'>): Promise<ApiConteudoSite> {
+  await ensureCsrfToken();
+  return apiFetch<ApiConteudoSite>('/api/admin/conteudos/', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function atualizarConteudoAdminApi(id: number, payload: Partial<Omit<ApiConteudoSite, 'id' | 'atualizado_por' | 'atualizado_por_nome' | 'criado_em' | 'atualizado_em'>>): Promise<ApiConteudoSite> {
+  await ensureCsrfToken();
+  return apiFetch<ApiConteudoSite>(`/api/admin/conteudos/${id}/`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+
+export async function noticiasAdminApi(): Promise<ApiNoticia[]> {
+  return apiFetch<ApiNoticia[]>('/api/admin/noticias/');
+}
+
+export async function criarNoticiaAdminApi(payload: Omit<ApiNoticia, 'id' | 'autor_id' | 'autor_nome' | 'publicada_em' | 'criado_em' | 'atualizado_em'>): Promise<ApiNoticia> {
+  await ensureCsrfToken();
+  return apiFetch<ApiNoticia>('/api/admin/noticias/', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function atualizarNoticiaAdminApi(id: number, payload: Partial<Omit<ApiNoticia, 'id' | 'autor_id' | 'autor_nome' | 'publicada_em' | 'criado_em' | 'atualizado_em'>>): Promise<ApiNoticia> {
+  await ensureCsrfToken();
+  return apiFetch<ApiNoticia>(`/api/admin/noticias/${id}/`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+
+export async function mensagensContactoAdminApi(): Promise<ApiMensagemContacto[]> {
+  return apiFetch<ApiMensagemContacto[]>('/api/admin/contactos/');
+}
+
+export async function atualizarMensagemContactoAdminApi(id: number, estado: ApiMensagemContacto['estado']): Promise<ApiMensagemContacto> {
+  await ensureCsrfToken();
+  return apiFetch<ApiMensagemContacto>(`/api/admin/contactos/${id}/`, { method: 'PATCH', body: JSON.stringify({ estado }) });
 }

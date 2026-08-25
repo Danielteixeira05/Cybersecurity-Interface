@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, Legend,
+  PieChart, Pie, Cell, LineChart, Line,
 } from 'recharts';
 import type { Page } from '../types';
 import {
@@ -127,7 +127,7 @@ function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: st
   );
 }
 
-function severityColor(s: string | undefined) {
+function severityColor(s: string | null | undefined) {
   const v = (s || 'MEDIA').toLowerCase();
   if (v.includes('alta') || v.includes('crit')) return 'bg-rose-100 text-rose-700';
   if (v.includes('media') || v.includes('mod')) return 'bg-amber-100 text-amber-700';
@@ -166,15 +166,6 @@ export function ClientDashboard({ setPage }: PageProps) {
       .finally(() => setLoading(false));
   }, []);
 
-  const trendData = [
-    { mes: 'Jul', incidentes: 2, ativos: ativos.length - 2 },
-    { mes: 'Ago', incidentes: 3, ativos: ativos.length - 1 },
-    { mes: 'Set', incidentes: 1, ativos: ativos.length },
-    { mes: 'Out', incidentes: 4, ativos: ativos.length + 1 },
-    { mes: 'Nov', incidentes: 2, ativos: ativos.length + 2 },
-    { mes: 'Dez', incidentes: 1, ativos: ativos.length },
-  ];
-
   const criticidade = [
     { t: 'Alta', n: ativos.filter(a => (a.criticalidade || '').toLowerCase().includes('alt') || (a.criticalidade || '').toLowerCase().includes('crit')).length, c: '#ef4444' },
     { t: 'Média', n: ativos.filter(a => (a.criticalidade || '').toLowerCase().includes('med')).length, c: '#f59e0b' },
@@ -184,8 +175,9 @@ export function ClientDashboard({ setPage }: PageProps) {
   if (loading) return <Loader />;
   if (err) return <ErrorCard msg={err} />;
 
-  const clienteNome = sess.cliente?.nome || 'A sua Empresa';
-  const abertos = incidentes.filter(i => !i.resolvido_em).length;
+  const clienteNome = sess.cliente?.nome || 'Cliente';
+  const abertos = incidentes.filter((incidente) => incidente.estado === 'ABERTO').length;
+  const hasCriticidade = criticidade.some((item) => item.n > 0);
 
   return (
     <div>
@@ -194,40 +186,41 @@ export function ClientDashboard({ setPage }: PageProps) {
         subtitle="Painel de controlo da sua segurança e conformidade"
       />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
-        <StatCard label="Meus Ativos" value={ativos.length} icon="💻" color="bg-blue-50" delta={resumo.numero_ativos ? '' : undefined} />
-        <StatCard label="Incidentes Abertos" value={abertos} icon="🚨" color="bg-rose-50" delta={`${incidentes.length} total`} />
-        <StatCard label="Conformidade NIS2" value={resumo.conformidade_estado || 'Em Avaliação'} icon="🛡️" color="bg-emerald-50" />
-        <StatCard label="Score Risco" value={resumo.score_risco ?? '7.4/10'} icon="⭐" color="bg-amber-50" />
+        <StatCard label="Meus Ativos" value={ativos.length} icon="💻" color="bg-blue-50" />
+        <StatCard label="Incidentes Abertos" value={abertos} icon="🚨" color="bg-rose-50" />
+        <StatCard label="Conformidade NIS2" value={resumo.conformidade_estado || '—'} icon="🛡️" color="bg-emerald-50" />
+        <StatCard label="Score Risco" value={resumo.score_risco ?? '—'} icon="⭐" color="bg-amber-50" />
       </div>
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="rounded-2xl border border-slate-200 bg-white p-6 lg:col-span-2">
           <h3 className="mb-4 font-display text-lg font-semibold text-slate-900">Evolução (6 meses)</h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={trendData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="mes" stroke="#64748b" />
-                <YAxis stroke="#64748b" />
-                <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="incidentes" stroke="#ef4444" strokeWidth={2.5} name="Incidentes" dot={{ r: 4 }} />
-                <Line type="monotone" dataKey="ativos" stroke="#2563eb" strokeWidth={2.5} name="Ativos" dot={{ r: 4 }} />
-              </LineChart>
-            </ResponsiveContainer>
+          <div className="flex h-72 items-center justify-center text-center text-sm text-slate-500">
+            Sem série histórica disponível.
           </div>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-6">
           <h3 className="mb-4 font-display text-lg font-semibold text-slate-900">Ativos por Criticidade</h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={criticidade} dataKey="n" nameKey="t" outerRadius={95} label={(p) => `${p.t}: ${p.n}`}>
-                  {criticidade.map((c, i) => <Cell key={i} fill={c.c} />)}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+          {hasCriticidade ? (
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={criticidade.filter((item) => item.n > 0)}
+                    dataKey="n"
+                    nameKey="t"
+                    outerRadius={95}
+                    label={(p) => {
+                      const item = p.payload as { t?: string; n?: number } | undefined;
+                      return `${item?.t ?? ''}: ${item?.n ?? p.value ?? ''}`;
+                    }}
+                  >
+                    {criticidade.filter((item) => item.n > 0).map((item) => <Cell key={item.t} fill={item.c} />)}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          ) : <div className="flex h-72 items-center justify-center text-center text-sm text-slate-500">Sem ativos classificados disponíveis.</div>}
         </div>
       </div>
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
@@ -240,7 +233,7 @@ export function ClientDashboard({ setPage }: PageProps) {
             data={incidentes.slice(0, 5)}
             emptyText="Sem incidentes registados"
             columns={[
-              { key: 'id', label: 'Ref.', width: '70px', render: (r) => <span className="font-mono text-xs">INC-{String(r.id).padStart(4,'0')}</span> },
+              { key: 'codigo', label: 'Ref.', width: '70px', render: (r) => <span className="font-mono text-xs">{r.codigo || `#${r.id}`}</span> },
               { key: 'titulo', label: 'Incidente', render: (r) => (
                 <div>
                   <div className="font-medium text-slate-900">{r.titulo}</div>
@@ -248,9 +241,7 @@ export function ClientDashboard({ setPage }: PageProps) {
                 </div>
               )},
               { key: 'severidade', label: 'Sev.', render: (r) => <span className={`badge ${severityColor(r.severidade)}`}>{r.severidade || '—'}</span> },
-              { key: 'resolvido_em', label: 'Estado', render: (r) => r.resolvido_em ? (
-                <span className="badge bg-emerald-100 text-emerald-700">✓ Fechado</span>
-              ) : <span className="badge bg-rose-100 text-rose-700">● Aberto</span> },
+              { key: 'estado', label: 'Estado', render: (r) => <span className={`badge ${r.estado === 'ABERTO' ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>{r.estado || '—'}</span> },
             ]}
           />
         </div>
