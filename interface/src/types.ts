@@ -4,7 +4,7 @@ export type Page =
   // Public
   | 'home' | 'about' | 'mission' | 'services' | 'news' | 'news-detail' | 'contact' | 'login'
   // Admin
-  | 'admin-dashboard' | 'admin-analytics' | 'admin-users' | 'admin-clients' | 'admin-documents'
+  | 'admin-dashboard' | 'admin-analytics' | 'admin-users' | 'admin-clients' | 'admin-assets' | 'admin-documents'
   | 'admin-incidents' | 'admin-logs' | 'admin-site-content' | 'admin-permissions'
   | 'admin-client-detail' | 'admin-user-client' | 'admin-user-manager'
   // Manager

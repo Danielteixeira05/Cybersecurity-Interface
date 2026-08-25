@@ -1,4 +1,7 @@
-import { getClient, getClientOverview, listClients } from '../services/clients.service.js';
+import {
+  createClient, createContact, getClient, getClientOverview, listClients, updateClient,
+  updateContact, updateManagers,
+} from '../services/clients.service.js';
 import { httpError } from '../middleware/errors.js';
 
 function clientIdFrom(request) {
@@ -9,7 +12,7 @@ function clientIdFrom(request) {
 
 export async function list(request, response, next) {
   try {
-    return response.json({ items: await listClients(request.auth) });
+    return response.json({ items: await listClients(request.auth, request.query.q) });
   } catch (error) {
     return next(error);
   }
@@ -26,6 +29,52 @@ export async function detail(request, response, next) {
 export async function overview(request, response, next) {
   try {
     return response.json(await getClientOverview(request.auth, clientIdFrom(request)));
+  } catch (error) {
+    return next(error);
+  }
+}
+
+function contactIdFrom(request) {
+  const id = Number(request.params.contactId);
+  if (!Number.isSafeInteger(id) || id < 1) throw httpError(400, 'Identificador de contacto inválido.');
+  return id;
+}
+
+export async function create(request, response, next) {
+  try {
+    return response.status(201).json(await createClient(request.body ?? {}, Number(request.auth.sub)));
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function update(request, response, next) {
+  try {
+    return response.json(await updateClient(clientIdFrom(request), request.body ?? {}, Number(request.auth.sub)));
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function createClientContact(request, response, next) {
+  try {
+    return response.status(201).json(await createContact(clientIdFrom(request), request.body ?? {}, Number(request.auth.sub)));
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function updateClientContact(request, response, next) {
+  try {
+    return response.json(await updateContact(clientIdFrom(request), contactIdFrom(request), request.body ?? {}, Number(request.auth.sub)));
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function assignManagers(request, response, next) {
+  try {
+    return response.json(await updateManagers(clientIdFrom(request), request.body ?? {}, Number(request.auth.sub)));
   } catch (error) {
     return next(error);
   }
@@ -53,7 +102,7 @@ function djangoClient(client) {
 
 export async function legacyList(request, response, next) {
   try {
-    return response.json((await listClients(request.auth)).map(djangoClient));
+    return response.json((await listClients(request.auth, request.query.q)).map(djangoClient));
   } catch (error) {
     return next(error);
   }

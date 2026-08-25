@@ -30,8 +30,8 @@ import newsNis2Image from '../assets/news/nis2-compliance.jpg';
 import newsPentestingImage from '../assets/news/pentesting.jpg';
 import newsRansomwareImage from '../assets/news/ransomware.jpg';
 import {
-  enviarContactoPublicoApi, noticiaPublicaDetalheApi, noticiasPublicasApi, session,
-  type ApiNoticia,
+  conteudosPublicosApi, enviarContactoPublicoApi, noticiaPublicaDetalheApi, noticiasPublicasApi, session,
+  type ApiConteudoSite, type ApiNoticia,
 } from '../apiClient';
 import type { Page } from '../types';
 
@@ -716,29 +716,26 @@ export function HomePage({ setPage }: PageProps) {
 }
 
 export function AboutPage({ setPage }: PageProps) {
+  const [contents, setContents] = useState<ApiConteudoSite[]>([]);
+  const [loadingContents, setLoadingContents] = useState(true);
+  const [contentError, setContentError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    conteudosPublicosApi()
+      .then((rows) => { if (active) setContents(rows); })
+      .catch((cause) => { if (active) setContentError(cause instanceof Error ? cause.message : 'Não foi possível carregar o conteúdo institucional.'); })
+      .finally(() => { if (active) setLoadingContents(false); });
+    return () => { active = false; };
+  }, []);
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
       <span className="badge bg-blue-100 text-blue-700">Sobre Nós</span>
       <h1 className="mt-4 font-display text-5xl font-bold text-slate-900">
-        Construímos confiança digital desde 2019
+        Conteúdo institucional
       </h1>
-      <p className="mt-6 text-xl leading-relaxed text-slate-600">
-        A CiberBoxSecur nasceu com a missão de democratizar o acesso a serviços profissionais de cibersegurança
-        para PMEs e Grandes Empresas em Portugal e na Europa Lusófona.
-      </p>
-
-      <div className="mt-16 grid gap-8 sm:grid-cols-3">
-        {[
-          { t: 'Missão', d: 'Proteger organizações de todos os tamanhos contra ameaças cibernéticas modernas, com tecnologia acessível e equipa especializada.' },
-          { t: 'Visão', d: 'Ser a plataforma de referência de cibersegurança em língua portuguesa, reconhecida pela inovação e excelência operacional.' },
-          { t: 'Valores', d: 'Integridade, transparência, resiliência e melhoria contínua. A segurança é um processo, não um destino.' },
-        ].map((v) => (
-          <div key={v.t} className="rounded-2xl border border-slate-200 bg-white p-7">
-            <h3 className="font-display text-xl font-semibold text-slate-900">{v.t}</h3>
-            <p className="mt-3 text-sm leading-relaxed text-slate-600">{v.d}</p>
-          </div>
-        ))}
-      </div>
+      {loadingContents ? <p className="mt-6 text-slate-500">A carregar conteúdo institucional...</p> : contentError ? <p className="mt-6 text-rose-700" role="alert">{contentError}</p> : contents.length === 0 ? <p className="mt-6 text-slate-500">Sem conteúdo institucional publicado.</p> : <div className="mt-10 grid gap-8 sm:grid-cols-2">{contents.map((content) => <article key={content.id} className="rounded-2xl border border-slate-200 bg-white p-7"><h2 className="font-display text-xl font-semibold text-slate-900">{content.titulo}</h2>{content.subtitulo && <p className="mt-2 text-sm font-medium text-blue-700">{content.subtitulo}</p>}{content.corpo && <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-slate-600">{content.corpo}</p>}</article>)}</div>}
 
       <div className="mt-16 rounded-3xl bg-slate-900 p-10 text-white sm:p-14">
         <h2 className="font-display text-3xl font-bold">A nossa equipa</h2>

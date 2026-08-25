@@ -14,10 +14,10 @@ function monthKey(value) {
 
 async function accessibleClients(auth) {
   const { Client } = getModels();
-  if (auth.role === 'admin') return Client.findAll({ order: [['nome', 'ASC']] });
+  if (auth.role === 'admin') return Client.findAll({ where: { ativo: true }, order: [['nome', 'ASC']] });
   const ids = await clientIdsForUser(auth.sub);
   if (!ids.length) return [];
-  return Client.findAll({ where: { id: ids }, order: [['nome', 'ASC']] });
+  return Client.findAll({ where: { id: ids, ativo: true }, order: [['nome', 'ASC']] });
 }
 
 async function latestAssessments(clientIds) {

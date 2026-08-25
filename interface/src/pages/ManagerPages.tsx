@@ -13,6 +13,7 @@ import {
   type ApiDashboardAdmin, type ApiCliente, type ApiAtivo, type ApiIncidente,
   type ApiDocumento, type ApiPedido, type ApiAvaliacao,
 } from '../apiClient';
+import { AssetsWorkspace, IncidentsWorkspace } from '../components/OperationalResources';
 
 interface PageProps {
   setPage: (p: Page) => void;
@@ -561,13 +562,18 @@ export function MgrClientDetail({ setPage, backPage = 'mgr-clients', backLabel =
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [detailTab, setDetailTab] = useState<'overview' | 'assets' | 'incidents'>('overview');
+
+  const refreshDetail = async () => {
+    if (!cid) { setLoading(false); return; }
+    setLoading(true); setErr(null);
+    try { setData(await clienteDetalheApi(cid)); }
+    catch (cause: any) { setErr(cause?.message || 'Erro'); }
+    finally { setLoading(false); }
+  };
 
   useEffect(() => {
-    if (!cid) { setLoading(false); return; }
-    clienteDetalheApi(cid)
-      .then(setData)
-      .catch((e) => setErr(e?.message || 'Erro'))
-      .finally(() => setLoading(false));
+    void refreshDetail();
   }, [cid]);
 
   if (loading) return <Loader />;
@@ -599,7 +605,15 @@ export function MgrClientDetail({ setPage, backPage = 'mgr-clients', backLabel =
         <StatCard label="Conformidade" value={c.conformidade || '—'} icon="✅" color="bg-emerald-50" />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <nav aria-label="Detalhe do cliente" className="mb-6 flex overflow-x-auto border-b border-slate-200">
+        {[
+          ['overview', 'Visão Geral'],
+          ['assets', 'Ativos'],
+          ['incidents', 'Incidentes'],
+        ].map(([key, itemLabel]) => <button key={key} type="button" onClick={() => setDetailTab(key as 'overview' | 'assets' | 'incidents')} className={`shrink-0 border-b-2 px-5 py-3 text-sm font-medium transition ${detailTab === key ? 'border-blue-600 bg-blue-50/60 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-900'}`}>{itemLabel}</button>)}
+      </nav>
+
+      {detailTab === 'assets' ? <AssetsWorkspace role="manager" clientId={Number(cid)} compact title="Ativos Tecnológicos" subtitle="Inventário associado a este cliente" onChanged={() => void refreshDetail()} /> : detailTab === 'incidents' ? <IncidentsWorkspace role="manager" clientId={Number(cid)} compact title="Incidentes de Segurança" subtitle="Incidentes associados a este cliente" onChanged={() => void refreshDetail()} /> : <div className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 bg-white p-6">
           <h3 className="mb-4 font-display text-lg font-semibold text-slate-900">Ativos</h3>
           <DataTable
@@ -678,72 +692,13 @@ export function MgrClientDetail({ setPage, backPage = 'mgr-clients', backLabel =
             />
           </div>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }
 
 export function MgrIncidents({ setPage }: PageProps) {
-  const [data, setData] = useState<ApiIncidente[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    incidentesApi()
-      .then(setData)
-      .catch((e) => setErr(e?.message || 'Erro'))
-      .finally(() => setLoading(false));
-  }, []);
-
-  return (
-    <div>
-      <PageHeader
-        title="Incidentes de Segurança"
-        subtitle={`${data.filter(i => !i.resolvido_em).length} abertos / ${data.length} total`}
-        actions={
-          <button className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700">
-            + Reportar Incidente
-          </button>
-        }
-      />
-      {loading ? <Loader /> : err ? <ErrorCard msg={err} /> : (
-        <DataTable
-          data={data}
-          columns={[
-            { key: 'id', label: 'Ref', width: '70px', render: (r) => <span className="font-mono text-xs text-slate-500">INC-{String(r.id).padStart(4, '0')}</span> },
-            { key: 'titulo', label: 'Incidente', render: (r) => (
-              <div>
-                <div className="font-medium text-slate-900">{r.titulo}</div>
-                <div className="text-xs text-slate-500">Cliente: {r.cliente_nome || '—'}</div>
-              </div>
-            )},
-            { key: 'tipo', label: 'Tipo', render: (r) => <span className="badge bg-slate-100 text-slate-700">{r.tipo || '—'}</span> },
-            { key: 'severidade', label: 'Severidade', render: (r) => (
-              <span className={`badge ${severityColor(r.severidade)}`}>{r.severidade || 'Média'}</span>
-            )},
-            { key: 'detetado_em', label: 'Deteção', render: (r) => r.detetado_em ? new Date(r.detetado_em).toLocaleDateString('pt-PT') : '—' },
-            { key: 'resolvido_em', label: 'Estado', render: (r) => r.resolvido_em ? (
-              <span className="badge bg-emerald-100 text-emerald-700">✓ Resolvido</span>
-            ) : <span className="badge bg-rose-100 text-rose-700">● Aberto</span> },
-            { key: 'id', label: '', width: '80px', render: (r) => (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (r.cliente_id) {
-                    (session as any).set({ ...session.get(), cliente: { id: r.cliente_id, nome: r.cliente_nome } });
-                    setPage('mgr-client-detail');
-                  }
-                }}
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Ver Cliente
-              </button>
-            )},
-          ]}
-        />
-      )}
-    </div>
-  );
+  return <IncidentsWorkspace role="manager" title="Incidentes de Segurança" subtitle="Incidentes dos clientes que gere" />;
 }
 
 export function MgrDocuments() {
@@ -833,46 +788,7 @@ export function MgrRequests() {
 }
 
 export function MgrAssets() {
-  const [data, setData] = useState<ApiAtivo[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    ativosApi()
-      .then(setData)
-      .catch((e) => setErr(e?.message || 'Erro'))
-      .finally(() => setLoading(false));
-  }, []);
-
-  return (
-    <div>
-      <PageHeader
-        title="Ativos de TI"
-        subtitle={`${data.length} ativos registados na plataforma`}
-        actions={<button className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">+ Novo Ativo</button>}
-      />
-      {loading ? <Loader /> : err ? <ErrorCard msg={err} /> : (
-        <DataTable
-          data={data}
-          columns={[
-            { key: 'id', label: 'ID', width: '60px', render: (r) => <span className="font-mono text-xs">#{r.id}</span> },
-            { key: 'nome', label: 'Ativo', render: (r) => (
-              <div>
-                <div className="font-medium text-slate-900">{r.nome}</div>
-                <div className="text-xs text-slate-500">Cliente: {r.cliente_nome || '—'}</div>
-              </div>
-            )},
-            { key: 'tipo', label: 'Tipo', render: (r) => <span className="badge bg-slate-100 text-slate-700">{r.tipo || '—'}</span> },
-            { key: 'criticalidade', label: 'Criticidade', render: (r) => (
-              <span className={`badge ${severityColor(r.criticalidade)}`}>{r.criticalidade || '—'}</span>
-            )},
-            { key: 'endereco_ip', label: 'Endereço IP', render: (r) => <span className="font-mono text-xs">{r.endereco_ip || '—'}</span> },
-            { key: 'data_aquisicao', label: 'Aquisição', render: (r) => r.data_aquisicao ? new Date(r.data_aquisicao).toLocaleDateString('pt-PT') : '—' },
-          ]}
-        />
-      )}
-    </div>
-  );
+  return <AssetsWorkspace role="manager" title="Ativos Tecnológicos" subtitle="Inventário dos clientes que gere" />;
 }
 
 export function MgrRisk({ setPage }: PageProps) {

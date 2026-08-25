@@ -10,6 +10,7 @@ import {
   type ApiAtivo, type ApiIncidente, type ApiDocumento,
   type ApiPedido, type ApiAvaliacao,
 } from '../apiClient';
+import { AssetsWorkspace, IncidentsWorkspace } from '../components/OperationalResources';
 
 interface PageProps {
   setPage: (p: Page) => void;
@@ -311,85 +312,11 @@ export function ClientWorkspace({ setPage }: PageProps) {
 }
 
 export function ClientAssets() {
-  const [data, setData] = useState<ApiAtivo[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    ativosApi()
-      .then(setData)
-      .catch((e) => setErr(e?.message || 'Erro'))
-      .finally(() => setLoading(false));
-  }, []);
-
-  return (
-    <div>
-      <PageHeader title="Meus Ativos" subtitle={`${data.length} ativos registados na sua conta`} />
-      {loading ? <Loader /> : err ? <ErrorCard msg={err} /> : (
-        <DataTable
-          data={data}
-          columns={[
-            { key: 'id', label: 'ID', width: '50px', render: (r) => <span className="font-mono text-xs">#{r.id}</span> },
-            { key: 'nome', label: 'Ativo', render: (r) => (
-              <div>
-                <div className="font-semibold text-slate-900">{r.nome}</div>
-                <div className="text-xs text-slate-500">{r.descricao || ''}</div>
-              </div>
-            )},
-            { key: 'tipo', label: 'Tipo', render: (r) => <span className="badge bg-slate-100 text-slate-700">{r.tipo || '—'}</span> },
-            { key: 'criticalidade', label: 'Criticidade', render: (r) => (
-              <span className={`badge ${severityColor(r.criticalidade)}`}>{r.criticalidade || '—'}</span>
-            )},
-            { key: 'endereco_ip', label: 'IP', render: (r) => <span className="font-mono text-xs">{r.endereco_ip || '—'}</span> },
-            { key: 'data_aquisicao', label: 'Aquisição', render: (r) => r.data_aquisicao ? new Date(r.data_aquisicao).toLocaleDateString('pt-PT') : '—' },
-          ]}
-        />
-      )}
-    </div>
-  );
+  return <AssetsWorkspace role="client" title="Meus Ativos" subtitle="Inventário associado à sua organização" />;
 }
 
 export function ClientIncidents() {
-  const [data, setData] = useState<ApiIncidente[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    incidentesApi()
-      .then(setData)
-      .catch((e) => setErr(e?.message || 'Erro'))
-      .finally(() => setLoading(false));
-  }, []);
-
-  return (
-    <div>
-      <PageHeader
-        title="Incidentes"
-        subtitle={`${data.filter(i => !i.resolvido_em).length} em aberto / ${data.length} total`}
-        actions={<button className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700">+ Reportar Incidente</button>}
-      />
-      {loading ? <Loader /> : err ? <ErrorCard msg={err} /> : (
-        <DataTable
-          data={data}
-          columns={[
-            { key: 'id', label: 'Ref.', width: '70px', render: (r) => <span className="font-mono text-xs text-slate-500">INC-{String(r.id).padStart(4, '0')}</span> },
-            { key: 'titulo', label: 'Incidente', render: (r) => (
-              <div>
-                <div className="font-medium text-slate-900">{r.titulo}</div>
-                <div className="text-xs text-slate-500">{r.descricao ? String(r.descricao).slice(0, 80) + '...' : ''}</div>
-              </div>
-            )},
-            { key: 'tipo', label: 'Tipo', render: (r) => <span className="badge bg-slate-100 text-slate-700">{r.tipo || '—'}</span> },
-            { key: 'severidade', label: 'Severidade', render: (r) => <span className={`badge ${severityColor(r.severidade)}`}>{r.severidade || '—'}</span> },
-            { key: 'detetado_em', label: 'Deteção', render: (r) => r.detetado_em ? new Date(r.detetado_em).toLocaleDateString('pt-PT') : '—' },
-            { key: 'resolvido_em', label: 'Estado', render: (r) => r.resolvido_em ? (
-              <span className="badge bg-emerald-100 text-emerald-700">✓ Resolvido</span>
-            ) : <span className="badge bg-rose-100 text-rose-700">● Aberto</span> },
-          ]}
-        />
-      )}
-    </div>
-  );
+  return <IncidentsWorkspace role="client" title="Incidentes" subtitle="Reporte e acompanhe incidentes da sua organização" />;
 }
 
 export function ClientDocuments({ setPage }: PageProps) {

@@ -48,6 +48,44 @@ export interface ApiCliente {
   total_incidentes?: number;
 }
 
+export interface ApiContactoCliente {
+  id: number;
+  tipo: 'RESPONSAVEL_SEGURANCA' | 'CONTACTO_PERMANENTE' | 'OUTRO';
+  nome: string;
+  cargo?: string | null;
+  email: string;
+  telefone?: string | null;
+  comunicado_cncs?: boolean;
+  ativo: boolean;
+}
+
+export interface CriarUtilizadorPayload {
+  nome: string;
+  email: string;
+  telefone?: string | null;
+  nif?: string | null;
+  password: string;
+  perfil_codigo: PerfilCodigo;
+  clientes_ids?: number[];
+}
+
+export interface AtualizarUtilizadorPayload extends Partial<Omit<CriarUtilizadorPayload, 'perfil_codigo'>> {
+  ativo?: boolean;
+}
+
+export interface CriarClientePayload {
+  nome: string;
+  nif: string;
+  email: string;
+  telefone?: string | null;
+  morada?: string | null;
+  setor_atividade?: string | null;
+  numero_colaboradores?: number | null;
+  volume_negocios?: number | null;
+  contactos: Array<Omit<ApiContactoCliente, 'id'>>;
+  gestores_ids?: number[];
+}
+
 export interface ApiAtivo {
   id: number;
   cliente_id: number;
@@ -59,8 +97,28 @@ export interface ApiAtivo {
   criticalidade?: string | null;
   tipo_equipamento?: string | null;
   criticidade?: string | null;
+  numero_inventario?: string | null;
+  tipologia?: string | null;
+  modelo_versao?: string | null;
+  numero_serie?: string | null;
+  fabricante?: string | null;
+  localizacao?: string | null;
+  sistema_operativo?: string | null;
+  endereco_mac?: string | null;
+  fqdn?: string | null;
+  servico_suportado?: string | null;
+  responsavel_nome?: string | null;
+  responsavel_contacto?: string | null;
+  unidade_organica?: string | null;
+  aplicacoes_servicos?: string | null;
+  observacoes?: string | null;
+  comunicado_cncs?: boolean;
+  programa_gestao_risco?: boolean;
+  ativo?: boolean;
+  // Alias legado apenas de leitura. O esquema Neon não possui data de aquisição.
   data_aquisicao?: string | null;
   criado_em?: string;
+  atualizado_em?: string;
 }
 
 export interface ApiIncidente {
@@ -80,6 +138,77 @@ export interface ApiIncidente {
   data_hora_incidente?: string | null;
   encerrado_em?: string | null;
   estado?: string | null;
+  registado_por?: string | null;
+  departamento?: string | null;
+  utilizadores_afetados?: number;
+  dados_comprometidos?: boolean;
+  sistemas_afetados?: string | null;
+  origem_ataque?: string | null;
+  ip_atacante?: string | null;
+  analise_log?: string | null;
+  resposta_imediata?: string | null;
+  medidas_corretivas?: string | null;
+  entidades_internas?: string | null;
+  entidades_externas?: string | null;
+  probabilidade_reincidencia?: string | null;
+  recomendacoes?: string | null;
+  responsavel_encerramento?: string | null;
+  ativo?: boolean;
+  atualizado_em?: string;
+}
+
+export interface CriarAtivoPayload {
+  cliente_id: number;
+  nome: string;
+  tipo_equipamento?: string | null;
+  numero_inventario?: string | null;
+  sistema_operativo?: string | null;
+  criticidade: string;
+  endereco_ip?: string | null;
+  endereco_mac?: string | null;
+  fqdn?: string | null;
+  tipologia?: string | null;
+  modelo_versao?: string | null;
+  numero_serie?: string | null;
+  fabricante?: string | null;
+  localizacao?: string | null;
+  observacoes?: string | null;
+  comunicado_cncs?: boolean;
+  programa_gestao_risco?: boolean;
+}
+
+export interface CriarIncidentePayload {
+  cliente_id: number;
+  codigo: string;
+  data_hora_incidente: string;
+  tipo_incidente: string;
+  descricao: string;
+  gravidade: string;
+  estado?: string;
+  departamento?: string | null;
+  utilizadores_afetados?: number;
+  dados_comprometidos?: boolean;
+  sistemas_afetados?: string | null;
+  origem_ataque?: string | null;
+  ip_atacante?: string | null;
+  resposta_imediata?: string | null;
+  medidas_corretivas?: string | null;
+  recomendacoes?: string | null;
+}
+
+export interface FiltrosAtivos {
+  cliente_id?: number;
+  q?: string;
+  criticidade?: string;
+}
+
+export interface FiltrosIncidentes {
+  cliente_id?: number;
+  q?: string;
+  estado?: string;
+  gravidade?: string;
+  de?: string;
+  ate?: string;
 }
 
 export interface ApiDocumento {
@@ -221,6 +350,7 @@ export interface ApiNoticia {
   autor_id?: number | null;
   autor_nome?: string | null;
   publicada: boolean;
+  ativo: boolean;
   publicada_em?: string | null;
   criado_em?: string;
   atualizado_em?: string;
@@ -580,11 +710,12 @@ export async function dashboardApi(): Promise<ApiDashboard> {
 }
 export async function clientesApi(q?: string): Promise<ApiCliente[]> {
   const qs = q ? `?q=${encodeURIComponent(q)}` : '';
-  const result = await apiFetch<unknown>(`/api/clientes/${qs}`);
-  return Array.isArray(result) ? result.map(normaliseCliente) : [];
+  const result = await apiFetch<unknown>(`/api/clients/${qs}`);
+  const rows = Array.isArray(result) ? result : (asRecord(result).items as unknown);
+  return Array.isArray(rows) ? rows.map(normaliseCliente) : [];
 }
 export async function clienteDetalheApi(id: number): Promise<any> {
-  const result = asRecord(await apiFetch<unknown>(`/api/clientes/${id}/`));
+  const result = asRecord(await apiFetch<unknown>(`/api/clients/${id}`));
   return {
     ...result,
     cliente: result.cliente ? normaliseCliente(result.cliente) : null,
@@ -596,17 +727,94 @@ export async function clienteDetalheApi(id: number): Promise<any> {
 }
 export async function utilizadoresApi(perfil?: string): Promise<ApiUtilizador[]> {
   const qs = perfil ? `?perfil=${encodeURIComponent(perfil)}` : '';
-  return apiFetch<ApiUtilizador[]>(`/api/utilizadores/${qs}`);
+  const result = await apiFetch<unknown>(`/api/users/${qs}`);
+  const rows = Array.isArray(result) ? result : (asRecord(result).items as unknown);
+  return Array.isArray(rows) ? rows as ApiUtilizador[] : [];
 }
-export async function ativosApi(clienteId?: number): Promise<ApiAtivo[]> {
-  const qs = clienteId ? `?cliente_id=${clienteId}` : '';
-  const result = await apiFetch<unknown>(`/api/ativos/${qs}`);
-  return Array.isArray(result) ? result.map(normaliseAtivo) : [];
+
+export async function criarUtilizadorApi(payload: CriarUtilizadorPayload): Promise<ApiUtilizador> {
+  await ensureCsrfToken();
+  return apiFetch<ApiUtilizador>('/api/users/', { method: 'POST', body: JSON.stringify(payload) });
 }
-export async function incidentesApi(clienteId?: number): Promise<ApiIncidente[]> {
-  const qs = clienteId ? `?cliente_id=${clienteId}` : '';
-  const result = await apiFetch<unknown>(`/api/incidentes/${qs}`);
-  return Array.isArray(result) ? result.map(normaliseIncidente) : [];
+
+export async function atualizarUtilizadorApi(id: number, payload: AtualizarUtilizadorPayload): Promise<ApiUtilizador> {
+  await ensureCsrfToken();
+  return apiFetch<ApiUtilizador>(`/api/users/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+
+export async function criarClienteApi(payload: CriarClientePayload): Promise<any> {
+  await ensureCsrfToken();
+  return apiFetch('/api/clients/', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function atualizarClienteApi(id: number, payload: Partial<Omit<CriarClientePayload, 'contactos' | 'gestores_ids'>> & { ativo?: boolean }): Promise<any> {
+  await ensureCsrfToken();
+  return apiFetch(`/api/clients/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+
+export async function criarContactoClienteApi(clientId: number, payload: Omit<ApiContactoCliente, 'id'>): Promise<ApiContactoCliente> {
+  await ensureCsrfToken();
+  return apiFetch<ApiContactoCliente>(`/api/clients/${clientId}/contacts`, { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function atualizarContactoClienteApi(clientId: number, contactId: number, payload: Partial<Omit<ApiContactoCliente, 'id'>>): Promise<ApiContactoCliente> {
+  await ensureCsrfToken();
+  return apiFetch<ApiContactoCliente>(`/api/clients/${clientId}/contacts/${contactId}`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+
+export async function associarGestoresClienteApi(clientId: number, gestoresIds: number[]): Promise<any> {
+  await ensureCsrfToken();
+  return apiFetch(`/api/clients/${clientId}/managers`, { method: 'PUT', body: JSON.stringify({ gestores_ids: gestoresIds }) });
+}
+function queryString(filters: object) {
+  const params = new URLSearchParams();
+  Object.entries(filters as Record<string, unknown>).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') params.set(key, String(value));
+  });
+  const query = params.toString();
+  return query ? `?${query}` : '';
+}
+
+export async function ativosApi(filters: FiltrosAtivos | number = {}): Promise<ApiAtivo[]> {
+  const resolved = typeof filters === 'number' ? { cliente_id: filters } : filters;
+  const result = await apiFetch<unknown>(`/api/assets/${queryString(resolved)}`);
+  const rows = Array.isArray(result) ? result : (asRecord(result).items as unknown);
+  return Array.isArray(rows) ? rows.map(normaliseAtivo) : [];
+}
+
+export async function ativoDetalheApi(id: number): Promise<ApiAtivo> {
+  return normaliseAtivo(await apiFetch(`/api/assets/${id}`));
+}
+
+export async function criarAtivoApi(payload: CriarAtivoPayload): Promise<ApiAtivo> {
+  await ensureCsrfToken();
+  return normaliseAtivo(await apiFetch('/api/assets/', { method: 'POST', body: JSON.stringify(payload) }));
+}
+
+export async function atualizarAtivoApi(id: number, payload: Partial<CriarAtivoPayload> & { ativo?: boolean }): Promise<ApiAtivo> {
+  await ensureCsrfToken();
+  return normaliseAtivo(await apiFetch(`/api/assets/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }));
+}
+
+export async function incidentesApi(filters: FiltrosIncidentes | number = {}): Promise<ApiIncidente[]> {
+  const resolved = typeof filters === 'number' ? { cliente_id: filters } : filters;
+  const result = await apiFetch<unknown>(`/api/incidents/${queryString(resolved)}`);
+  const rows = Array.isArray(result) ? result : (asRecord(result).items as unknown);
+  return Array.isArray(rows) ? rows.map(normaliseIncidente) : [];
+}
+
+export async function incidenteDetalheApi(id: number): Promise<ApiIncidente> {
+  return normaliseIncidente(await apiFetch(`/api/incidents/${id}`));
+}
+
+export async function criarIncidenteApi(payload: CriarIncidentePayload): Promise<ApiIncidente> {
+  await ensureCsrfToken();
+  return normaliseIncidente(await apiFetch('/api/incidents/', { method: 'POST', body: JSON.stringify(payload) }));
+}
+
+export async function atualizarIncidenteApi(id: number, payload: Partial<CriarIncidentePayload> & { ativo?: boolean; encerrado_em?: string | null }): Promise<ApiIncidente> {
+  await ensureCsrfToken();
+  return normaliseIncidente(await apiFetch(`/api/incidents/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }));
 }
 export async function documentosApi(clienteId?: number): Promise<ApiDocumento[]> {
   const qs = clienteId ? `?cliente_id=${clienteId}` : '';

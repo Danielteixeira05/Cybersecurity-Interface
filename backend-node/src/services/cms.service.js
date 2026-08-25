@@ -75,6 +75,7 @@ function newsPayload(input, current = {}) {
     corpo: cleanText(input.corpo ?? current.corpo, 20000, { required: true }),
     imagem_url: cleanText(input.imagem_url ?? current.imagem_url, 500) || null,
     publicada: requiredBoolean(input.publicada, current.publicada ?? false),
+    ativo: requiredBoolean(input.ativo, current.ativo ?? true),
   };
 }
 
@@ -105,7 +106,7 @@ async function findContent(id) {
 async function findNews(id, { publicOnly = false } = {}) {
   const { News, User } = getModels();
   const news = await News.findOne({
-    where: publicOnly ? { id, publicada: true } : { id },
+    where: publicOnly ? { id, publicada: true, ativo: true } : { id },
     include: [{ model: User, as: 'autor', attributes: ['nome'] }],
   });
   if (!news) throw httpError(404, 'Notícia não encontrada.');
@@ -162,7 +163,7 @@ export async function updateContent(id, input, actorId) {
 export async function listPublicNews() {
   const { News, User } = getModels();
   const rows = await News.findAll({
-    where: { publicada: true },
+    where: { publicada: true, ativo: true },
     include: [{ model: User, as: 'autor', attributes: ['nome'] }],
     order: [['publicada_em', 'DESC'], ['id', 'DESC']],
   });
@@ -197,7 +198,7 @@ export async function createNews(input, actorId) {
       criado_em: new Date(),
       atualizado_em: new Date(),
     }, { transaction });
-    await recordAudit({ userId: actorId, action: 'CRIAR', entity: 'noticias', entityId: Number(row.id), details: { publicada: payload.publicada } }, transaction);
+    await recordAudit({ userId: actorId, action: 'CRIAR', entity: 'noticias', entityId: Number(row.id), details: { publicada: payload.publicada, ativo: payload.ativo } }, transaction);
     return row.id;
   });
   return getAdminNews(newsId);
@@ -215,7 +216,7 @@ export async function updateNews(id, input, actorId) {
       publicada_em: payload.publicada ? (currentData.publicada_em ?? new Date()) : null,
       atualizado_em: new Date(),
     }, { transaction });
-    await recordAudit({ userId: actorId, action: 'ATUALIZAR', entity: 'noticias', entityId: Number(id), details: { publicada: payload.publicada } }, transaction);
+    await recordAudit({ userId: actorId, action: payload.ativo ? 'ATUALIZAR' : 'DESATIVAR', entity: 'noticias', entityId: Number(id), details: { publicada: payload.publicada, ativo: payload.ativo } }, transaction);
   });
   return getAdminNews(id);
 }

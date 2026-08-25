@@ -30,7 +30,7 @@ function serializeUser(user) {
 async function clientForUser(userId) {
   const { UserClient, Client } = getModels();
   const link = await UserClient.findOne({
-    where: { utilizador_id: userId },
+    where: { utilizador_id: userId, ativo: true },
     order: [['principal', 'DESC'], ['criado_em', 'ASC']],
   });
   if (!link) return null;
@@ -69,7 +69,9 @@ export async function login(request, response, next) {
 
     const safeUser = serializeUser(user);
     if (!safeUser.role) throw httpError(403, 'Perfil sem acesso à aplicação.');
-    await user.update({ ultimo_acesso_em: new Date() });
+    if (!env.readOnlyMode) {
+      await user.update({ ultimo_acesso_em: new Date() });
+    }
     const token = jwt.sign({ sub: String(user.id), role: safeUser.role, email: safeUser.email }, env.jwtSecret, { expiresIn: env.jwtExpiresIn });
     response.cookie('cbsess_node', token, authCookieOptions());
     // O JWT fica exclusivamente no cookie HttpOnly; não o devolver ao JavaScript.

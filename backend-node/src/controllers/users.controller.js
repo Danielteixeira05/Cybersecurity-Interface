@@ -8,7 +8,7 @@ function userId(value) {
 }
 
 export async function list(request, response, next) {
-  try { return response.json({ items: await listUsers(request.query.perfil) }); } catch (error) { return next(error); }
+  try { return response.json({ items: await listUsers(request.query.perfil, request.query.q) }); } catch (error) { return next(error); }
 }
 
 export async function detail(request, response, next) {
@@ -25,5 +25,5 @@ export async function update(request, response, next) {
 
 // Contrato transitório do frontend Django atual: devolve uma lista direta.
 export async function legacyList(request, response, next) {
-  try { return response.json(await listUsers(request.query.perfil)); } catch (error) { return next(error); }
+  try { return response.json(await listUsers(request.query.perfil, request.query.q)); } catch (error) { return next(error); }
 }

@@ -8,7 +8,7 @@ import {
 } from './pages/PublicPages';
 import LoginPage from './pages/LoginPage';
 import {
-  AdminDashboard, AdminAnalytics, AdminUsers, AdminClients, AdminDocuments,
+  AdminDashboard, AdminAnalytics, AdminUsers, AdminClients, AdminAssets, AdminDocuments,
   AdminIncidents, AdminLogs, AdminSiteContent, AdminManagerDetail, AdminPermissions,
 } from './pages/AdminPages';
 import {
@@ -35,6 +35,7 @@ const PAGE_PATHS: Partial<Record<Page, string>> = {
   'admin-analytics': '/administrador/analises',
   'admin-users': '/administrador/utilizadores',
   'admin-clients': '/administrador/clientes',
+  'admin-assets': '/administrador/ativos',
   'admin-client-detail': '/administrador/clientes/detalhe',
   'admin-user-client': '/administrador/utilizadores/cliente',
   'admin-user-manager': '/administrador/utilizadores/gestor',
@@ -249,6 +250,7 @@ export default function App() {
       {page === 'admin-analytics' && <AdminAnalytics />}
       {page === 'admin-users' && <AdminUsers setPage={setPage} />}
       {page === 'admin-clients' && <AdminClients setPage={setPage} />}
+      {page === 'admin-assets' && <AdminAssets />}
       {page === 'admin-documents' && <AdminDocuments />}
       {page === 'admin-incidents' && <AdminIncidents />}
       {page === 'admin-logs' && <AdminLogs />}

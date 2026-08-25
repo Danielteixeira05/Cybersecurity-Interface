@@ -65,6 +65,7 @@ export function getModels() {
     cliente_id: { type: DataTypes.BIGINT, primaryKey: true },
     principal: { type: DataTypes.BOOLEAN, allowNull: false },
     criado_em: createdAt,
+    ativo: { type: DataTypes.BOOLEAN, allowNull: false },
   }, 'utilizadores_clientes');
 
   const ClientContact = define('ClientContact', {
@@ -95,7 +96,7 @@ export function getModels() {
     data_avaliacao: { type: DataTypes.DATEONLY, allowNull: false },
     nivel_risco: { type: DataTypes.STRING(20), allowNull: false },
     pontuacao: DataTypes.DECIMAL(5, 2),
-    resumo: DataTypes.TEXT,
+    resumo: { type: DataTypes.TEXT, allowNull: false },
     recomendacoes: DataTypes.TEXT,
     criado_por: DataTypes.BIGINT,
     criado_em: createdAt,
@@ -129,6 +130,7 @@ export function getModels() {
     criado_por: DataTypes.BIGINT,
     criado_em: createdAt,
     atualizado_em: updatedAt,
+    ativo: { type: DataTypes.BOOLEAN, allowNull: false },
   }, 'ativos_tecnologicos');
 
   const Incident = define('Incident', {
@@ -160,6 +162,7 @@ export function getModels() {
     criado_por: DataTypes.BIGINT,
     criado_em: createdAt,
     atualizado_em: updatedAt,
+    ativo: { type: DataTypes.BOOLEAN, allowNull: false },
   }, 'incidentes');
 
   const Document = define('Document', {
@@ -177,6 +180,7 @@ export function getModels() {
     privado: { type: DataTypes.BOOLEAN, allowNull: false },
     submetido_por: DataTypes.BIGINT,
     submetido_em: { type: DataTypes.DATE, allowNull: false },
+    ativo: { type: DataTypes.BOOLEAN, allowNull: false },
   }, 'documentos');
 
   const RequestStatus = define('RequestStatus', {
@@ -240,6 +244,7 @@ export function getModels() {
     publicada_em: DataTypes.DATE,
     criado_em: createdAt,
     atualizado_em: updatedAt,
+    ativo: { type: DataTypes.BOOLEAN, allowNull: false },
   }, 'noticias');
 
   const ContactMessage = define('ContactMessage', {
@@ -260,6 +265,8 @@ export function getModels() {
   Profile.hasMany(User, { foreignKey: 'perfil_id', as: 'utilizadores' });
   User.belongsToMany(Client, { through: UserClient, foreignKey: 'utilizador_id', otherKey: 'cliente_id', as: 'clientes' });
   Client.belongsToMany(User, { through: UserClient, foreignKey: 'cliente_id', otherKey: 'utilizador_id', as: 'utilizadores' });
+  UserClient.belongsTo(User, { foreignKey: 'utilizador_id', as: 'utilizador' });
+  UserClient.belongsTo(Client, { foreignKey: 'cliente_id', as: 'cliente' });
   Client.hasMany(ClientContact, { foreignKey: 'cliente_id', as: 'contactos' });
   ClientContact.belongsTo(Client, { foreignKey: 'cliente_id', as: 'cliente' });
   Client.hasMany(RiskAssessment, { foreignKey: 'cliente_id', as: 'avaliacoes' });

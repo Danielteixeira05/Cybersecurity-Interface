@@ -8,9 +8,15 @@ import {
   dashboardApi, clientesApi, utilizadoresApi, documentosApi,
   incidentesApi, logsApi, clienteDetalheApi,
   atualizarConteudoAdminApi, conteudosAdminApi, criarConteudoAdminApi,
+  associarGestoresClienteApi, atualizarClienteApi, atualizarContactoClienteApi,
+  atualizarUtilizadorApi, criarClienteApi, criarContactoClienteApi, criarUtilizadorApi,
+  atualizarMensagemContactoAdminApi, atualizarNoticiaAdminApi, criarNoticiaAdminApi,
+  mensagensContactoAdminApi, noticiasAdminApi,
   type ApiDashboardAdmin, type ApiCliente, type ApiUtilizador,
-  type ApiConteudoSite, type ApiIncidente, type ApiDocumento, session,
+  type ApiContactoCliente, type ApiConteudoSite, type ApiIncidente, type ApiDocumento, type ApiMensagemContacto,
+  type ApiNoticia, type PerfilCodigo, session,
 } from '../apiClient';
+import { AssetsWorkspace, IncidentsWorkspace } from '../components/OperationalResources';
 
 // ========== UI HELPERS ==========
 interface PageProps {
@@ -341,16 +347,30 @@ export function AdminAnalytics() {
 // ========== ADMIN USERS ==========
 export function AdminUsers({ setPage }: PageProps) {
   const [users, setUsers] = useState<ApiUtilizador[]>([]);
+  const [clientOptions, setClientOptions] = useState<ApiCliente[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<string>('');
+  const [editing, setEditing] = useState<ApiUtilizador | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const emptyDraft = (): { nome: string; email: string; telefone: string; nif: string; password: string; perfil_codigo: PerfilCodigo; clientes_ids: number[]; ativo: boolean } => ({ nome: '', email: '', telefone: '', nif: '', password: '', perfil_codigo: 'COLABORADOR', clientes_ids: [], ativo: true });
+  const [draft, setDraft] = useState(emptyDraft);
+
+  const load = () => {
+    setLoading(true);
+    setErr(null);
+    Promise.all([utilizadoresApi(filter || undefined), clientesApi()])
+      .then(([items, clients]) => { setUsers(items); setClientOptions(clients); })
+      .catch((cause) => setErr(cause instanceof Error ? cause.message : 'Não foi possível carregar os utilizadores.'))
+      .finally(() => setLoading(false));
+  };
 
   useEffect(() => {
-    utilizadoresApi(filter || undefined)
-      .then(setUsers)
-      .catch((e) => setErr(e?.message || 'Erro'))
-      .finally(() => setLoading(false));
+    load();
   }, [filter]);
 
   const filtered = users.filter((u) =>
@@ -358,6 +378,55 @@ export function AdminUsers({ setPage }: PageProps) {
     u.nome.toLowerCase().includes(search.toLowerCase()) ||
     (u.email || '').toLowerCase().includes(search.toLowerCase()),
   );
+
+  const openNew = () => {
+    setEditing(null);
+    setDraft(emptyDraft());
+    setFormError(null);
+    setNotice(null);
+    setFormOpen(true);
+  };
+
+  const openEdit = (user: ApiUtilizador) => {
+    setEditing(user);
+    setDraft({
+      nome: user.nome, email: user.email, telefone: user.telefone ?? '', nif: user.nif ?? '', password: '',
+      perfil_codigo: user.perfil_codigo,
+      clientes_ids: Array.isArray(user.clientes) ? user.clientes.map((client) => client.id) : (user.cliente_id ? [user.cliente_id] : []),
+      ativo: user.ativo,
+    });
+    setFormError(null);
+    setNotice(null);
+    setFormOpen(true);
+  };
+
+  const save = async () => {
+    setSaving(true);
+    setFormError(null);
+    try {
+      if (!draft.nome || !draft.email) throw new Error('Nome e email são obrigatórios.');
+      if (!editing && draft.password.length < 12) throw new Error('A password inicial tem de ter pelo menos 12 caracteres.');
+      if (draft.perfil_codigo === 'CLIENTE' && draft.clientes_ids.length !== 1) throw new Error('Uma conta Cliente requer exatamente uma organização.');
+      if (draft.perfil_codigo === 'COLABORADOR' && draft.clientes_ids.length === 0) throw new Error('Uma conta Gestor requer pelo menos uma organização.');
+      if (draft.perfil_codigo === 'ADMINISTRADOR' && draft.clientes_ids.length) throw new Error('Uma conta Administrador não pode ter organizações associadas.');
+      if (editing) {
+        await atualizarUtilizadorApi(editing.id, {
+          nome: draft.nome, email: draft.email, telefone: draft.telefone || null, nif: draft.nif || null,
+          ativo: draft.ativo, clientes_ids: draft.clientes_ids,
+          ...(draft.password ? { password: draft.password } : {}),
+        });
+      } else {
+        await criarUtilizadorApi(draft);
+      }
+      setNotice(editing ? 'Utilizador atualizado com sucesso.' : 'Utilizador criado com sucesso.');
+      setFormOpen(false);
+      load();
+    } catch (cause) {
+      setFormError(cause instanceof Error ? cause.message : 'Não foi possível guardar o utilizador.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div>
@@ -389,12 +458,32 @@ export function AdminUsers({ setPage }: PageProps) {
                 <path d="M21 21l-4.35-4.35" strokeLinecap="round" />
               </svg>
             </div>
-            <button className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+            <button type="button" onClick={() => setPage('admin-assets')} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+              Ativos Tecnológicos
+            </button>
+            <button type="button" onClick={openNew} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
               + Novo Utilizador
             </button>
           </>
         }
       />
+      {notice && <p className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">{notice}</p>}
+      {formOpen && (
+        <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm" aria-label={editing ? 'Editar utilizador' : 'Novo utilizador'}>
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="text-sm font-medium text-slate-700">Nome<input value={draft.nome} onChange={(event) => setDraft({ ...draft, nome: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+            <label className="text-sm font-medium text-slate-700">Email<input type="email" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+            <label className="text-sm font-medium text-slate-700">Telefone<input value={draft.telefone} onChange={(event) => setDraft({ ...draft, telefone: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+            <label className="text-sm font-medium text-slate-700">NIF<input value={draft.nif} maxLength={9} onChange={(event) => setDraft({ ...draft, nif: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+            {!editing && <label className="text-sm font-medium text-slate-700">Perfil<select value={draft.perfil_codigo} onChange={(event) => setDraft({ ...draft, perfil_codigo: event.target.value as typeof draft.perfil_codigo, clientes_ids: [] })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"><option value="ADMINISTRADOR">Administrador</option><option value="COLABORADOR">Gestor</option><option value="CLIENTE">Cliente</option></select></label>}
+            <label className="text-sm font-medium text-slate-700">{editing ? 'Nova password (opcional)' : 'Password inicial'}<input type="password" value={draft.password} onChange={(event) => setDraft({ ...draft, password: event.target.value })} minLength={12} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+            {draft.perfil_codigo !== 'ADMINISTRADOR' && <label className="text-sm font-medium text-slate-700 md:col-span-2">Organizações associadas<select multiple value={draft.clientes_ids.map(String)} onChange={(event) => setDraft({ ...draft, clientes_ids: Array.from(event.currentTarget.selectedOptions, (option) => Number(option.value)) })} className="mt-1 min-h-28 w-full rounded-xl border border-slate-200 px-3 py-2">{clientOptions.filter((client) => client.ativo !== false).map((client) => <option key={client.id} value={client.id}>{client.nome}</option>)}</select><span className="mt-1 block text-xs text-slate-500">Cliente: uma organização. Gestor: uma ou mais organizações.</span></label>}
+          </div>
+          {editing && <label className="mt-4 inline-flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={draft.ativo} onChange={(event) => setDraft({ ...draft, ativo: event.target.checked })} />Conta ativa</label>}
+          {formError && <p className="mt-3 text-sm text-rose-700" role="alert">{formError}</p>}
+          <div className="mt-5 flex gap-3"><button type="button" disabled={saving} onClick={save} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'A guardar...' : 'Guardar'}</button><button type="button" onClick={() => setFormOpen(false)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700">Cancelar</button></div>
+        </section>
+      )}
       {loading ? <Loader /> : err ? <ErrorCard msg={err} /> : (
         <DataTable
           data={filtered}
@@ -428,21 +517,10 @@ export function AdminUsers({ setPage }: PageProps) {
             ) : <span className="text-xs text-slate-400">— Nunca —</span> },
             { key: 'clientes', label: 'Ações', width: '80px', render: (r) => (
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (r.perfil_codigo === 'CLIENTE') {
-                    const cid = r.cliente_id;
-                    if (cid) {
-                      (session as any).set({ ...session.get(), cliente: { id: cid, nome: r.nome } });
-                      setPage('admin-user-client');
-                    }
-                  } else if (r.perfil_codigo === 'COLABORADOR') {
-                    setPage('admin-user-manager');
-                  }
-                }}
+                onClick={(e) => { e.stopPropagation(); openEdit(r); }}
                 className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
               >
-                Detalhes
+                Editar
               </button>
             )},
           ]}
@@ -455,21 +533,88 @@ export function AdminUsers({ setPage }: PageProps) {
 // ========== ADMIN CLIENTS ==========
 export function AdminClients({ setPage }: PageProps) {
   const [clients, setClients] = useState<ApiCliente[]>([]);
+  const [managers, setManagers] = useState<ApiUtilizador[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [q, setQ] = useState('');
+  const [editing, setEditing] = useState<ApiCliente | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  type ContactDraft = Partial<ApiContactoCliente> & Pick<ApiContactoCliente, 'tipo' | 'nome' | 'email'>;
+  type ClientDraft = Omit<Partial<ApiCliente>, 'id'> & { nome: string; nif: string; email: string; contactos: ContactDraft[]; gestores_ids: number[] };
+  const emptyContact = (tipo: ApiContactoCliente['tipo']): ContactDraft => ({ tipo, nome: '', email: '', cargo: '', telefone: '', comunicado_cncs: false, ativo: true });
+  const emptyDraft = (): ClientDraft => ({ nome: '', nif: '', email: '', telefone: '', morada: '', setor_atividade: '', numero_colaboradores: null, volume_negocios: null, ativo: true, gestores_ids: [], contactos: [emptyContact('RESPONSAVEL_SEGURANCA'), emptyContact('CONTACTO_PERMANENTE')] });
+  const [draft, setDraft] = useState<ClientDraft>(emptyDraft);
+
+  const load = () => {
+    setLoading(true);
+    setErr(null);
+    Promise.all([clientesApi(), utilizadoresApi('COLABORADOR')])
+      .then(([items, managerRows]) => { setClients(items); setManagers(managerRows); })
+      .catch((cause) => setErr(cause instanceof Error ? cause.message : 'Não foi possível carregar os clientes.'))
+      .finally(() => setLoading(false));
+  };
 
   useEffect(() => {
-    clientesApi(q)
-      .then(setClients)
-      .catch((e) => setErr(e?.message || 'Erro'))
-      .finally(() => setLoading(false));
+    load();
   }, []);
 
   const filtered = !q ? clients : clients.filter((c) =>
     (c.nome || '').toLowerCase().includes(q.toLowerCase()) ||
     (c.nif || '').includes(q),
   );
+
+  const openNew = () => {
+    setEditing(null); setDraft(emptyDraft()); setFormError(null); setNotice(null); setFormOpen(true);
+  };
+
+  const openEdit = async (client: ApiCliente) => {
+    setEditing(client); setFormError(null); setNotice(null); setFormOpen(true);
+    try {
+      const detail = await clienteDetalheApi(client.id);
+      const contacts = Array.isArray(detail.contactos) ? detail.contactos as ContactDraft[] : [];
+      setDraft({
+        ...client, nome: client.nome, nif: client.nif ?? '', email: client.email ?? '', telefone: client.telefone ?? '',
+        morada: client.morada ?? '', setor_atividade: client.setor_atividade ?? '', numero_colaboradores: client.numero_colaboradores ?? null,
+        volume_negocios: typeof client.volume_negocios === 'string' ? Number(client.volume_negocios) : client.volume_negocios ?? null,
+        ativo: client.ativo !== false, contactos: contacts.length ? contacts : [emptyContact('RESPONSAVEL_SEGURANCA'), emptyContact('CONTACTO_PERMANENTE')],
+        gestores_ids: Array.isArray(detail.gestores) ? detail.gestores.map((manager: { id: number }) => manager.id) : [],
+      });
+    } catch (cause) {
+      setFormError(cause instanceof Error ? cause.message : 'Não foi possível carregar os contactos do cliente.');
+    }
+  };
+
+  const save = async () => {
+    setSaving(true); setFormError(null);
+    try {
+      if (!draft.nome || !draft.nif || !draft.email) throw new Error('Nome, NIF e email são obrigatórios.');
+      if (editing) {
+        await atualizarClienteApi(editing.id, {
+          nome: draft.nome, nif: draft.nif, email: draft.email, telefone: draft.telefone || null, morada: draft.morada || null,
+          setor_atividade: draft.setor_atividade || null, numero_colaboradores: draft.numero_colaboradores ?? null,
+          volume_negocios: typeof draft.volume_negocios === 'string' ? Number(draft.volume_negocios) : draft.volume_negocios ?? null, ativo: draft.ativo !== false,
+        });
+        await Promise.all(draft.contactos.map((contact) => contact.id
+          ? atualizarContactoClienteApi(editing.id, contact.id, contact)
+          : criarContactoClienteApi(editing.id, contact as Omit<ApiContactoCliente, 'id'>)));
+        await associarGestoresClienteApi(editing.id, draft.gestores_ids);
+      } else {
+        await criarClienteApi({
+          nome: draft.nome, nif: draft.nif, email: draft.email, telefone: draft.telefone || null, morada: draft.morada || null,
+          setor_atividade: draft.setor_atividade || null, numero_colaboradores: draft.numero_colaboradores ?? null,
+          volume_negocios: typeof draft.volume_negocios === 'string' ? Number(draft.volume_negocios) : draft.volume_negocios ?? null,
+          gestores_ids: draft.gestores_ids, contactos: draft.contactos as Array<Omit<ApiContactoCliente, 'id'>>,
+        });
+      }
+      setNotice(editing ? 'Cliente atualizado com sucesso.' : 'Cliente criado com sucesso.');
+      setFormOpen(false); load();
+    } catch (cause) {
+      setFormError(cause instanceof Error ? cause.message : 'Não foi possível guardar o cliente.');
+    } finally { setSaving(false); }
+  };
 
   return (
     <div>
@@ -491,12 +636,31 @@ export function AdminClients({ setPage }: PageProps) {
                 <path d="M21 21l-4.35-4.35" strokeLinecap="round" />
               </svg>
             </div>
-            <button className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+            <button type="button" onClick={openNew} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
               + Novo Cliente
             </button>
           </>
         }
       />
+      {notice && <p className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">{notice}</p>}
+      {formOpen && (
+        <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm" aria-label={editing ? 'Editar cliente' : 'Novo cliente'}>
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="text-sm font-medium text-slate-700">Organização<input value={draft.nome} onChange={(event) => setDraft({ ...draft, nome: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+            <label className="text-sm font-medium text-slate-700">NIF<input value={draft.nif} maxLength={9} onChange={(event) => setDraft({ ...draft, nif: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+            <label className="text-sm font-medium text-slate-700">Email<input type="email" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+            <label className="text-sm font-medium text-slate-700">Telefone<input value={draft.telefone ?? ''} onChange={(event) => setDraft({ ...draft, telefone: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+            <label className="text-sm font-medium text-slate-700">Setor<input value={draft.setor_atividade ?? ''} onChange={(event) => setDraft({ ...draft, setor_atividade: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+            <label className="text-sm font-medium text-slate-700">N.º colaboradores<input type="number" min="0" value={draft.numero_colaboradores ?? ''} onChange={(event) => setDraft({ ...draft, numero_colaboradores: event.target.value === '' ? null : Number(event.target.value) })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+            <label className="text-sm font-medium text-slate-700 md:col-span-2">Morada<input value={draft.morada ?? ''} onChange={(event) => setDraft({ ...draft, morada: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+            <label className="text-sm font-medium text-slate-700 md:col-span-2">Gestores associados<select multiple value={draft.gestores_ids.map(String)} onChange={(event) => setDraft({ ...draft, gestores_ids: Array.from(event.currentTarget.selectedOptions, (option) => Number(option.value)) })} className="mt-1 min-h-24 w-full rounded-xl border border-slate-200 px-3 py-2">{managers.filter((manager) => manager.ativo).map((manager) => <option key={manager.id} value={manager.id}>{manager.nome} — {manager.email}</option>)}</select></label>
+          </div>
+          <div className="mt-6 border-t border-slate-100 pt-5"><h3 className="font-semibold text-slate-900">Contactos do cliente</h3><div className="mt-4 grid gap-4 lg:grid-cols-2">{draft.contactos.map((contact, index) => <div key={contact.id ?? `${contact.tipo}-${index}`} className="rounded-xl border border-slate-200 p-4"><div className="mb-3 text-sm font-semibold text-slate-700">{contact.tipo === 'RESPONSAVEL_SEGURANCA' ? 'Responsável de Segurança' : contact.tipo === 'CONTACTO_PERMANENTE' ? 'Contacto Permanente' : 'Outro contacto'}</div><div className="grid gap-3"><input value={contact.nome} onChange={(event) => setDraft({ ...draft, contactos: draft.contactos.map((item, itemIndex) => itemIndex === index ? { ...item, nome: event.target.value } : item) })} placeholder="Nome" className="rounded-xl border border-slate-200 px-3 py-2 text-sm" /><input type="email" value={contact.email} onChange={(event) => setDraft({ ...draft, contactos: draft.contactos.map((item, itemIndex) => itemIndex === index ? { ...item, email: event.target.value } : item) })} placeholder="Email" className="rounded-xl border border-slate-200 px-3 py-2 text-sm" /><input value={contact.telefone ?? ''} onChange={(event) => setDraft({ ...draft, contactos: draft.contactos.map((item, itemIndex) => itemIndex === index ? { ...item, telefone: event.target.value } : item) })} placeholder="Telefone" className="rounded-xl border border-slate-200 px-3 py-2 text-sm" /></div></div>)}</div><button type="button" onClick={() => setDraft({ ...draft, contactos: [...draft.contactos, emptyContact('OUTRO')] })} className="mt-4 rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700">+ Adicionar contacto</button></div>
+          {editing && <label className="mt-4 inline-flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={draft.ativo !== false} onChange={(event) => setDraft({ ...draft, ativo: event.target.checked })} />Cliente ativo</label>}
+          {formError && <p className="mt-3 text-sm text-rose-700" role="alert">{formError}</p>}
+          <div className="mt-5 flex gap-3"><button type="button" disabled={saving} onClick={save} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'A guardar...' : 'Guardar'}</button><button type="button" onClick={() => setFormOpen(false)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700">Cancelar</button></div>
+        </section>
+      )}
       {loading ? <Loader /> : err ? <ErrorCard msg={err} /> : (
         <DataTable
           data={filtered}
@@ -534,11 +698,16 @@ export function AdminClients({ setPage }: PageProps) {
                 'bg-slate-100 text-slate-700';
               return <span className={`badge ${color}`}>{c || 'Sem dados'}</span>;
             }},
+            { key: 'id', label: 'Ações', width: '86px', render: (r) => <button type="button" onClick={(event) => { event.stopPropagation(); void openEdit(r); }} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">Editar</button> },
           ]}
         />
       )}
     </div>
   );
+}
+
+export function AdminAssets() {
+  return <AssetsWorkspace role="admin" title="Ativos Tecnológicos" subtitle="Inventário global dos clientes" />;
 }
 
 // ========== ADMIN DOCUMENTS ==========
@@ -605,62 +774,7 @@ export function AdminDocuments() {
 
 // ========== ADMIN INCIDENTS ==========
 export function AdminIncidents() {
-  const [data, setData] = useState<ApiIncidente[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    incidentesApi()
-      .then(setData)
-      .catch((e) => setErr(e?.message || 'Erro'))
-      .finally(() => setLoading(false));
-  }, []);
-
-  return (
-    <div>
-      <PageHeader
-        title="Gestão de Incidentes"
-        subtitle={`${data.filter((i) => !i.resolvido_em).length} incidentes abertos / ${data.length} total`}
-        actions={
-          <button className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700">
-            + Reportar Incidente
-          </button>
-        }
-      />
-      {loading ? <Loader /> : err ? <ErrorCard msg={err} /> : (
-        <DataTable
-          data={data}
-          columns={[
-            { key: 'id', label: 'Ref', width: '70px', render: (r) => <span className="font-mono text-xs text-slate-500">INC-{r.id.toString().padStart(4, '0')}</span> },
-            { key: 'titulo', label: 'Incidente', render: (r) => (
-              <div>
-                <div className="font-medium text-slate-900">{r.titulo}</div>
-                <div className="text-xs text-slate-500">Cliente: {r.cliente_nome || '—'}</div>
-              </div>
-            )},
-            { key: 'severidade', label: 'Severidade', render: (r) => {
-              const s = (r.severidade || 'MEDIA').toLowerCase();
-              const color = s.includes('alta') || s.includes('crit') ? 'bg-rose-100 text-rose-700' :
-                s.includes('media') || s.includes('mod') ? 'bg-amber-100 text-amber-700' :
-                'bg-emerald-100 text-emerald-700';
-              return <span className={`badge ${color}`}>{r.severidade || 'Média'}</span>;
-            }},
-            { key: 'tipo', label: 'Tipo', render: (r) => (
-              <span className="badge bg-slate-100 text-slate-700">{r.tipo || '—'}</span>
-            )},
-            { key: 'detetado_em', label: 'Deteção', render: (r) => r.detetado_em ? (
-              <span className="text-xs text-slate-600">{new Date(r.detetado_em).toLocaleDateString('pt-PT')}</span>
-            ) : '—' },
-            { key: 'resolvido_em', label: 'Estado', render: (r) => r.resolvido_em ? (
-              <span className="badge bg-emerald-100 text-emerald-700">✓ Resolvido</span>
-            ) : (
-              <span className="badge bg-rose-100 text-rose-700">● Aberto</span>
-            )},
-          ]}
-        />
-      )}
-    </div>
-  );
+  return <IncidentsWorkspace role="admin" title="Gestão de Incidentes" subtitle="Incidentes de todos os clientes autorizados" />;
 }
 
 // ========== ADMIN LOGS ==========
@@ -713,11 +827,18 @@ export function AdminLogs() {
 // ========== ADMIN SITE CONTENT & PERMISSIONS ==========
 export function AdminSiteContent() {
   type ContentDraft = Pick<ApiConteudoSite, 'chave' | 'titulo' | 'subtitulo' | 'corpo' | 'imagem_url' | 'ativo' | 'ordem'>;
+  type NewsDraft = Pick<ApiNoticia, 'titulo' | 'resumo' | 'corpo' | 'imagem_url' | 'publicada' | 'ativo'>;
   const emptyDraft = (): ContentDraft => ({ chave: '', titulo: '', subtitulo: '', corpo: '', imagem_url: '', ativo: true, ordem: 0 });
+  const emptyNewsDraft = (): NewsDraft => ({ titulo: '', resumo: '', corpo: '', imagem_url: '', publicada: false, ativo: true });
   const [items, setItems] = useState<ApiConteudoSite[]>([]);
+  const [news, setNews] = useState<ApiNoticia[]>([]);
+  const [messages, setMessages] = useState<ApiMensagemContacto[]>([]);
   const [editing, setEditing] = useState<ApiConteudoSite | null>(null);
   const [draft, setDraft] = useState<ContentDraft>(emptyDraft);
+  const [editingNews, setEditingNews] = useState<ApiNoticia | null>(null);
+  const [newsDraft, setNewsDraft] = useState<NewsDraft>(emptyNewsDraft);
   const [formOpen, setFormOpen] = useState(false);
+  const [newsFormOpen, setNewsFormOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -726,8 +847,8 @@ export function AdminSiteContent() {
   const load = () => {
     setLoading(true);
     setLoadError(null);
-    conteudosAdminApi()
-      .then(setItems)
+    Promise.all([conteudosAdminApi(), noticiasAdminApi(), mensagensContactoAdminApi()])
+      .then(([contentRows, newsRows, messageRows]) => { setItems(contentRows); setNews(newsRows); setMessages(messageRows); })
       .catch((cause) => setLoadError(cause instanceof Error ? cause.message : 'Erro ao carregar conteúdos.'))
       .finally(() => setLoading(false));
   };
@@ -768,6 +889,42 @@ export function AdminSiteContent() {
     }
   };
 
+  const openNews = (item?: ApiNoticia) => {
+    setEditingNews(item ?? null);
+    setNewsDraft(item ? {
+      titulo: item.titulo, resumo: item.resumo, corpo: item.corpo, imagem_url: item.imagem_url ?? '',
+      publicada: item.publicada, ativo: item.ativo,
+    } : emptyNewsDraft());
+    setNewsFormOpen(true);
+    setFormError(null);
+  };
+
+  const saveNews = async () => {
+    setSaving(true);
+    setFormError(null);
+    try {
+      if (!newsDraft.titulo || !newsDraft.resumo || !newsDraft.corpo) throw new Error('Título, resumo e corpo são obrigatórios.');
+      if (editingNews) await atualizarNoticiaAdminApi(editingNews.id, newsDraft);
+      else await criarNoticiaAdminApi(newsDraft);
+      setNewsFormOpen(false);
+      load();
+    } catch (cause) {
+      setFormError(cause instanceof Error ? cause.message : 'Não foi possível guardar a notícia.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateMessage = async (id: number, estado: ApiMensagemContacto['estado']) => {
+    setFormError(null);
+    try {
+      await atualizarMensagemContactoAdminApi(id, estado);
+      load();
+    } catch (cause) {
+      setFormError(cause instanceof Error ? cause.message : 'Não foi possível atualizar a mensagem.');
+    }
+  };
+
   return (
     <div>
       <PageHeader
@@ -790,24 +947,32 @@ export function AdminSiteContent() {
           <div className="mt-5 flex gap-3"><button type="button" disabled={saving} onClick={save} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'A guardar...' : 'Guardar'}</button><button type="button" onClick={() => { setEditing(null); setDraft(emptyDraft()); setFormOpen(false); setFormError(null); }} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700">Cancelar</button></div>
         </section>
       )}
-      {loading ? <Loader /> : loadError ? <ErrorCard msg={loadError} /> : items.length === 0 ? <DataTable data={[]} columns={[]} emptyText="Sem conteúdos institucionais disponíveis" /> : (
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {items.map((item) => (
-          <div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-6">
-            <div className="flex items-start justify-between">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-2xl">📄</div>
-              <span className={`badge ${item.ativo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700'}`}>
-                {item.ativo ? 'Publicado' : 'Inativo'}
-              </span>
+      {loading ? <Loader /> : loadError ? <ErrorCard msg={loadError} /> : (
+        <>
+          {items.length === 0 ? <DataTable data={[]} columns={[]} emptyText="Sem conteúdos institucionais disponíveis" /> : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {items.map((item) => (
+                <div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-6">
+                  <div className="flex items-start justify-between"><span className="text-sm font-semibold text-blue-700">Conteúdo</span><span className={`badge ${item.ativo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700'}`}>{item.ativo ? 'Publicado' : 'Inativo'}</span></div>
+                  <h3 className="mt-4 font-display font-semibold text-slate-900">{item.titulo}</h3>
+                  <p className="mt-1 text-xs text-slate-500">{item.subtitulo || item.chave}</p>
+                  <button type="button" onClick={() => openEdit(item)} className="mt-4 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Editar Conteúdo</button>
+                </div>
+              ))}
             </div>
-            <h3 className="mt-4 font-display font-semibold text-slate-900">{item.titulo}</h3>
-            <p className="mt-1 text-xs text-slate-500">{item.subtitulo || item.chave}</p>
-            <button type="button" onClick={() => openEdit(item)} className="mt-4 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-              Editar Conteúdo
-            </button>
-          </div>
-        ))}
-      </div>
+          )}
+
+          <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-display text-lg font-semibold text-slate-900">Notícias</h2><p className="mt-1 text-sm text-slate-500">Crie, edite, publique, despublique ou desative notícias reais.</p></div><button type="button" onClick={() => openNews()} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white">+ Nova notícia</button></div>
+            {newsFormOpen && <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="grid gap-3 md:grid-cols-2"><label className="text-sm font-medium text-slate-700 md:col-span-2">Título<input value={newsDraft.titulo} onChange={(event) => setNewsDraft({ ...newsDraft, titulo: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label><label className="text-sm font-medium text-slate-700 md:col-span-2">Resumo<textarea value={newsDraft.resumo} onChange={(event) => setNewsDraft({ ...newsDraft, resumo: event.target.value })} className="mt-1 min-h-20 w-full rounded-xl border border-slate-200 px-3 py-2" /></label><label className="text-sm font-medium text-slate-700 md:col-span-2">Corpo<textarea value={newsDraft.corpo} onChange={(event) => setNewsDraft({ ...newsDraft, corpo: event.target.value })} className="mt-1 min-h-32 w-full rounded-xl border border-slate-200 px-3 py-2" /></label><label className="text-sm font-medium text-slate-700 md:col-span-2">Imagem URL<input type="url" value={newsDraft.imagem_url ?? ''} onChange={(event) => setNewsDraft({ ...newsDraft, imagem_url: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label></div><div className="mt-4 flex flex-wrap gap-4"><label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={newsDraft.publicada} onChange={(event) => setNewsDraft({ ...newsDraft, publicada: event.target.checked })} />Publicada</label><label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={newsDraft.ativo} onChange={(event) => setNewsDraft({ ...newsDraft, ativo: event.target.checked })} />Ativa</label></div><div className="mt-4 flex gap-3"><button type="button" disabled={saving} onClick={saveNews} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'A guardar...' : 'Guardar notícia'}</button><button type="button" onClick={() => setNewsFormOpen(false)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700">Cancelar</button></div></div>}
+            <div className="mt-5 space-y-3">{news.length === 0 ? <p className="text-sm text-slate-500">Sem notícias registadas.</p> : news.map((item) => <article key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-4"><div><h3 className="font-medium text-slate-900">{item.titulo}</h3><p className="mt-1 text-sm text-slate-500">{item.resumo}</p></div><div className="flex items-center gap-2"><span className={`badge ${item.ativo ? 'bg-slate-100 text-slate-700' : 'bg-rose-100 text-rose-700'}`}>{item.ativo ? (item.publicada ? 'Publicada' : 'Rascunho') : 'Inativa'}</span><button type="button" onClick={() => openNews(item)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700">Editar</button></div></article>)}</div>
+          </section>
+
+          <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="font-display text-lg font-semibold text-slate-900">Mensagens de contacto</h2>
+            <div className="mt-4 overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-3 py-2">Remetente</th><th className="px-3 py-2">Assunto</th><th className="px-3 py-2">Estado</th><th className="px-3 py-2">Ação</th></tr></thead><tbody>{messages.length === 0 ? <tr><td colSpan={4} className="px-3 py-5 text-slate-500">Sem mensagens de contacto.</td></tr> : messages.map((message) => <tr key={message.id} className="border-b border-slate-100"><td className="px-3 py-3"><div className="font-medium text-slate-900">{message.nome}</div><div className="text-xs text-slate-500">{message.email}</div></td><td className="px-3 py-3 text-slate-700">{message.assunto}</td><td className="px-3 py-3"><span className="badge bg-slate-100 text-slate-700">{message.estado}</span></td><td className="px-3 py-3"><select aria-label={`Estado da mensagem ${message.id}`} value={message.estado} onChange={(event) => void updateMessage(message.id, event.target.value as ApiMensagemContacto['estado'])} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs"><option value="NOVA">Nova</option><option value="EM_ANALISE">Em análise</option><option value="RESPONDIDA">Respondida</option><option value="ARQUIVADA">Arquivada</option></select></td></tr>)}</tbody></table></div>
+          </section>
+        </>
       )}
     </div>
   );
