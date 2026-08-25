@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import type { Page, UserRole } from '../types';
 import { session, logoutApi } from '../apiClient';
+import { useRealtime } from '../realtime';
 
 interface NavbarProps {
   page: Page;
@@ -149,6 +150,29 @@ interface SideItem {
   key: Page;
   label: string;
   icon: ReactNode;
+}
+
+function NotificationBell({ managerStyle, onOpenIncidents }: { managerStyle?: boolean; onOpenIncidents: () => void }) {
+  const { notifications, unreadCount, connected, markRead } = useRealtime();
+  const [open, setOpen] = useState(false);
+  const buttonClass = managerStyle
+    ? 'mgr-shell__notification cursor-pointer hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500'
+    : 'relative inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500';
+
+  return <div className="relative">
+    <button type="button" className={buttonClass} onClick={() => setOpen((value) => !value)} aria-label={`Notificações${unreadCount ? ` (${unreadCount} não lidas)` : ''}`} aria-expanded={open}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M18 8a6 6 0 00-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      {unreadCount > 0 && <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-rose-500 px-1 text-center text-[10px] font-bold leading-4 text-white">{unreadCount > 99 ? '99+' : unreadCount}</span>}
+    </button>
+    {open && <div className="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3"><span className="text-sm font-semibold text-slate-900">Notificações</span><span className={`text-xs ${connected ? 'text-emerald-600' : 'text-slate-400'}`}>{connected ? 'Em tempo real' : 'A sincronizar'}</span></div>
+      <div className="max-h-80 overflow-y-auto">
+        {notifications.length === 0 ? <p className="px-4 py-6 text-center text-sm text-slate-500">Sem notificações.</p> : notifications.map((notification) => <button key={notification.id} type="button" onClick={async () => { try { await markRead(notification); } catch {} setOpen(false); onOpenIncidents(); }} className={`block w-full border-b border-slate-100 px-4 py-3 text-left text-sm hover:bg-slate-50 ${notification.lida ? 'text-slate-500' : 'bg-blue-50/60 text-slate-900'}`}>
+          <span className="block font-medium">{notification.titulo}</span><span className="mt-1 block text-xs leading-5">{notification.mensagem}</span>
+        </button>)}
+      </div>
+    </div>}
+  </div>;
 }
 
 const ICON = {
@@ -323,6 +347,7 @@ export function AppLayout({ role, page, setPage, setRole, onHome, children }: Ap
       : role === 'manager'
         ? 'bg-amber-500/20 text-amber-200'
         : 'bg-emerald-500/20 text-emerald-200';
+  const openIncidents = () => setPage(role === 'admin' ? 'admin-incidents' : role === 'manager' ? 'mgr-incidents' : 'cli-incidents');
 
   return (
     <div className={`flex min-h-screen bg-slate-100${isManager ? ' mgr-shell' : ''}`}>
@@ -470,11 +495,11 @@ export function AppLayout({ role, page, setPage, setRole, onHome, children }: Ap
                 <button type="button" onClick={onHome} className="mgr-shell__header-icon" aria-label="Página Principal" title="Página Principal">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M3 10.5L12 3l9 7.5V21a1 1 0 01-1 1h-5v-7H9v7H4a1 1 0 01-1-1v-10.5Z" strokeLinejoin="round" /></svg>
                 </button>
-                <span className="mgr-shell__notification" aria-label="Notificações"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M18 8a6 6 0 00-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
+                <NotificationBell managerStyle onOpenIncidents={openIncidents} />
                 <span className="mgr-shell__header-avatar" aria-hidden="true">{(sess.utilizador?.nome || 'G').charAt(0).toUpperCase()}</span>
                 <span className="mgr-shell__header-name">{sess.utilizador?.nome || 'Gestor'}</span>
               </>
-            ) : <span className={`badge ${roleBadge}`}>{role}</span>}
+            ) : <><NotificationBell onOpenIncidents={openIncidents} /><span className={`badge ${roleBadge}`}>{role}</span></>}
           </div>
         </header>
 

@@ -22,6 +22,7 @@ import {
   ClientNIS2, ClientRisk, ClientRequests, ClientCommunication, ClientPentests,
 } from './pages/ClientPages';
 import { AUTH_EXPIRED_EVENT, defaultHomePageForRole, meApi, session } from './apiClient';
+import { RealtimeProvider } from './realtime';
 
 const PAGE_PATHS: Partial<Record<Page, string>> = {
   home: '/',
@@ -244,6 +245,7 @@ export default function App() {
 
   // ── Authenticated Shell ─────────────────────────────────────────────────────
   return (
+    <RealtimeProvider>
     <AppLayout role={role} page={page} setPage={setPage} setRole={handleSetRoleNull} onHome={() => setPage('home')}>
       {/* ADMIN PAGES */}
       {page === 'admin-dashboard' && <AdminDashboard setPage={setPage} />}
@@ -291,5 +293,6 @@ export default function App() {
       {page === 'cli-communication' && <ClientCommunication setPage={setPage} />}
       {page === 'cli-pentests' && <ClientPentests />}
     </AppLayout>
+    </RealtimeProvider>
   );
 }

@@ -159,11 +159,28 @@ export function getModels() {
     estado: { type: DataTypes.STRING(20), allowNull: false },
     encerrado_em: DataTypes.DATE,
     responsavel_encerramento: DataTypes.STRING(120),
+    notificado_nis2: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    notificado_nis2_em: DataTypes.DATE,
+    notificado_nis2_por: DataTypes.BIGINT,
     criado_por: DataTypes.BIGINT,
     criado_em: createdAt,
     atualizado_em: updatedAt,
     ativo: { type: DataTypes.BOOLEAN, allowNull: false },
   }, 'incidentes');
+
+  const Notification = define('Notification', {
+    id,
+    utilizador_id: { type: DataTypes.BIGINT, allowNull: false },
+    incidente_id: { type: DataTypes.BIGINT, allowNull: false },
+    cliente_id: { type: DataTypes.BIGINT, allowNull: false },
+    tipo: { type: DataTypes.STRING(40), allowNull: false },
+    titulo: { type: DataTypes.STRING(180), allowNull: false },
+    mensagem: { type: DataTypes.TEXT, allowNull: false },
+    lida: { type: DataTypes.BOOLEAN, allowNull: false },
+    lida_em: DataTypes.DATE,
+    criado_em: createdAt,
+    atualizado_em: updatedAt,
+  }, 'notificacoes_utilizadores');
 
   const Document = define('Document', {
     id,
@@ -275,6 +292,12 @@ export function getModels() {
   Asset.belongsTo(Client, { foreignKey: 'cliente_id', as: 'cliente' });
   Client.hasMany(Incident, { foreignKey: 'cliente_id', as: 'incidentes' });
   Incident.belongsTo(Client, { foreignKey: 'cliente_id', as: 'cliente' });
+  User.hasMany(Notification, { foreignKey: 'utilizador_id', as: 'notificacoes' });
+  Notification.belongsTo(User, { foreignKey: 'utilizador_id', as: 'utilizador' });
+  Client.hasMany(Notification, { foreignKey: 'cliente_id', as: 'notificacoes' });
+  Notification.belongsTo(Client, { foreignKey: 'cliente_id', as: 'cliente' });
+  Incident.hasMany(Notification, { foreignKey: 'incidente_id', as: 'notificacoes' });
+  Notification.belongsTo(Incident, { foreignKey: 'incidente_id', as: 'incidente' });
   Client.hasMany(Document, { foreignKey: 'cliente_id', as: 'documentos' });
   Document.belongsTo(Client, { foreignKey: 'cliente_id', as: 'cliente' });
   Client.hasMany(Request, { foreignKey: 'cliente_id', as: 'pedidos' });
@@ -286,7 +309,7 @@ export function getModels() {
 
   models = {
     sequelize, Profile, User, Client, UserClient, ClientContact, ConformityStatus,
-    RiskAssessment, Asset, Incident, Document, RequestStatus, Request, ActivityLog,
+    RiskAssessment, Asset, Incident, Notification, Document, RequestStatus, Request, ActivityLog,
     SiteContent, News, ContactMessage,
   };
   return models;

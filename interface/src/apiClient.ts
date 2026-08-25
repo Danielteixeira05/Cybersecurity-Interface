@@ -154,6 +154,22 @@ export interface ApiIncidente {
   recomendacoes?: string | null;
   responsavel_encerramento?: string | null;
   ativo?: boolean;
+  notificado_nis2?: boolean;
+  notificado_nis2_em?: string | null;
+  notificado_nis2_por?: number | null;
+  atualizado_em?: string;
+}
+
+export interface ApiNotificacao {
+  id: number;
+  incidente_id: number;
+  cliente_id: number;
+  tipo: 'INCIDENTE_NIS2';
+  titulo: string;
+  mensagem: string;
+  lida: boolean;
+  lida_em?: string | null;
+  criado_em?: string;
   atualizado_em?: string;
 }
 
@@ -194,6 +210,7 @@ export interface CriarIncidentePayload {
   resposta_imediata?: string | null;
   medidas_corretivas?: string | null;
   recomendacoes?: string | null;
+  notificado_nis2?: boolean;
 }
 
 export interface FiltrosAtivos {
@@ -627,6 +644,25 @@ export function normaliseIncidente(value: unknown): ApiIncidente {
     detetado_em: detetadoEm ?? null,
     encerrado_em: resolvidoEm ?? null,
     resolvido_em: resolvidoEm ?? null,
+    notificado_nis2: typeof raw.notificado_nis2 === 'boolean' ? raw.notificado_nis2 : false,
+    notificado_nis2_em: typeof raw.notificado_nis2_em === 'string' ? raw.notificado_nis2_em : null,
+    notificado_nis2_por: numericValue(raw.notificado_nis2_por) ?? null,
+  };
+}
+
+function normaliseNotificacao(value: unknown): ApiNotificacao {
+  const raw = asRecord(value);
+  return {
+    id: requiredNumber(raw.id, 'notificacao.id'),
+    incidente_id: requiredNumber(raw.incidente_id, 'notificacao.incidente_id'),
+    cliente_id: requiredNumber(raw.cliente_id, 'notificacao.cliente_id'),
+    tipo: 'INCIDENTE_NIS2',
+    titulo: requiredString(raw.titulo, 'notificacao.titulo'),
+    mensagem: requiredString(raw.mensagem, 'notificacao.mensagem'),
+    lida: raw.lida === true,
+    lida_em: typeof raw.lida_em === 'string' ? raw.lida_em : null,
+    criado_em: typeof raw.criado_em === 'string' ? raw.criado_em : undefined,
+    atualizado_em: typeof raw.atualizado_em === 'string' ? raw.atualizado_em : undefined,
   };
 }
 
@@ -815,6 +851,17 @@ export async function criarIncidenteApi(payload: CriarIncidentePayload): Promise
 export async function atualizarIncidenteApi(id: number, payload: Partial<CriarIncidentePayload> & { ativo?: boolean; encerrado_em?: string | null }): Promise<ApiIncidente> {
   await ensureCsrfToken();
   return normaliseIncidente(await apiFetch(`/api/incidents/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }));
+}
+
+export async function notificacoesApi(limit = 50): Promise<ApiNotificacao[]> {
+  const result = await apiFetch<unknown>(`/api/notifications/?limit=${limit}`);
+  const rows = Array.isArray(result) ? result : (asRecord(result).items as unknown);
+  return Array.isArray(rows) ? rows.map(normaliseNotificacao) : [];
+}
+
+export async function marcarNotificacaoLidaApi(id: number): Promise<ApiNotificacao> {
+  await ensureCsrfToken();
+  return normaliseNotificacao(await apiFetch(`/api/notifications/${id}/read`, { method: 'PATCH', body: JSON.stringify({}) }));
 }
 export async function documentosApi(clienteId?: number): Promise<ApiDocumento[]> {
   const qs = clienteId ? `?cliente_id=${clienteId}` : '';

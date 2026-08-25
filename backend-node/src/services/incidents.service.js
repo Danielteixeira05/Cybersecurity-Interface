@@ -4,6 +4,8 @@ import { getModels } from '../models/index.js';
 import { httpError } from '../middleware/errors.js';
 import { assertClientAccess, clientIdsForUser } from './clients.service.js';
 import { recordAudit } from './audit-log.service.js';
+import { createNis2Notifications } from './notifications.service.js';
+import { emitIncidentChanged, emitNotification } from '../socket/events.js';
 
 const SEVERITIES = new Set(['RESIDUAL', 'BAIXA', 'MEDIA', 'ALTA', 'CRITICA']);
 const STATES = new Set(['ABERTO', 'EM_ANALISE', 'ENCERRADO']);
@@ -84,10 +86,9 @@ function serialise(incident) {
   };
 }
 
-function incidentPayload(input, current = {}, { clientCanReport = false } = {}) {
+function incidentPayload(input, current = {}) {
   const requestedState = input.estado === undefined ? current.estado ?? 'ABERTO' : input.estado;
   const estado = enumValue(requestedState, 'Estado', STATES, undefined, { required: true });
-  if (clientCanReport && estado !== 'ABERTO') throw httpError(403, 'O Cliente apenas pode reportar incidentes abertos.');
   return {
     cliente_id: idOf(input.cliente_id ?? input.clienteId ?? current.cliente_id, 'Cliente', { required: true }),
     codigo: text(input.codigo ?? current.codigo, 40, { required: true }),
@@ -111,6 +112,7 @@ function incidentPayload(input, current = {}, { clientCanReport = false } = {}) 
     recomendacoes: optionalText(input.recomendacoes, 10000, current.recomendacoes),
     estado,
     ativo: bool(input.ativo, 'ativo', current.ativo ?? true),
+    notificado_nis2: bool(input.notificado_nis2, 'notificado_nis2', current.notificado_nis2 ?? false),
   };
 }
 
@@ -188,18 +190,33 @@ function closure(data, input, current, actor) {
 }
 
 export async function createIncident(auth, input) {
-  const isClient = auth.role === 'client';
-  const data = incidentPayload(input, {}, { clientCanReport: isClient });
+  const data = incidentPayload(input, {});
   await assertClientAccess(auth, data.cliente_id);
   const { sequelize, Incident } = getModels();
-  const id = await sequelize.transaction(async (transaction) => {
+  const result = await sequelize.transaction(async (transaction) => {
     await assertActiveClient(data.cliente_id, transaction);
     await assertCodeAvailable(data.cliente_id, data.codigo, null, transaction);
-    const incident = await Incident.create({ ...data, ...closure(data, input, {}, null), criado_por: Number(auth.sub), criado_em: new Date(), atualizado_em: new Date() }, { transaction });
-    await recordAudit({ userId: Number(auth.sub), action: 'CRIAR', entity: 'incidentes', entityId: Number(incident.id), details: { cliente_id: data.cliente_id, codigo: data.codigo, gravidade: data.gravidade } }, transaction);
-    return incident.id;
+    const now = new Date();
+    const incident = await Incident.create({
+      ...data,
+      ...closure(data, input, {}, null),
+      notificado_nis2_em: data.notificado_nis2 ? now : null,
+      notificado_nis2_por: data.notificado_nis2 ? Number(auth.sub) : null,
+      criado_por: Number(auth.sub), criado_em: now, atualizado_em: now,
+    }, { transaction });
+    const notifications = data.notificado_nis2
+      ? await createNis2Notifications({ incident, actorId: Number(auth.sub), transaction })
+      : [];
+    await recordAudit({
+      userId: Number(auth.sub), action: 'CRIAR', entity: 'incidentes', entityId: Number(incident.id),
+      details: { cliente_id: data.cliente_id, codigo: data.codigo, gravidade: data.gravidade, notificado_nis2: data.notificado_nis2 },
+    }, transaction);
+    return { id: incident.id, notifications };
   });
-  return getIncident(auth, id);
+  const saved = await getIncident({ ...auth, role: 'admin' }, result.id);
+  emitIncidentChanged('created', saved);
+  for (const notification of result.notifications) emitNotification(notification);
+  return saved;
 }
 
 export async function updateIncident(auth, incidentId, input) {
@@ -210,12 +227,36 @@ export async function updateIncident(auth, incidentId, input) {
   const current = incident.get({ plain: true });
   const data = incidentPayload(input, current);
   await assertClientAccess(auth, data.cliente_id);
-  await sequelize.transaction(async (transaction) => {
+  if (auth.role !== 'admin' && input.ativo === false) {
+    throw httpError(403, 'Apenas o Administrador pode desativar um incidente.');
+  }
+  if (current.notificado_nis2 && data.notificado_nis2 === false) {
+    throw httpError(400, 'Uma notificação NIS2 confirmada não pode ser removida.');
+  }
+  const result = await sequelize.transaction(async (transaction) => {
     await assertActiveClient(data.cliente_id, transaction);
     await assertCodeAvailable(data.cliente_id, data.codigo, incident.id, transaction);
     const responsible = data.estado === 'ENCERRADO' ? await actorName(Number(auth.sub), transaction) : null;
-    await incident.update({ ...data, ...closure(data, input, current, responsible), atualizado_em: new Date() }, { transaction });
-    await recordAudit({ userId: Number(auth.sub), action: data.ativo ? (data.estado === 'ENCERRADO' ? 'ENCERRAR' : 'ATUALIZAR') : 'DESATIVAR', entity: 'incidentes', entityId: Number(incident.id), details: { cliente_id: data.cliente_id, codigo: data.codigo, estado: data.estado, gravidade: data.gravidade } }, transaction);
+    const notificationTransition = !current.notificado_nis2 && data.notificado_nis2;
+    const now = new Date();
+    await incident.update({
+      ...data,
+      ...closure(data, input, current, responsible),
+      notificado_nis2_em: notificationTransition ? now : current.notificado_nis2_em,
+      notificado_nis2_por: notificationTransition ? Number(auth.sub) : current.notificado_nis2_por,
+      atualizado_em: now,
+    }, { transaction });
+    const notifications = notificationTransition
+      ? await createNis2Notifications({ incident, actorId: Number(auth.sub), transaction })
+      : [];
+    await recordAudit({
+      userId: Number(auth.sub), action: data.ativo ? (data.estado === 'ENCERRADO' ? 'ENCERRAR' : 'ATUALIZAR') : 'DESATIVAR', entity: 'incidentes', entityId: Number(incident.id),
+      details: { cliente_id: data.cliente_id, codigo: data.codigo, estado: data.estado, gravidade: data.gravidade, notificado_nis2: data.notificado_nis2 },
+    }, transaction);
+    return { notifications, kind: data.ativo ? 'updated' : 'deactivated' };
   });
-  return getIncident({ ...auth, role: 'admin' }, incident.id).catch(() => serialise(incident));
+  const saved = await getIncident({ ...auth, role: 'admin' }, incident.id).catch(() => serialise(incident));
+  emitIncidentChanged(result.kind, saved);
+  for (const notification of result.notifications) emitNotification(notification);
+  return saved;
 }

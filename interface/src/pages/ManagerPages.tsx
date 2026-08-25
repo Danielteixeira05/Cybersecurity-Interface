@@ -16,6 +16,7 @@ import {
   type ApiDocumento, type ApiPedido, type ApiAvaliacao,
 } from '../apiClient';
 import { AssetsWorkspace, IncidentsWorkspace } from '../components/OperationalResources';
+import { INCIDENT_CHANGED_EVENT } from '../realtime';
 
 interface PageProps {
   setPage: (p: Page) => void;
@@ -163,6 +164,13 @@ export function MgrDashboard({ setPage }: PageProps) {
   const [available, setAvailable] = useState({ clientes: false, incidentes: false, documentos: false });
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshToken, setRefreshToken] = useState(0);
+
+  useEffect(() => {
+    const refresh = () => setRefreshToken((value) => value + 1);
+    window.addEventListener(INCIDENT_CHANGED_EVENT, refresh);
+    return () => window.removeEventListener(INCIDENT_CHANGED_EVENT, refresh);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -200,7 +208,7 @@ export function MgrDashboard({ setPage }: PageProps) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [refreshToken]);
 
   if (loading) return <Loader />;
   if (err) return <ErrorCard msg={err} />;

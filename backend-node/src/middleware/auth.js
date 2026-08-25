@@ -3,7 +3,7 @@ import { env } from '../config/env.js';
 import { httpError } from './errors.js';
 import { getModels } from '../models/index.js';
 
-function roleForProfile(profileCode) {
+export function roleForProfile(profileCode) {
   if (profileCode === 'ADMINISTRADOR') return 'admin';
   if (profileCode === 'COLABORADOR') return 'manager';
   if (profileCode === 'CLIENTE') return 'client';

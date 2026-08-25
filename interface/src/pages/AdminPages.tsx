@@ -17,6 +17,7 @@ import {
   type ApiNoticia, type PerfilCodigo, session,
 } from '../apiClient';
 import { AssetsWorkspace, IncidentsWorkspace } from '../components/OperationalResources';
+import { INCIDENT_CHANGED_EVENT } from '../realtime';
 
 // ========== UI HELPERS ==========
 interface PageProps {
@@ -140,13 +141,20 @@ export function AdminDashboard({ setPage }: PageProps) {
   const [data, setData] = useState<ApiDashboardAdmin | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshToken, setRefreshToken] = useState(0);
+
+  useEffect(() => {
+    const refresh = () => setRefreshToken((value) => value + 1);
+    window.addEventListener(INCIDENT_CHANGED_EVENT, refresh);
+    return () => window.removeEventListener(INCIDENT_CHANGED_EVENT, refresh);
+  }, []);
 
   useEffect(() => {
     dashboardApi()
       .then((r) => setData(r as ApiDashboardAdmin))
       .catch((e) => setErr(e?.message || 'Erro ao carregar dashboard'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [refreshToken]);
 
   if (loading) return <Loader />;
   if (err) return <ErrorCard msg={err} />;

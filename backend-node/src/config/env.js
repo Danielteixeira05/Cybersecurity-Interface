@@ -13,13 +13,17 @@ function boolean(name, fallback = false) {
   throw new Error(`${name} tem de ser true ou false.`);
 }
 
+const corsOrigin = optional('CORS_ORIGIN') ?? 'http://localhost:8443';
+const socketCorsOrigins = optional('SOCKET_CORS_ORIGINS') ?? corsOrigin;
+
 export const env = Object.freeze({
   nodeEnv: optional('NODE_ENV') ?? 'development',
   port: Number(optional('PORT') ?? 3001),
   databaseUrl: optional('DATABASE_URL'),
   jwtSecret: optional('JWT_SECRET'),
   jwtExpiresIn: optional('JWT_EXPIRES_IN') ?? '8h',
-  corsOrigin: optional('CORS_ORIGIN') ?? 'http://localhost:8443',
+  corsOrigin,
+  socketCorsOrigins,
   readOnlyMode: boolean('READ_ONLY_MODE', false),
 });
 

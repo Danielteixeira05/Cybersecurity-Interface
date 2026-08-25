@@ -11,6 +11,7 @@ import {
   type ApiPedido, type ApiAvaliacao,
 } from '../apiClient';
 import { AssetsWorkspace, IncidentsWorkspace } from '../components/OperationalResources';
+import { INCIDENT_CHANGED_EVENT } from '../realtime';
 
 interface PageProps {
   setPage: (p: Page) => void;
@@ -151,6 +152,13 @@ export function ClientDashboard({ setPage }: PageProps) {
   const [resumo, setResumo] = useState<any>({});
   const [ativos, setAtivos] = useState<ApiAtivo[]>([]);
   const [incidentes, setIncidentes] = useState<ApiIncidente[]>([]);
+  const [refreshToken, setRefreshToken] = useState(0);
+
+  useEffect(() => {
+    const refresh = () => setRefreshToken((value) => value + 1);
+    window.addEventListener(INCIDENT_CHANGED_EVENT, refresh);
+    return () => window.removeEventListener(INCIDENT_CHANGED_EVENT, refresh);
+  }, []);
 
   useEffect(() => {
     Promise.all([
@@ -165,7 +173,7 @@ export function ClientDashboard({ setPage }: PageProps) {
       })
       .catch((e) => setErr(e?.message || 'Erro'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [refreshToken]);
 
   const criticidade = [
     { t: 'Alta', n: ativos.filter(a => (a.criticalidade || '').toLowerCase().includes('alt') || (a.criticalidade || '').toLowerCase().includes('crit')).length, c: '#ef4444' },
@@ -316,7 +324,7 @@ export function ClientAssets() {
 }
 
 export function ClientIncidents() {
-  return <IncidentsWorkspace role="client" title="Incidentes" subtitle="Reporte e acompanhe incidentes da sua organização" />;
+  return <IncidentsWorkspace role="client" title="Incidentes" subtitle="Consulte os incidentes da sua organização" />;
 }
 
 export function ClientDocuments({ setPage }: PageProps) {
