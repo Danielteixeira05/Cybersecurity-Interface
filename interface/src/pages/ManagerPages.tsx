@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, Legend,
 } from 'recharts';
 import {
-  AlertTriangle, FileText, Hand,
+  AlertTriangle, BarChart3, Building2, CalendarDays, CheckCircle2,
+  Clock3, FileText, FolderOpen, Hand, MessageSquare, MonitorCog,
+  Plus, Search, ShieldCheck, TriangleAlert, Users,
 } from 'lucide-react';
 import type { Page } from '../types';
 import {
@@ -49,7 +51,7 @@ function ErrorCard({ msg }: { msg: string }) {
 }
 
 function StatCard({ label, value, delta, icon, color }: {
-  label: string; value: string | number; delta?: string; icon?: string; color?: string;
+  label: string; value: string | number; delta?: string; icon?: ReactNode; color?: string;
 }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -60,7 +62,7 @@ function StatCard({ label, value, delta, icon, color }: {
           {delta && <div className="mt-1 text-xs font-medium text-emerald-600">{delta}</div>}
         </div>
         {icon && (
-          <div className={`flex h-12 w-12 items-center justify-center rounded-xl text-2xl ${color || 'bg-blue-50'}`}>
+          <div className={`flex h-12 w-12 items-center justify-center rounded-xl text-blue-600 ${color || 'bg-blue-50'}`}>
             {icon}
           </div>
         )}
@@ -80,7 +82,7 @@ function DataTable<T extends Record<string, any>>({
   if (!data || data.length === 0) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center">
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-3xl">📭</div>
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-500"><FolderOpen size={25} aria-hidden="true" /></div>
         <div className="text-sm font-medium text-slate-900">{emptyText}</div>
         <div className="mt-1 text-xs text-slate-500">Não existem registos para apresentar</div>
       </div>
@@ -418,20 +420,31 @@ export function MgrAnalytics({ setPage }: PageProps) {
   }, new Map<string, number>()).entries()).map(([setor, n]) => ({ setor, n }));
 
   return (
-    <div>
-      <PageHeader title="Análises Operacionais" subtitle="Métricas calculadas a partir dos clientes associados" />
-      <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="MTTR (horas)" value={mttr === null ? '—' : mttr.toFixed(1)} icon="⏱️" color="bg-amber-50" />
-        <StatCard label="Clientes" value={clientes.length} icon="🔎" color="bg-cyan-50" />
-        <StatCard label="Incidentes" value={dashboard.stats.incidentes ?? '—'} icon="✅" color="bg-emerald-50" />
-      </div>
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6">
-          <h3 className="mb-4 font-display text-lg font-semibold text-slate-900">Tendências (6 meses)</h3>
-          <div className="flex h-80 items-center justify-center text-sm text-slate-500">Sem série histórica disponível.</div>
+    <div className="mgr-visual-page mgr-analytics-v98">
+      <PageHeader title="Análises & Gráficos" subtitle="Resumo visual dos clientes e incidentes sob a sua gestão." />
+      <section className="mgr-analytics-v98__summary" aria-label="Resumo de análises">
+        <div className="mgr-analytics-v98__summary-copy">
+          <BarChart3 aria-hidden="true" />
+          <div><h2>Análises & Gráficos</h2><p>Indicadores calculados com os dados disponíveis.</p></div>
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-6">
-          <h3 className="mb-4 font-display text-lg font-semibold text-slate-900">Distribuição de Clientes por Setor</h3>
+        <div className="mgr-analytics-v98__metrics">
+          <div><strong>{clientes.length}</strong><span>Clientes</span></div>
+          <div><strong>{dashboard.stats.incidentes ?? '—'}</strong><span>Incidentes</span></div>
+          <div><strong>{dashboard.stats.documentos ?? '—'}</strong><span>Documentos</span></div>
+        </div>
+      </section>
+      <div className="mgr-analytics-v98__stat-grid">
+        <StatCard label="Tempo médio de resolução" value={mttr === null ? '—' : `${mttr.toFixed(1)} h`} icon={<Clock3 size={22} aria-hidden="true" />} color="bg-amber-50 text-amber-600" />
+        <StatCard label="Clientes associados" value={clientes.length} icon={<Building2 size={22} aria-hidden="true" />} color="bg-blue-50 text-blue-600" />
+        <StatCard label="Incidentes registados" value={dashboard.stats.incidentes ?? '—'} icon={<ShieldCheck size={22} aria-hidden="true" />} color="bg-emerald-50 text-emerald-600" />
+      </div>
+      <div className="mgr-analytics-v98__charts">
+        <article className="mgr-analytics-v98__card">
+          <h3>Incidentes por severidade</h3>
+          <div className="mgr-analytics-v98__empty-chart"><BarChart3 aria-hidden="true" /><span>Não existe uma série de severidade disponível para este período.</span></div>
+        </article>
+        <article className="mgr-analytics-v98__card">
+          <h3>Distribuição de clientes por setor</h3>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -451,13 +464,12 @@ export function MgrAnalytics({ setPage }: PageProps) {
               </PieChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </article>
       </div>
-      <div className="mt-6">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-display text-lg font-semibold text-slate-900">Clientes com Mais Incidentes</h3>
-            <button onClick={() => setPage('mgr-clients')} className="text-xs text-blue-600 hover:underline">Gerir clientes →</button>
+      <div className="mgr-analytics-v98__wide-card">
+          <div className="mgr-analytics-v98__card-heading">
+            <h3>Clientes com mais incidentes</h3>
+            <button onClick={() => setPage('mgr-clients')}>Ver clientes <span aria-hidden="true">→</span></button>
           </div>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -475,7 +487,6 @@ export function MgrAnalytics({ setPage }: PageProps) {
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </div>
       </div>
     </div>
   );
@@ -497,61 +508,49 @@ export function MgrClients({ setPage }: PageProps) {
   const filtered = !q ? data : data.filter((c) =>
     (c.nome || '').toLowerCase().includes(q.toLowerCase()) || (c.nif || '').includes(q),
   );
+  const activeClients = data.filter((client) => client.ativo !== false).length;
+  const incidentCount = data.reduce((total, client) => total + (client.numero_incidentes ?? client.total_incidentes ?? 0), 0);
+  const assetCount = data.reduce((total, client) => total + (client.numero_ativos ?? client.total_ativos ?? 0), 0);
+  const openClient = (client: ApiCliente) => {
+    session.set({ ...session.get(), cliente: { id: client.id, nome: client.nome } });
+    setPage('mgr-client-detail');
+  };
 
   return (
-    <div>
-      <PageHeader
-        title="Clientes"
-        subtitle={`${data.length} clientes registados`}
-        actions={
-          <>
-            <div className="relative">
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Pesquisar..."
-                className="w-64 rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm"
-              />
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400">
-                <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" strokeLinecap="round" />
-              </svg>
-            </div>
-            <button className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
-              + Novo Cliente
-            </button>
-          </>
-        }
-      />
-      {loading ? <Loader /> : err ? <ErrorCard msg={err} /> : (
-        <DataTable
-          data={filtered}
-          onRowClick={(r) => {
-            (session as any).set({ ...session.get(), cliente: { id: r.id, nome: r.nome } });
-            setPage('mgr-client-detail');
-          }}
-          columns={[
-            { key: 'id', label: 'ID', width: '60px', render: (r) => <span className="font-mono text-xs text-slate-500">#{r.id}</span> },
-            { key: 'nome', label: 'Cliente', render: (r) => (
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 text-white font-bold">
-                  {(r.nome || 'C').charAt(0)}
-                </div>
-                <div>
-                  <div className="font-semibold text-slate-900">{r.nome}</div>
-                  <div className="text-xs text-slate-500">NIF: {r.nif || '—'} • {r.email || '—'}</div>
-                </div>
-              </div>
-            )},
-            { key: 'setor_atividade', label: 'Setor', render: (r) => r.setor_atividade || '—' },
-            { key: 'numero_ativos', label: 'Ativos', render: (r) => r.numero_ativos ?? 0 },
-            { key: 'numero_incidentes', label: 'Incidentes', render: (r) => r.numero_incidentes ?? 0 },
-            { key: 'conformidade', label: 'Conformidade', render: (r) => (
-              <span className={`badge ${conformidadeColor(r.conformidade)}`}>{r.conformidade || 'Sem dados'}</span>
-            )},
-          ]}
-        />
-      )}
+    <div className="mgr-visual-page mgr-clients-v98">
+      <PageHeader title="Clientes" subtitle="Visualize os clientes sob a sua gestão." />
+      <section className="mgr-clients-v98__summary" aria-label="Resumo de clientes">
+        <div><h2>Os Meus Clientes</h2><p>Visualize os clientes sob a sua gestão.</p></div>
+        <div className="mgr-clients-v98__metrics">
+          <div><strong>{data.length}</strong><span>Total</span></div>
+          <div><strong>{activeClients}</strong><span>Ativos</span></div>
+          <div><strong>{incidentCount}</strong><span>Incidentes</span></div>
+          <div><strong>{assetCount}</strong><span>Ativos tecnológicos</span></div>
+        </div>
+      </section>
+      {loading ? <Loader /> : err ? <ErrorCard msg={err} /> : <>
+        <section className="mgr-clients-v98__search" aria-label="Pesquisa de clientes">
+          <label>
+            <Search size={19} aria-hidden="true" />
+            <input value={q} onChange={(event) => setQ(event.target.value)} placeholder="Pesquisar por nome ou NIF..." />
+          </label>
+          <span>{filtered.length} resultado{filtered.length === 1 ? '' : 's'}</span>
+        </section>
+        {filtered.length === 0 ? <DataTable<ApiCliente> data={[]} columns={[]} emptyText="Nenhum cliente corresponde à pesquisa." /> : <section className="mgr-clients-v98__list" aria-label="Lista de clientes">
+          {filtered.map((client) => {
+            const initials = (client.nome || 'C').split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+            const clientIncidents = client.numero_incidentes ?? client.total_incidentes ?? 0;
+            const clientAssets = client.numero_ativos ?? client.total_ativos ?? 0;
+            return <button key={client.id} type="button" onClick={() => openClient(client)} className="mgr-clients-v98__client">
+              <span className="mgr-clients-v98__avatar" aria-hidden="true">{initials}</span>
+              <span className="mgr-clients-v98__identity"><strong>{client.nome}</strong><small>{client.email || client.nif || 'Sem contacto indicado'}</small></span>
+              <span className="mgr-clients-v98__badges"><span className={`badge ${client.ativo !== false ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{client.ativo !== false ? 'Ativo' : 'Inativo'}</span>{client.conformidade && <span className={`badge ${conformidadeColor(client.conformidade)}`}>{client.conformidade}</span>}</span>
+              <span className="mgr-clients-v98__counts"><span><b>{clientIncidents}</b>Incidentes</span><span><b>{clientAssets}</b>Ativos</span></span>
+              <span className="mgr-clients-v98__open" aria-label={`Abrir ${client.nome}`}>›</span>
+            </button>;
+          })}
+        </section>}
+      </>}
     </div>
   );
 }
@@ -562,7 +561,17 @@ export function MgrClientDetail({ setPage, backPage = 'mgr-clients', backLabel =
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  const [detailTab, setDetailTab] = useState<'overview' | 'assets' | 'incidents'>('overview');
+  const tabs = [
+    ['overview', 'Visão Geral'], ['nis2', 'NIS2'], ['assets', 'Ativos'], ['incidents', 'Incidentes'],
+    ['documents', 'Documentos'], ['reports', 'Relatórios'], ['pentests', 'PenTests'], ['evidence', 'Evidências'],
+    ['requests', 'Pedidos'], ['communication', 'Comunicação'],
+  ] as const;
+  type DetailTab = typeof tabs[number][0];
+  const tabFromHash = (): DetailTab => {
+    const hash = typeof window === 'undefined' ? '' : window.location.hash.replace('#', '');
+    return tabs.some(([key]) => key === hash) ? hash as DetailTab : 'overview';
+  };
+  const [detailTab, setDetailTab] = useState<DetailTab>(tabFromHash);
 
   const refreshDetail = async () => {
     if (!cid) { setLoading(false); return; }
@@ -582,129 +591,82 @@ export function MgrClientDetail({ setPage, backPage = 'mgr-clients', backLabel =
 
   const c = data.cliente;
   const res = data.resumo || {};
+  const assets: ApiAtivo[] = Array.isArray(data.ativos) ? data.ativos : [];
+  const incidents: ApiIncidente[] = Array.isArray(data.incidentes) ? data.incidentes : [];
+  const documents: ApiDocumento[] = Array.isArray(data.documentos) ? data.documentos : [];
+  const evaluations: ApiAvaliacao[] = Array.isArray(data.avaliacoes) ? data.avaliacoes : [];
+  const requests: ApiPedido[] = Array.isArray(data.pedidos) ? data.pedidos : [];
+  const latestEvaluation = [...evaluations].sort((a, b) => new Date(b.data_avaliacao || 0).getTime() - new Date(a.data_avaliacao || 0).getTime())[0];
+  const conformity = c.conformidade || c.estado_conformidade || latestEvaluation?.estado_conformidade_nome || 'Sem avaliação';
+  const risk = latestEvaluation?.nivel_risco || res.nivel_risco || 'Sem dados';
+  const openIncidents = incidents.filter((incident) => !incident.resolvido_em && !incident.encerrado_em).length;
+  const formatDate = (value?: string | null) => value ? new Intl.DateTimeFormat('pt-PT', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value)) : '—';
+  const selectTab = (tab: DetailTab) => {
+    setDetailTab(tab);
+    if (typeof window !== 'undefined') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${tab}`);
+  };
+  const tabEmpty = (title: string, description: string) => <section className="mgr-client-detail-v98__empty"><FolderOpen aria-hidden="true" /><h3>{title}</h3><p>{description}</p></section>;
+
+  const renderDocuments = (items: ApiDocumento[], emptyText: string) => <DataTable
+    data={items}
+    emptyText={emptyText}
+    columns={[
+      { key: 'titulo', label: 'Documento', render: (item) => <div><strong className="font-medium text-slate-900">{item.titulo}</strong><div className="mt-1 text-xs text-slate-500">{item.cliente_nome || c.nome}</div></div> },
+      { key: 'tipo', label: 'Tipo', render: (item) => <span className="badge bg-blue-50 text-blue-700">{item.tipo || item.categoria || '—'}</span> },
+      { key: 'formato', label: 'Formato', render: (item) => <span className="font-mono text-xs text-slate-600">{item.formato || item.tipo_mime || '—'}</span> },
+      { key: 'submetido_em', label: 'Data', render: (item) => formatDate(item.submetido_em) },
+    ]}
+  />;
 
   return (
-    <div>
-      <PageHeader
-        title={c.nome}
-        subtitle={`NIF ${c.nif || '—'} • Setor: ${c.setor_atividade || '—'}`}
-        actions={
-          <button
-            onClick={() => setPage(backPage)}
-            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            ← Voltar a {backLabel}
-          </button>
-        }
-      />
+    <div className="mgr-visual-page mgr-client-detail-v98">
+      <div className="mgr-client-detail-v98__breadcrumb"><button type="button" onClick={() => setPage(backPage)}>Gestor</button><span>/</span><button type="button" onClick={() => setPage(backPage)}>{backLabel}</button><span>/</span><strong>{c.nome}</strong></div>
+      <header className="mgr-client-detail-v98__header">
+        <span className="mgr-client-detail-v98__avatar" aria-hidden="true">{c.nome?.charAt(0)?.toUpperCase() || 'C'}</span>
+        <div className="mgr-client-detail-v98__title"><h1>{c.nome}</h1><div><span>{c.setor_atividade || 'Setor não indicado'}</span><span className={`badge ${conformidadeColor(conformity)}`}>{conformity}</span><span className="badge bg-blue-100 text-blue-700">Risco: {risk}</span></div></div>
+        <div className="mgr-client-detail-v98__actions"><button type="button" onClick={() => selectTab('communication')}><MessageSquare size={16} aria-hidden="true" />Mensagem</button><button type="button" onClick={() => selectTab('incidents')}><Plus size={17} aria-hidden="true" />Novo Incidente</button></div>
+      </header>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
-        <StatCard label="Ativos" value={res.numero_ativos ?? data.ativos?.length ?? 0} icon="💻" color="bg-blue-50" />
-        <StatCard label="Incidentes" value={res.numero_incidentes ?? data.incidentes?.length ?? 0} icon="🚨" color="bg-rose-50" />
-        <StatCard label="Documentos" value={data.documentos?.length ?? 0} icon="📄" color="bg-violet-50" />
-        <StatCard label="Conformidade" value={c.conformidade || '—'} icon="✅" color="bg-emerald-50" />
-      </div>
-
-      <nav aria-label="Detalhe do cliente" className="mb-6 flex overflow-x-auto border-b border-slate-200">
-        {[
-          ['overview', 'Visão Geral'],
-          ['assets', 'Ativos'],
-          ['incidents', 'Incidentes'],
-        ].map(([key, itemLabel]) => <button key={key} type="button" onClick={() => setDetailTab(key as 'overview' | 'assets' | 'incidents')} className={`shrink-0 border-b-2 px-5 py-3 text-sm font-medium transition ${detailTab === key ? 'border-blue-600 bg-blue-50/60 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-900'}`}>{itemLabel}</button>)}
+      <nav aria-label="Detalhe do cliente" className="mgr-client-detail-v98__tabs">
+        {tabs.map(([key, itemLabel]) => <button key={key} type="button" onClick={() => selectTab(key)} aria-current={detailTab === key ? 'page' : undefined} className={detailTab === key ? 'is-active' : ''}>{itemLabel}</button>)}
       </nav>
 
-      {detailTab === 'assets' ? <AssetsWorkspace role="manager" clientId={Number(cid)} compact title="Ativos Tecnológicos" subtitle="Inventário associado a este cliente" onChanged={() => void refreshDetail()} /> : detailTab === 'incidents' ? <IncidentsWorkspace role="manager" clientId={Number(cid)} compact title="Incidentes de Segurança" subtitle="Incidentes associados a este cliente" onChanged={() => void refreshDetail()} /> : <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6">
-          <h3 className="mb-4 font-display text-lg font-semibold text-slate-900">Ativos</h3>
-          <DataTable
-            data={data.ativos || []}
-            columns={[
-              { key: 'id', label: 'ID', width: '50px', render: (r: ApiAtivo) => <span className="font-mono text-xs">#{r.id}</span> },
-              { key: 'nome', label: 'Ativo', render: (r: ApiAtivo) => (
-                <div>
-                  <div className="font-medium text-slate-900">{r.nome}</div>
-                  <div className="text-xs text-slate-500">{r.tipo || '—'}</div>
-                </div>
-              )},
-              { key: 'criticalidade', label: 'Criticidade', render: (r: ApiAtivo) => (
-                <span className={`badge ${severityColor(r.criticalidade)}`}>{r.criticalidade || '—'}</span>
-              )},
-              { key: 'endereco_ip', label: 'IP', render: (r: ApiAtivo) => r.endereco_ip || '—' },
-            ]}
-          />
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-6">
-          <h3 className="mb-4 font-display text-lg font-semibold text-slate-900">Incidentes</h3>
-          <DataTable
-            data={data.incidentes || []}
-            columns={[
-              { key: 'id', label: 'Ref', width: '70px', render: (r: ApiIncidente) => <span className="font-mono text-xs">INC-{String(r.id).padStart(4,'0')}</span> },
-              { key: 'titulo', label: 'Incidente', render: (r: ApiIncidente) => r.titulo },
-              { key: 'severidade', label: 'Severidade', render: (r: ApiIncidente) => (
-                <span className={`badge ${severityColor(r.severidade)}`}>{r.severidade || '—'}</span>
-              )},
-              { key: 'resolvido_em', label: 'Estado', render: (r: ApiIncidente) => r.resolvido_em ? (
-                <span className="badge bg-emerald-100 text-emerald-700">✓ Resolvido</span>
-              ) : <span className="badge bg-rose-100 text-rose-700">● Aberto</span> },
-            ]}
-          />
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-6">
-          <h3 className="mb-4 font-display text-lg font-semibold text-slate-900">Documentos</h3>
-          <DataTable
-            data={data.documentos || []}
-            columns={[
-              { key: 'id', label: 'ID', width: '50px', render: (r: ApiDocumento) => <span className="font-mono text-xs">#{r.id}</span> },
-              { key: 'titulo', label: 'Título', render: (r: ApiDocumento) => r.titulo },
-              { key: 'tipo', label: 'Tipo', render: (r: ApiDocumento) => r.tipo || '—' },
-              { key: 'submetido_em', label: 'Data', render: (r: ApiDocumento) => r.submetido_em ? new Date(r.submetido_em).toLocaleDateString('pt-PT') : '—' },
-            ]}
-          />
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-6">
-          <h3 className="mb-4 font-display text-lg font-semibold text-slate-900">Avaliações / Pedidos</h3>
-          <div className="mb-4">
-            <h4 className="text-sm font-semibold text-slate-700 mb-2">Avaliações de Conformidade</h4>
-            <DataTable
-              data={data.avaliacoes || []}
-              emptyText="Sem avaliações"
-              columns={[
-                { key: 'id', label: 'ID', width: '50px', render: (r: ApiAvaliacao) => <span className="font-mono text-xs">#{r.id}</span> },
-                { key: 'data_avaliacao', label: 'Data', render: (r: ApiAvaliacao) => r.data_avaliacao ? new Date(r.data_avaliacao).toLocaleDateString('pt-PT') : '—' },
-                { key: 'estado_conformidade_nome', label: 'Estado', render: (r: ApiAvaliacao) => (
-                  <span className={`badge ${conformidadeColor(r.estado_conformidade_nome)}`}>{r.estado_conformidade_nome || '—'}</span>
-                )},
-                { key: 'score', label: 'Score', render: (r: ApiAvaliacao) => r.score ?? '—' },
-              ]}
-            />
-          </div>
-          <div>
-            <h4 className="text-sm font-semibold text-slate-700 mb-2">Pedidos</h4>
-            <DataTable
-              data={data.pedidos || []}
-              emptyText="Sem pedidos"
-              columns={[
-                { key: 'id', label: 'ID', width: '50px', render: (r: ApiPedido) => <span className="font-mono text-xs">#{r.id}</span> },
-                { key: 'assunto', label: 'Assunto', render: (r: ApiPedido) => r.assunto },
-                { key: 'estado_nome', label: 'Estado', render: (r: ApiPedido) => r.estado_nome || '—' },
-                { key: 'criado_em', label: 'Data', render: (r: ApiPedido) => r.criado_em ? new Date(r.criado_em).toLocaleDateString('pt-PT') : '—' },
-              ]}
-            />
-          </div>
-        </div>
+      {detailTab === 'overview' && <div className="mgr-client-detail-v98__overview">
+        <section className="mgr-client-detail-v98__stats" aria-label="Indicadores do cliente">
+          <StatCard label="Incidentes abertos" value={openIncidents} icon={<TriangleAlert size={22} aria-hidden="true" />} color="bg-rose-50 text-rose-600" />
+          <StatCard label="Pontuação NIS2" value={latestEvaluation?.score ?? latestEvaluation?.pontuacao ?? '—'} icon={<CheckCircle2 size={22} aria-hidden="true" />} color="bg-emerald-50 text-emerald-600" />
+          <StatCard label="Ativos" value={res.numero_ativos ?? assets.length} icon={<MonitorCog size={22} aria-hidden="true" />} color="bg-blue-50 text-blue-600" />
+          <StatCard label="Pedidos em aberto" value={requests.filter((request) => !request.resolvido_em).length} icon={<MessageSquare size={22} aria-hidden="true" />} color="bg-amber-50 text-amber-600" />
+          <StatCard label="Classificação seg." value={latestEvaluation?.pontuacao ?? latestEvaluation?.score ?? '—'} icon={<ShieldCheck size={22} aria-hidden="true" />} color="bg-violet-50 text-violet-600" />
+        </section>
+        <section className="mgr-client-detail-v98__overview-grid">
+          <article className="mgr-client-detail-v98__panel"><h2>Informação da organização</h2><dl className="mgr-client-detail-v98__definition-list"><div><dt>Contacto</dt><dd>{c.email || '—'}</dd></div><div><dt>Telefone</dt><dd>{c.telefone || '—'}</dd></div><div><dt>Setor</dt><dd>{c.setor_atividade || '—'}</dd></div><div><dt>NIF</dt><dd>{c.nif || '—'}</dd></div></dl></article>
+          <article className="mgr-client-detail-v98__panel"><div className="mgr-client-detail-v98__panel-heading"><h2>Incidentes recentes</h2><button type="button" onClick={() => selectTab('incidents')}>Ver todos</button></div>{incidents.length ? <div className="mgr-client-detail-v98__incident-list">{incidents.slice(0, 4).map((incident) => <button type="button" key={incident.id} onClick={() => selectTab('incidents')}><TriangleAlert aria-hidden="true" /><span><strong>{incident.titulo}</strong><small>{formatDate(incident.detetado_em || incident.criado_em)}</small></span><span className={`badge ${severityColor(incident.severidade || incident.gravidade)}`}>{incident.severidade || incident.gravidade || '—'}</span></button>)}</div> : <p className="mgr-client-detail-v98__muted">Sem incidentes registados.</p>}</article>
+        </section>
       </div>}
+      {detailTab === 'nis2' && <section className="mgr-client-detail-v98__panel"><div className="mgr-client-detail-v98__panel-heading"><h2>Avaliações NIS2</h2><span className={`badge ${conformidadeColor(conformity)}`}>{conformity}</span></div><DataTable data={evaluations} emptyText="Sem avaliações NIS2 disponíveis." columns={[{ key: 'data_avaliacao', label: 'Data', render: (item) => formatDate(item.data_avaliacao) }, { key: 'estado_conformidade_nome', label: 'Estado', render: (item) => <span className={`badge ${conformidadeColor(item.estado_conformidade_nome)}`}>{item.estado_conformidade_nome || '—'}</span> }, { key: 'score', label: 'Pontuação', render: (item) => item.score ?? item.pontuacao ?? '—' }, { key: 'nivel_risco', label: 'Risco', render: (item) => item.nivel_risco || '—' }]} /></section>}
+      {detailTab === 'assets' && <AssetsWorkspace role="manager" clientId={Number(cid)} compact title="Ativos Tecnológicos" subtitle="Inventário associado a este cliente" onChanged={() => void refreshDetail()} />}
+      {detailTab === 'incidents' && <IncidentsWorkspace role="manager" clientId={Number(cid)} compact title="Incidentes de Segurança" subtitle="Incidentes associados a este cliente" onChanged={() => void refreshDetail()} />}
+      {detailTab === 'documents' && <section className="mgr-client-detail-v98__panel"><h2>Documentos</h2>{renderDocuments(documents, 'Sem documentos disponíveis para este cliente.')}</section>}
+      {detailTab === 'reports' && <section className="mgr-client-detail-v98__panel"><h2>Relatórios</h2>{renderDocuments(documents.filter((document) => `${document.tipo || ''} ${document.categoria || ''}`.toLowerCase().includes('relat')), 'Sem relatórios disponíveis para este cliente.')}</section>}
+      {detailTab === 'pentests' && <section className="mgr-client-detail-v98__panel"><h2>Testes de penetração</h2>{renderDocuments(documents.filter((document) => `${document.tipo || ''} ${document.categoria || ''}`.toLowerCase().includes('pentest')), 'Sem documentos de PenTest disponíveis para este cliente.')}</section>}
+      {detailTab === 'evidence' && tabEmpty('Evidências', 'A API atual não disponibiliza evidências associadas a este cliente.')}
+      {detailTab === 'requests' && <section className="mgr-client-detail-v98__panel"><h2>Pedidos</h2><DataTable data={requests} emptyText="Sem pedidos submetidos por este cliente." columns={[{ key: 'assunto', label: 'Assunto', render: (item) => item.assunto }, { key: 'estado_nome', label: 'Estado', render: (item) => item.estado_nome || item.estado_codigo || '—' }, { key: 'prioridade', label: 'Prioridade', render: (item) => item.prioridade || '—' }, { key: 'criado_em', label: 'Data', render: (item) => formatDate(item.criado_em) }]} /></section>}
+      {detailTab === 'communication' && tabEmpty('Comunicação', 'A comunicação segura para este cliente ainda não está disponível na API atual.')}
     </div>
   );
 }
 
 export function MgrIncidents({ setPage }: PageProps) {
-  return <IncidentsWorkspace role="manager" title="Incidentes de Segurança" subtitle="Incidentes dos clientes que gere" />;
+  return <div className="mgr-visual-page mgr-incidents-v98"><IncidentsWorkspace role="manager" title="Incidentes" subtitle="Incidentes dos clientes que gere" /></div>;
 }
 
 export function MgrDocuments() {
   const [data, setData] = useState<ApiDocumento[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [q, setQ] = useState('');
+  const [type, setType] = useState('');
 
   useEffect(() => {
     documentosApi()
@@ -713,34 +675,26 @@ export function MgrDocuments() {
       .finally(() => setLoading(false));
   }, []);
 
+  const types = Array.from(new Set(data.map((document) => document.tipo || document.categoria).filter((value): value is string => Boolean(value))));
+  const filtered = data.filter((document) => {
+    const value = q.trim().toLowerCase();
+    const matchesSearch = !value || `${document.titulo} ${document.cliente_nome || ''} ${document.nome_ficheiro_original || ''}`.toLowerCase().includes(value);
+    return matchesSearch && (!type || document.tipo === type || document.categoria === type);
+  });
+  const formatBytes = (bytes?: number | null) => {
+    if (!bytes) return '—';
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   return (
-    <div>
-      <PageHeader
-        title="Documentos"
-        subtitle={`${data.length} documentos armazenados`}
-        actions={<button className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">+ Submeter Documento</button>}
-      />
-      {loading ? <Loader /> : err ? <ErrorCard msg={err} /> : (
-        <DataTable
-          data={data}
-          columns={[
-            { key: 'id', label: 'ID', width: '50px', render: (r) => <span className="font-mono text-xs">#{r.id}</span> },
-            { key: 'titulo', label: 'Título', render: (r) => (
-              <div>
-                <div className="font-medium text-slate-900">{r.titulo}</div>
-                <div className="text-xs text-slate-500">Cliente: {r.cliente_nome || '—'}</div>
-              </div>
-            )},
-            { key: 'tipo', label: 'Tipo', render: (r) => <span className="badge bg-blue-50 text-blue-700">{r.tipo || '—'}</span> },
-            { key: 'formato', label: 'Formato', render: (r) => <span className="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded">{r.formato || '—'}</span> },
-            { key: 'tamanho_bytes', label: 'Tamanho', render: (r) => `${((r.tamanho_bytes || 0) / 1024).toFixed(1)} KB` },
-            { key: 'submetido_em', label: 'Submetido', render: (r) => r.submetido_em ? new Date(r.submetido_em).toLocaleDateString('pt-PT') : '—' },
-            { key: 'id', label: '', width: '80px', render: () => (
-              <button className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium hover:bg-slate-50">Download</button>
-            )},
-          ]}
-        />
-      )}
+    <div className="mgr-visual-page mgr-documents-v98">
+      <PageHeader title="Documentos" subtitle="Documentos dos clientes sob a sua gestão." />
+      {loading ? <Loader /> : err ? <ErrorCard msg={err} /> : <>
+        <section className="mgr-documents-v98__summary" aria-label="Resumo de documentos"><div><FileText aria-hidden="true" /><span><strong>{data.length}</strong>Documentos</span></div><div><Building2 aria-hidden="true" /><span><strong>{new Set(data.map((document) => document.cliente_id)).size}</strong>Clientes</span></div><div><FolderOpen aria-hidden="true" /><span><strong>{types.length}</strong>Tipos</span></div></section>
+        <section className="mgr-documents-v98__filters" aria-label="Pesquisa de documentos"><label><Search size={18} aria-hidden="true" /><input value={q} onChange={(event) => setQ(event.target.value)} placeholder="Pesquisar documentos..." /></label><select value={type} onChange={(event) => setType(event.target.value)} aria-label="Filtrar por tipo"><option value="">Todos os tipos</option>{types.map((item) => <option key={item} value={item}>{item}</option>)}</select><span>{filtered.length} resultado{filtered.length === 1 ? '' : 's'}</span></section>
+        {filtered.length === 0 ? <DataTable<ApiDocumento> data={[]} columns={[]} emptyText="Nenhum documento corresponde aos filtros." /> : <section className="mgr-documents-v98__list" aria-label="Documentos disponíveis">{filtered.map((document) => <article key={document.id} className="mgr-documents-v98__item"><span className="mgr-documents-v98__icon"><FileText size={22} aria-hidden="true" /></span><div><h2>{document.titulo}</h2><p>{document.cliente_nome || 'Cliente não indicado'}</p><div><span className="badge bg-blue-50 text-blue-700">{document.tipo || document.categoria || '—'}</span><span>{document.formato || document.tipo_mime || 'Formato não indicado'}</span><span>{formatBytes(document.tamanho_bytes)}</span></div></div><time dateTime={document.submetido_em || undefined}>{document.submetido_em ? new Intl.DateTimeFormat('pt-PT', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(document.submetido_em)) : '—'}</time></article>)}</section>}
+      </>}
     </div>
   );
 }
