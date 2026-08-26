@@ -186,15 +186,8 @@ export default function LoginPage({ setRole, setPage }: Props) {
               </button>
 
               <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4 text-xs text-blue-900">
-                <div className="font-semibold mb-1">Contas de demonstração:</div>
-                <div className="space-y-1 font-mono text-[11px]">
-                  <div>admin@ciberbox.local / Demo2026!</div>
-                  <div>colaborador@ciberbox.local / Demo2026!</div>
-                  <div>cliente1@ciberbox.local / Demo2026!</div>
-                </div>
-                <div className="mt-2 text-[10px] text-blue-700/80">
-                  Projeto de Bases de Dados — Daniel Teixeira, n.º 27645 · 2025/2026
-                </div>
+                <div className="font-semibold">Ambiente de demonstração</div>
+                <p className="mt-1 text-blue-700/80">Use as credenciais fornecidas pelo administrador.</p>
               </div>
             </form>
 
