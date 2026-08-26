@@ -121,7 +121,12 @@ async function replaceClientLinks({ userId, profileCode, clientIds, transaction 
       ativo: true,
     };
     if (current) {
-      await current.update(values, { transaction });
+      // A desativação em lote anterior não atualiza a instância já carregada.
+      // Reativar pela chave composta garante que a associação persiste na BD.
+      await UserClient.update(values, {
+        where: { utilizador_id: userId, cliente_id: clientId },
+        transaction,
+      });
     } else {
       await UserClient.create({
         utilizador_id: userId,

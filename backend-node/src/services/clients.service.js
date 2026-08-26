@@ -125,12 +125,28 @@ function managerIds(value) {
 }
 
 export async function clientIdsForUser(userId, { principalOnly = false } = {}) {
-  const { UserClient } = getModels();
+  const { UserClient, User, Client } = getModels();
   const links = await UserClient.findAll({
     where: { utilizador_id: userId, ativo: true, ...(principalOnly ? { principal: true } : {}) },
     attributes: ['cliente_id'],
+    include: [
+      {
+        model: User,
+        as: 'utilizador',
+        attributes: [],
+        where: { ativo: true },
+        required: true,
+      },
+      {
+        model: Client,
+        as: 'cliente',
+        attributes: [],
+        where: { ativo: true },
+        required: true,
+      },
+    ],
   });
-  return links.map((link) => String(link.cliente_id));
+  return [...new Set(links.map((link) => String(link.cliente_id)))];
 }
 
 export async function assertClientAccess(auth, clientId) {
