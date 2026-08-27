@@ -106,6 +106,99 @@ img, video, canvas, svg {
   background: #f8fafc;
 }
 
+/* Shared portal layout: allow the content column to shrink beside the sidebar.
+   Wide data stays scrollable inside its own table wrapper instead of widening the page. */
+.app-shell__main {
+  min-width: 0;
+}
+
+/* Admin data workspaces opt into cards below the table breakpoint. */
+.admin-workspace-page {
+  min-width: 0;
+}
+
+.admin-data-table__cards {
+  display: none;
+}
+
+@media (max-width: 639px) {
+  .admin-workspace-page__header {
+    align-items: stretch;
+  }
+
+  .admin-workspace-page__header > div:last-child {
+    width: 100%;
+  }
+
+  .admin-workspace-page__header > div:last-child > * {
+    flex: 1 1 auto;
+  }
+
+  .admin-workspace-page__header > div:last-child > .relative {
+    flex-basis: 100%;
+  }
+
+  .admin-workspace-page__header > div:last-child input {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .admin-data-table__table {
+    display: none;
+  }
+
+  .admin-data-table__cards {
+    display: grid;
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .admin-data-table__card {
+    display: grid;
+    gap: 0.625rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.875rem;
+    background: #ffffff;
+    padding: 0.875rem;
+  }
+
+  .admin-data-table__card--interactive {
+    cursor: pointer;
+  }
+
+  .admin-data-table__card--interactive:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+  }
+
+  .admin-data-table__field {
+    display: grid;
+    grid-template-columns: minmax(5.75rem, 0.65fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 0.75rem;
+  }
+
+  .admin-data-table__field > span {
+    color: #64748b;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    line-height: 1.25rem;
+    text-transform: uppercase;
+  }
+
+  .admin-data-table__field > div {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    text-align: right;
+  }
+
+  .admin-data-table__field > div > .flex {
+    justify-content: flex-end;
+    text-align: left;
+  }
+}
+
 /* Transition utilities */
 .transition-base {
   transition: all 0.2s ease;
@@ -6449,6 +6542,13 @@ input:focus, select:focus, textarea:focus {
   .manager-incidents-page__filters { grid-template-columns: minmax(16rem, 1fr) repeat(3, minmax(9rem, 1fr)); }
   .manager-incidents-page__search { grid-column: 1 / -1; margin-top: 0; }
   .manager-incidents-page__filter-action { justify-self: start; }
+}
+
+/* A desktop sidebar leaves roughly 768 px for the workspace at 1024 px.
+   Two filter columns retain readable controls without widening the portal. */
+@media (min-width: 768px) and (max-width: 1199.98px) {
+  .manager-incidents-page__filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .manager-incidents-page__filter-action { grid-column: 1 / -1; width: 100%; }
 }
 
 @media (max-width: 767.98px) {

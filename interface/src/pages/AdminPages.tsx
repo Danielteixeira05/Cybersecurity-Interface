@@ -67,12 +67,13 @@ function StatCard({ label, value, delta, icon, color }: {
 }
 
 function DataTable<T extends Record<string, any>>({
-  columns, data, onRowClick, emptyText = 'Sem dados',
+  columns, data, onRowClick, emptyText = 'Sem dados', mobileCards = false,
 }: {
   columns: { id?: string; key: keyof T; label: string; render?: (r: T) => React.ReactNode; width?: string }[];
   data: T[];
   onRowClick?: (r: T) => void;
   emptyText?: string;
+  mobileCards?: boolean;
 }) {
   if (!data || data.length === 0) {
     return (
@@ -83,9 +84,13 @@ function DataTable<T extends Record<string, any>>({
       </div>
     );
   }
+  const rowKey = (row: T, index: number) => String(row.id ?? index);
+  const renderCell = (row: T, column: typeof columns[number]) =>
+    column.render ? column.render(row) : (row[column.key] as any) ?? '-';
+
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="overflow-x-auto">
+    <div className={`overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm${mobileCards ? ' admin-data-table' : ''}`}>
+      <div className={mobileCards ? 'admin-data-table__table overflow-x-auto' : 'overflow-x-auto'}>
         <table className="w-full">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50/80">
@@ -104,13 +109,13 @@ function DataTable<T extends Record<string, any>>({
           <tbody className="divide-y divide-slate-100">
             {data.map((row, i) => (
               <tr
-                key={i}
+                key={rowKey(row, i)}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
                 className={`table-row-hover ${onRowClick ? 'cursor-pointer' : ''}`}
               >
                 {columns.map((c) => (
                   <td key={c.id ?? String(c.key)} className="whitespace-nowrap px-4 py-3.5 text-sm text-slate-700">
-                    {c.render ? c.render(row) : (row[c.key] as any) ?? '-'}
+                    {renderCell(row, c)}
                   </td>
                 ))}
               </tr>
@@ -118,13 +123,39 @@ function DataTable<T extends Record<string, any>>({
           </tbody>
         </table>
       </div>
+      {mobileCards && (
+        <div className="admin-data-table__cards">
+          {data.map((row, index) => (
+            <article
+              key={rowKey(row, index)}
+              className={onRowClick ? 'admin-data-table__card admin-data-table__card--interactive' : 'admin-data-table__card'}
+              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              onKeyDown={onRowClick ? (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  onRowClick(row);
+                }
+              } : undefined}
+              role={onRowClick ? 'button' : undefined}
+              tabIndex={onRowClick ? 0 : undefined}
+            >
+              {columns.map((column) => (
+                <div key={column.id ?? String(column.key)} className="admin-data-table__field">
+                  <span>{column.label}</span>
+                  <div>{renderCell(row, column)}</div>
+                </div>
+              ))}
+            </article>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: React.ReactNode }) {
+function PageHeader({ title, subtitle, actions, className = '' }: { title: string; subtitle?: string; actions?: React.ReactNode; className?: string }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <div className={`mb-6 flex flex-wrap items-end justify-between gap-4${className ? ` ${className}` : ''}`}>
       <div>
         <h1 className="font-display text-2xl font-bold text-slate-900 sm:text-3xl">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
@@ -437,10 +468,11 @@ export function AdminUsers({ setPage }: PageProps) {
   };
 
   return (
-    <div>
+    <div className="admin-workspace-page">
       <PageHeader
         title="Gestão de Utilizadores"
         subtitle={`${users.length} utilizadores registados na plataforma`}
+        className="admin-workspace-page__header"
         actions={
           <>
             <select
@@ -495,6 +527,7 @@ export function AdminUsers({ setPage }: PageProps) {
       {loading ? <Loader /> : err ? <ErrorCard msg={err} /> : (
         <DataTable
           data={filtered}
+          mobileCards
           columns={[
             { key: 'id', label: 'ID', width: '60px', render: (r) => <span className="font-mono text-xs text-slate-500">#{r.id}</span> },
             { key: 'nome', label: 'Nome', render: (r) => (
@@ -625,10 +658,11 @@ export function AdminClients({ setPage }: PageProps) {
   };
 
   return (
-    <div>
+    <div className="admin-workspace-page">
       <PageHeader
         title="Gestão de Clientes"
         subtitle={`${clients.length} clientes ativos na plataforma`}
+        className="admin-workspace-page__header"
         actions={
           <>
             <div className="relative">
@@ -672,6 +706,7 @@ export function AdminClients({ setPage }: PageProps) {
       {loading ? <Loader /> : err ? <ErrorCard msg={err} /> : (
         <DataTable
           data={filtered}
+          mobileCards
           onRowClick={(r) => {
             (session as any).set({ ...session.get(), cliente: { id: r.id, nome: r.nome } });
             setPage('admin-client-detail');

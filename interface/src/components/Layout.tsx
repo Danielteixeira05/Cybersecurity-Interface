@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { Page, UserRole } from '../types';
@@ -347,8 +347,21 @@ export function AppLayout({ role, page, setPage, setRole, children }: AppLayoutP
         : 'bg-emerald-500/20 text-emerald-200';
   const openIncidents = () => setPage(role === 'admin' ? 'admin-incidents' : role === 'manager' ? 'mgr-incidents' : 'cli-incidents');
 
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [page]);
+
+  useEffect(() => {
+    if (!sidebarOpen) return undefined;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSidebarOpen(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [sidebarOpen]);
+
   return (
-    <div className={`flex min-h-screen bg-slate-100${isManager ? ' mgr-shell' : ''}`}>
+    <div className={`flex min-h-screen min-w-0 bg-slate-100${isManager ? ' mgr-shell' : ''}`}>
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-30 bg-slate-900/40 lg:hidden"
@@ -357,7 +370,7 @@ export function AppLayout({ role, page, setPage, setRole, children }: AppLayoutP
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex h-dvh w-64 flex-col transform bg-gradient-to-b from-slate-900 via-slate-900 to-slate-800 text-white transition-transform ${isManager ? 'mgr-shell__sidebar ' : ''}lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex h-dvh min-h-screen w-64 flex-col overflow-hidden transform bg-gradient-to-b from-slate-900 via-slate-900 to-slate-800 text-white transition-transform ${isManager ? 'mgr-shell__sidebar ' : ''}lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -461,7 +474,7 @@ export function AppLayout({ role, page, setPage, setRole, children }: AppLayoutP
         </div>
       </aside>
 
-      <div className="flex min-h-screen flex-1 flex-col">
+      <div className="app-shell__main flex min-h-screen min-w-0 flex-1 flex-col">
         <header className={`sticky top-0 z-20 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4 sm:px-6${isManager ? ' mgr-shell__header' : ''}`}>
           <div className="flex items-center gap-3">
             <button
@@ -507,7 +520,7 @@ export function AppLayout({ role, page, setPage, setRole, children }: AppLayoutP
           </div>
         </header>
 
-        <main className={`flex-1 p-4 sm:p-6 lg:p-8${isManager ? ' mgr-shell__content' : ''}`}>{children}</main>
+        <main className={`min-w-0 flex-1 p-4 sm:p-6 lg:p-8${isManager ? ' mgr-shell__content' : ''}`}>{children}</main>
       </div>
     </div>
   );
