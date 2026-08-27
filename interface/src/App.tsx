@@ -162,7 +162,7 @@ export default function App() {
         if (!active || !response.autenticado || !response.role) return;
         setRole(response.role);
         const requestedPage = pageFromPathname(location.pathname);
-        if (location.pathname === '/' || requestedPage === 'login' || !pageAllowedForRole(requestedPage, response.role)) {
+        if (requestedPage === 'login' || !pageAllowedForRole(requestedPage, response.role)) {
           setPageState(defaultHomePageForRole(response.role));
           navigate(PAGE_PATHS[defaultHomePageForRole(response.role)]!, { replace: true });
           return;

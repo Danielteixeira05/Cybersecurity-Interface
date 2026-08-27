@@ -152,12 +152,10 @@ interface SideItem {
   icon: ReactNode;
 }
 
-function NotificationBell({ managerStyle, onOpenIncidents }: { managerStyle?: boolean; onOpenIncidents: () => void }) {
+function NotificationBell({ onOpenIncidents }: { onOpenIncidents: () => void }) {
   const { notifications, unreadCount, connected, markRead } = useRealtime();
   const [open, setOpen] = useState(false);
-  const buttonClass = managerStyle
-    ? 'mgr-shell__notification cursor-pointer hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500'
-    : 'relative inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500';
+  const buttonClass = 'app-shell__header-control focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500';
 
   return <div className="relative">
     <button type="button" className={buttonClass} onClick={() => setOpen((value) => !value)} aria-label={`Notificações${unreadCount ? ` (${unreadCount} não lidas)` : ''}`} aria-expanded={open}>
@@ -359,12 +357,12 @@ export function AppLayout({ role, page, setPage, setRole, onHome, children }: Ap
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-64 transform bg-gradient-to-b from-slate-900 via-slate-900 to-slate-800 text-white transition-transform ${isManager ? 'mgr-shell__sidebar ' : ''}lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex h-dvh w-64 flex-col transform bg-gradient-to-b from-slate-900 via-slate-900 to-slate-800 text-white transition-transform ${isManager ? 'mgr-shell__sidebar ' : ''}lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="flex h-16 items-center justify-between border-b border-white/10 px-5">
-          <button onClick={onHome} className="flex items-center gap-2">
+        <div className="flex h-16 shrink-0 items-center justify-between border-b border-white/10 px-5">
+          <button type="button" onClick={onHome} className="flex items-center gap-2" aria-label="CiberBoxSecur — Ir para a página inicial" title="Ir para a página inicial">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-violet-500">
               <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 text-white" stroke="currentColor" strokeWidth="2">
                 <path d="M12 2L3 7v6c0 5 3.8 9.4 9 10 5.2-.6 9-5 9-10V7l-9-5z" strokeLinejoin="round" />
@@ -397,7 +395,7 @@ export function AppLayout({ role, page, setPage, setRole, onHome, children }: Ap
           </div>
         )}
 
-        <nav className={`flex flex-col gap-0.5 overflow-y-auto p-3${isManager ? ' mgr-shell__nav' : ' h-[calc(100%-8rem)]'}`}>
+        <nav className={`flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto p-3${isManager ? ' mgr-shell__nav' : ''}`}>
           {items.map((it) => (
             <button
               key={it.key}
@@ -415,7 +413,7 @@ export function AppLayout({ role, page, setPage, setRole, onHome, children }: Ap
           ))}
         </nav>
 
-        <div className={`absolute bottom-0 left-0 right-0 border-t border-white/10 p-3${isManager ? ' mgr-shell__user-area' : ''}`}>
+        <div className={`shrink-0 border-t border-white/10 p-3${isManager ? ' mgr-shell__user-area' : ''}`}>
           <div className={`flex items-center gap-3 rounded-lg bg-white/5 p-3${isManager ? ' mgr-shell__user' : ''}`}>
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-500 text-sm font-semibold text-white">
               {(sess.utilizador?.nome || 'U').charAt(0).toUpperCase()}
@@ -492,14 +490,20 @@ export function AppLayout({ role, page, setPage, setRole, onHome, children }: Ap
           <div className={`flex items-center gap-3${isManager ? ' mgr-shell__header-actions' : ''}`}>
             {isManager ? (
               <>
-                <button type="button" onClick={onHome} className="mgr-shell__header-icon" aria-label="Página Principal" title="Página Principal">
+                <button type="button" onClick={onHome} className="app-shell__header-control" aria-label="Ir para a página inicial" title="Ir para a página inicial">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M3 10.5L12 3l9 7.5V21a1 1 0 01-1 1h-5v-7H9v7H4a1 1 0 01-1-1v-10.5Z" strokeLinejoin="round" /></svg>
                 </button>
-                <NotificationBell managerStyle onOpenIncidents={openIncidents} />
+                <NotificationBell onOpenIncidents={openIncidents} />
                 <span className="mgr-shell__header-avatar" aria-hidden="true">{(sess.utilizador?.nome || 'G').charAt(0).toUpperCase()}</span>
                 <span className="mgr-shell__header-name">{sess.utilizador?.nome || 'Gestor'}</span>
               </>
-            ) : <><NotificationBell onOpenIncidents={openIncidents} /><span className={`badge ${roleBadge}`}>{role}</span></>}
+            ) : <>
+              <button type="button" onClick={onHome} className="app-shell__header-control" aria-label="Ir para a página inicial" title="Ir para a página inicial">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M3 10.5L12 3l9 7.5V21a1 1 0 01-1 1h-5v-7H9v7H4a1 1 0 01-1-1v-10.5Z" strokeLinejoin="round" /></svg>
+              </button>
+              <NotificationBell onOpenIncidents={openIncidents} />
+              <span className={`badge ${roleBadge}`}>{role}</span>
+            </>}
           </div>
         </header>
 
