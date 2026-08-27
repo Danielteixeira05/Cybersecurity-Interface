@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import type { Page, UserRole } from '../types';
 import { session, logoutApi } from '../apiClient';
 import { useRealtime } from '../realtime';
@@ -142,7 +143,6 @@ interface AppLayoutProps {
   page: Page;
   setPage: (p: Page) => void;
   setRole: (r: UserRole) => void;
-  onHome: () => void;
   children?: React.ReactNode;
 }
 
@@ -331,7 +331,7 @@ const CLIENT_ITEMS: SideItem[] = [
   { key: 'cli-profile', label: 'Perfil', icon: ICON.profile },
 ];
 
-export function AppLayout({ role, page, setPage, setRole, onHome, children }: AppLayoutProps) {
+export function AppLayout({ role, page, setPage, setRole, children }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const sess = session.get();
   const isManager = role === 'manager';
@@ -362,7 +362,7 @@ export function AppLayout({ role, page, setPage, setRole, onHome, children }: Ap
         }`}
       >
         <div className="flex h-16 shrink-0 items-center justify-between border-b border-white/10 px-5">
-          <button type="button" onClick={onHome} className="flex items-center gap-2" aria-label="CiberBoxSecur — Ir para a página inicial" title="Ir para a página inicial">
+          <Link to="/" className="flex items-center gap-2" aria-label="CiberBoxSecur — Ir para a página inicial" title="Ir para a página inicial">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-violet-500">
               <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 text-white" stroke="currentColor" strokeWidth="2">
                 <path d="M12 2L3 7v6c0 5 3.8 9.4 9 10 5.2-.6 9-5 9-10V7l-9-5z" strokeLinejoin="round" />
@@ -371,7 +371,7 @@ export function AppLayout({ role, page, setPage, setRole, onHome, children }: Ap
             <span className="font-display text-lg font-bold">
               CiberBox<span className="text-blue-400">Secur</span>
             </span>
-          </button>
+          </Link>
           <button
             onClick={() => setSidebarOpen(false)}
             className="rounded p-1 text-slate-300 hover:bg-white/10 lg:hidden"
@@ -490,17 +490,17 @@ export function AppLayout({ role, page, setPage, setRole, onHome, children }: Ap
           <div className={`flex items-center gap-3${isManager ? ' mgr-shell__header-actions' : ''}`}>
             {isManager ? (
               <>
-                <button type="button" onClick={onHome} className="app-shell__header-control" aria-label="Ir para a página inicial" title="Ir para a página inicial">
+                <Link to="/" className="app-shell__header-control" aria-label="Ir para a página inicial" title="Ir para a página inicial">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M3 10.5L12 3l9 7.5V21a1 1 0 01-1 1h-5v-7H9v7H4a1 1 0 01-1-1v-10.5Z" strokeLinejoin="round" /></svg>
-                </button>
+                </Link>
                 <NotificationBell onOpenIncidents={openIncidents} />
                 <span className="mgr-shell__header-avatar" aria-hidden="true">{(sess.utilizador?.nome || 'G').charAt(0).toUpperCase()}</span>
                 <span className="mgr-shell__header-name">{sess.utilizador?.nome || 'Gestor'}</span>
               </>
             ) : <>
-              <button type="button" onClick={onHome} className="app-shell__header-control" aria-label="Ir para a página inicial" title="Ir para a página inicial">
+              <Link to="/" className="app-shell__header-control" aria-label="Ir para a página inicial" title="Ir para a página inicial">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M3 10.5L12 3l9 7.5V21a1 1 0 01-1 1h-5v-7H9v7H4a1 1 0 01-1-1v-10.5Z" strokeLinejoin="round" /></svg>
-              </button>
+              </Link>
               <NotificationBell onOpenIncidents={openIncidents} />
               <span className={`badge ${roleBadge}`}>{role}</span>
             </>}

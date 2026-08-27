@@ -246,7 +246,7 @@ export default function App() {
   // ── Authenticated Shell ─────────────────────────────────────────────────────
   return (
     <RealtimeProvider>
-    <AppLayout role={role} page={page} setPage={setPage} setRole={handleSetRoleNull} onHome={() => setPage('home')}>
+    <AppLayout role={role} page={page} setPage={setPage} setRole={handleSetRoleNull}>
       {/* ADMIN PAGES */}
       {page === 'admin-dashboard' && <AdminDashboard setPage={setPage} />}
       {page === 'admin-analytics' && <AdminAnalytics />}

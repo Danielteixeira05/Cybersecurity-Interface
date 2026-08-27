@@ -69,7 +69,7 @@ function StatCard({ label, value, delta, icon, color }: {
 function DataTable<T extends Record<string, any>>({
   columns, data, onRowClick, emptyText = 'Sem dados',
 }: {
-  columns: { key: keyof T; label: string; render?: (r: T) => React.ReactNode; width?: string }[];
+  columns: { id?: string; key: keyof T; label: string; render?: (r: T) => React.ReactNode; width?: string }[];
   data: T[];
   onRowClick?: (r: T) => void;
   emptyText?: string;
@@ -91,7 +91,7 @@ function DataTable<T extends Record<string, any>>({
             <tr className="border-b border-slate-200 bg-slate-50/80">
               {columns.map((c) => (
                 <th
-                  key={String(c.key)}
+                  key={c.id ?? String(c.key)}
                   scope="col"
                   className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500"
                   style={c.width ? { width: c.width } : undefined}
@@ -109,7 +109,7 @@ function DataTable<T extends Record<string, any>>({
                 className={`table-row-hover ${onRowClick ? 'cursor-pointer' : ''}`}
               >
                 {columns.map((c) => (
-                  <td key={String(c.key)} className="whitespace-nowrap px-4 py-3.5 text-sm text-slate-700">
+                  <td key={c.id ?? String(c.key)} className="whitespace-nowrap px-4 py-3.5 text-sm text-slate-700">
                     {c.render ? c.render(row) : (row[c.key] as any) ?? '-'}
                   </td>
                 ))}
@@ -706,7 +706,7 @@ export function AdminClients({ setPage }: PageProps) {
                 'bg-slate-100 text-slate-700';
               return <span className={`badge ${color}`}>{c || 'Sem dados'}</span>;
             }},
-            { key: 'id', label: 'Ações', width: '86px', render: (r) => <button type="button" onClick={(event) => { event.stopPropagation(); void openEdit(r); }} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">Editar</button> },
+            { id: 'actions', key: 'id', label: 'Ações', width: '86px', render: (r) => <button type="button" onClick={(event) => { event.stopPropagation(); void openEdit(r); }} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">Editar</button> },
           ]}
         />
       )}
