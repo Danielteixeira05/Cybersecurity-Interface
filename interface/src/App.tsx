@@ -59,14 +59,14 @@ const PAGE_PATHS: Partial<Record<Page, string>> = {
   'mgr-evidence': '/gestor/evidencias',
   'mgr-excel': '/gestor/importar-excel',
   'cli-dashboard': '/cliente',
-  'cli-workspace': '/cliente/espaco',
+  'cli-workspace': '/cliente/area-trabalho',
   'cli-documents': '/cliente/documentos',
   'cli-reports': '/cliente/relatorios',
   'cli-profile': '/cliente/perfil',
   'cli-assets': '/cliente/ativos',
   'cli-incidents': '/cliente/incidentes',
   'cli-nis2': '/cliente/nis2',
-  'cli-risk': '/cliente/riscos',
+  'cli-risk': '/cliente/analises',
   'cli-requests': '/cliente/pedidos',
   'cli-communication': '/cliente/comunicacao',
   'cli-pentests': '/cliente/pentests',
@@ -74,12 +74,19 @@ const PAGE_PATHS: Partial<Record<Page, string>> = {
 
 const PUBLIC_PAGE_KEYS = new Set<Page>(['home', 'about', 'mission', 'services', 'news', 'news-detail', 'contact', 'login']);
 
+// Os links antigos permanecem legíveis após refresh, mas a navegação da aplicação
+// passa a usar apenas as rotas canónicas apresentadas na sidebar Cliente.
+const LEGACY_CLIENT_PAGE_PATHS: Record<string, Page> = {
+  '/cliente/espaco': 'cli-workspace',
+  '/cliente/riscos': 'cli-risk',
+};
+
 function pageFromPathname(pathname: string): Page {
   const path = pathname.replace(/\/+$/, '') || '/';
   if (/^\/gestor\/clientes\/\d+$/.test(path)) return 'mgr-client-detail';
   if (/^\/noticias\/[^/]+$/.test(path)) return 'news-detail';
   const entry = Object.entries(PAGE_PATHS).find(([, value]) => value === path);
-  return (entry?.[0] as Page | undefined) ?? 'home';
+  return (entry?.[0] as Page | undefined) ?? LEGACY_CLIENT_PAGE_PATHS[path] ?? 'home';
 }
 
 function clientIdFromPathname(pathname: string): number | undefined {

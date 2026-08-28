@@ -44,6 +44,8 @@ export interface ApiCliente {
   numero_incidentes?: number;
   // Campos canónicos devolvidos pelo Django atual. Os aliases acima mantêm as páginas existentes compatíveis.
   estado_conformidade?: string | null;
+  nivel_risco?: string | null;
+  pontuacao?: number | null;
   total_ativos?: number;
   total_incidentes?: number;
 }
@@ -280,6 +282,20 @@ export interface ApiAvaliacao {
   score?: number | null;
   pontuacao?: number | null;
   observacoes?: string | null;
+  recomendacoes?: string | null;
+}
+
+export interface ApiClienteDetalhe {
+  cliente: ApiCliente | null;
+  contactos: ApiContactoCliente[];
+  responsavelSeguranca: ApiContactoCliente | null;
+  contactoPermanente: ApiContactoCliente | null;
+  gestores: Array<Pick<ApiUtilizador, 'id' | 'nome' | 'email'>>;
+  ativos: ApiAtivo[];
+  incidentes: ApiIncidente[];
+  documentos: ApiDocumento[];
+  avaliacoes: ApiAvaliacao[];
+  pedidos: ApiPedido[];
 }
 
 export interface ApiLoginResponse {
@@ -607,12 +623,16 @@ export function normaliseCliente(value: unknown): ApiCliente {
   const totalAtivos = numericValue(raw.total_ativos ?? raw.totalAtivos ?? raw.numero_ativos);
   const totalIncidentes = numericValue(raw.total_incidentes ?? raw.totalIncidentes ?? raw.numero_incidentes);
   const estadoConformidade = (raw.estado_conformidade ?? raw.estadoConformidade ?? raw.conformidade) as string | null | undefined;
+  const nivelRisco = (raw.nivel_risco ?? raw.nivelRisco) as string | null | undefined;
+  const pontuacao = numericValue(raw.pontuacao);
   return {
     ...(raw as unknown as ApiCliente),
     id: requiredNumber(raw.id, 'cliente.id'),
     nome: requiredString(raw.nome, 'cliente.nome'),
     estado_conformidade: estadoConformidade ?? null,
     conformidade: estadoConformidade ?? null,
+    nivel_risco: nivelRisco ?? null,
+    pontuacao: pontuacao ?? null,
     total_ativos: totalAtivos,
     numero_ativos: totalAtivos,
     total_incidentes: totalIncidentes,
@@ -702,6 +722,7 @@ export function normaliseAvaliacao(value: unknown): ApiAvaliacao {
     cliente_id: requiredNumber(raw.cliente_id, 'avaliacao.cliente_id'),
     pontuacao: score ?? null,
     score: score ?? null,
+    recomendacoes: typeof raw.recomendacoes === 'string' ? raw.recomendacoes : null,
   };
 }
 
@@ -762,15 +783,42 @@ export async function clientesApi(q?: string): Promise<ApiCliente[]> {
   const rows = Array.isArray(result) ? result : (asRecord(result).items as unknown);
   return Array.isArray(rows) ? rows.map(normaliseCliente) : [];
 }
-export async function clienteDetalheApi(id: number): Promise<any> {
+export async function clienteDetalheApi(id: number): Promise<ApiClienteDetalhe> {
   const result = asRecord(await apiFetch<unknown>(`/api/clients/${id}`));
+  const contact = (value: unknown): ApiContactoCliente | null => {
+    if (!value) return null;
+    const raw = asRecord(value);
+    return {
+      id: requiredNumber(raw.id, 'contacto.id'),
+      tipo: requiredString(raw.tipo, 'contacto.tipo') as ApiContactoCliente['tipo'],
+      nome: requiredString(raw.nome, 'contacto.nome'),
+      cargo: typeof raw.cargo === 'string' ? raw.cargo : null,
+      email: requiredString(raw.email, 'contacto.email'),
+      telefone: typeof raw.telefone === 'string' ? raw.telefone : null,
+      comunicado_cncs: raw.comunicado_cncs === true,
+      ativo: raw.ativo !== false,
+    };
+  };
+  const contactos = Array.isArray(result.contactos)
+    ? result.contactos.map(contact).filter((value): value is ApiContactoCliente => value !== null)
+    : [];
+  const gestores = Array.isArray(result.gestores)
+    ? result.gestores.map((value) => {
+      const raw = asRecord(value);
+      return { id: requiredNumber(raw.id, 'gestor.id'), nome: requiredString(raw.nome, 'gestor.nome'), email: requiredString(raw.email, 'gestor.email') };
+    })
+    : [];
   return {
-    ...result,
     cliente: result.cliente ? normaliseCliente(result.cliente) : null,
+    contactos,
+    responsavelSeguranca: contact(result.responsavelSeguranca),
+    contactoPermanente: contact(result.contactoPermanente),
+    gestores,
     ativos: Array.isArray(result.ativos) ? result.ativos.map(normaliseAtivo) : [],
     incidentes: Array.isArray(result.incidentes) ? result.incidentes.map(normaliseIncidente) : [],
     documentos: Array.isArray(result.documentos) ? result.documentos.map(normaliseDocumento) : [],
     avaliacoes: Array.isArray(result.avaliacoes) ? result.avaliacoes.map(normaliseAvaliacao) : [],
+    pedidos: Array.isArray(result.pedidos) ? result.pedidos as ApiPedido[] : [],
   };
 }
 export async function utilizadoresApi(perfil?: string): Promise<ApiUtilizador[]> {

@@ -318,23 +318,19 @@ const MANAGER_ITEMS: SideItem[] = [
 
 const CLIENT_ITEMS: SideItem[] = [
   { key: 'cli-dashboard', label: 'Dashboard', icon: ICON.dashboard },
-  { key: 'cli-workspace', label: 'Espaço', icon: ICON.workspace },
-  { key: 'cli-assets', label: 'Meus Ativos', icon: ICON.assets },
+  { key: 'cli-workspace', label: 'Área de Trabalho', icon: ICON.workspace },
+  { key: 'cli-risk', label: 'Análises & Gráficos', icon: ICON.analytics },
   { key: 'cli-incidents', label: 'Incidentes', icon: ICON.incidents },
-  { key: 'cli-documents', label: 'Documentos', icon: ICON.documents },
-  { key: 'cli-requests', label: 'Pedidos', icon: ICON.requests },
-  { key: 'cli-communication', label: 'Comunicação', icon: ICON.communication },
-  { key: 'cli-risk', label: 'Riscos', icon: ICON.risk },
-  { key: 'cli-nis2', label: 'NIS2', icon: ICON.nis2 },
+  { key: 'cli-documents', label: 'Os Meus Documentos', icon: ICON.documents },
   { key: 'cli-reports', label: 'Relatórios', icon: ICON.reports },
-  { key: 'cli-pentests', label: 'Pentests', icon: ICON.pentests },
-  { key: 'cli-profile', label: 'Perfil', icon: ICON.profile },
+  { key: 'cli-communication', label: 'Comunicação', icon: ICON.communication },
 ];
 
 export function AppLayout({ role, page, setPage, setRole, children }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const sess = session.get();
   const isManager = role === 'manager';
+  const isClient = role === 'client';
   const items =
     role === 'admin' ? ADMIN_ITEMS : role === 'manager' ? MANAGER_ITEMS : CLIENT_ITEMS;
   const title =
@@ -361,7 +357,7 @@ export function AppLayout({ role, page, setPage, setRole, children }: AppLayoutP
   }, [sidebarOpen]);
 
   return (
-    <div className={`flex min-h-screen min-w-0 bg-slate-100${isManager ? ' mgr-shell' : ''}`}>
+    <div className={`flex min-h-screen min-w-0 bg-slate-100${isManager ? ' mgr-shell' : ''}${isClient ? ' client-shell' : ''}`}>
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-30 bg-slate-900/40 lg:hidden"
@@ -475,7 +471,7 @@ export function AppLayout({ role, page, setPage, setRole, children }: AppLayoutP
       </aside>
 
       <div className="app-shell__main flex min-h-screen min-w-0 flex-1 flex-col">
-        <header className={`sticky top-0 z-20 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4 sm:px-6${isManager ? ' mgr-shell__header' : ''}`}>
+        <header className={`sticky top-0 z-20 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4 sm:px-6${isManager ? ' mgr-shell__header' : ''}${isClient ? ' client-shell__header' : ''}`}>
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(true)}
@@ -491,6 +487,8 @@ export function AppLayout({ role, page, setPage, setRole, children }: AppLayoutP
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M3 12h3l2-6 4 12 2-6h7" strokeLinecap="round" strokeLinejoin="round" /></svg>
                 Sistema operacional
               </div>
+            ) : isClient ? (
+              <div className="client-shell__context">Área Cliente</div>
             ) : (
               <div>
                 <div className="text-sm font-medium text-slate-500">{title}</div>
@@ -510,7 +508,14 @@ export function AppLayout({ role, page, setPage, setRole, children }: AppLayoutP
                 <span className="mgr-shell__header-avatar" aria-hidden="true">{(sess.utilizador?.nome || 'G').charAt(0).toUpperCase()}</span>
                 <span className="mgr-shell__header-name">{sess.utilizador?.nome || 'Gestor'}</span>
               </>
-            ) : <>
+            ) : isClient ? <>
+              <Link to="/" className="app-shell__header-control" aria-label="Ir para a página inicial" title="Ir para a página inicial">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M3 10.5L12 3l9 7.5V21a1 1 0 01-1 1h-5v-7H9v7H4a1 1 0 01-1-1v-10.5Z" strokeLinejoin="round" /></svg>
+              </Link>
+              <NotificationBell onOpenIncidents={openIncidents} />
+              <span className="client-shell__header-avatar" aria-hidden="true">{(sess.cliente?.nome || sess.utilizador?.nome || 'C').charAt(0).toUpperCase()}</span>
+              <span className="client-shell__header-name">{sess.cliente?.nome || sess.utilizador?.nome || 'Cliente'}</span>
+            </> : <>
               <Link to="/" className="app-shell__header-control" aria-label="Ir para a página inicial" title="Ir para a página inicial">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M3 10.5L12 3l9 7.5V21a1 1 0 01-1 1h-5v-7H9v7H4a1 1 0 01-1-1v-10.5Z" strokeLinejoin="round" /></svg>
               </Link>
@@ -520,7 +525,7 @@ export function AppLayout({ role, page, setPage, setRole, children }: AppLayoutP
           </div>
         </header>
 
-        <main className={`min-w-0 flex-1 p-4 sm:p-6 lg:p-8${isManager ? ' mgr-shell__content' : ''}`}>{children}</main>
+        <main className={`min-w-0 flex-1 p-4 sm:p-6 lg:p-8${isManager ? ' mgr-shell__content' : ''}${isClient ? ' client-shell__content' : ''}`}>{children}</main>
       </div>
     </div>
   );

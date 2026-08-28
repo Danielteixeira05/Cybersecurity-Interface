@@ -1,14 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
+import { ArrowRight, BellRing, ClipboardCheck, FileText, MessageSquare, ShieldCheck, TriangleAlert, UsersRound } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line,
 } from 'recharts';
 import type { Page } from '../types';
 import {
-  dashboardApi, ativosApi, incidentesApi, documentosApi,
-  pedidosApi, avaliacoesApi, session,
+  clienteDetalheApi, documentosApi, notificacoesApi, pedidosApi, avaliacoesApi, session,
   type ApiAtivo, type ApiIncidente, type ApiDocumento,
-  type ApiPedido, type ApiAvaliacao,
+  type ApiPedido, type ApiAvaliacao, type ApiClienteDetalhe, type ApiNotificacao,
 } from '../apiClient';
 import { AssetsWorkspace, IncidentsWorkspace } from '../components/OperationalResources';
 import { INCIDENT_CHANGED_EVENT } from '../realtime';
@@ -16,8 +17,6 @@ import { INCIDENT_CHANGED_EVENT } from '../realtime';
 interface PageProps {
   setPage: (p: Page) => void;
 }
-
-const PIE_COLORS = ['#2563eb', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899'];
 
 function Loader({ text = 'A carregar...' }: { text?: string }) {
   return (
@@ -145,13 +144,47 @@ function conformidadeColor(c: string | null | undefined) {
   return 'bg-slate-100 text-slate-700';
 }
 
+function formatDashboardDate(value?: string | null) {
+  if (!value) return '—';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
+}
+
+function isPentestDocument(document: ApiDocumento) {
+  return /pentest|teste de penetra/i.test(`${document.categoria || ''} ${document.tipo || ''}`);
+}
+
+function isCriticalAsset(asset: ApiAtivo) {
+  return /crit|alt/i.test(asset.criticidade || asset.criticalidade || '');
+}
+
+function DashboardMetric({ label, value, detail, icon, tone = 'blue', onClick }: {
+  label: string;
+  value: string | number;
+  detail: string;
+  icon: ReactNode;
+  tone?: 'blue' | 'violet' | 'rose' | 'amber' | 'green';
+  onClick?: () => void;
+}) {
+  const content = <>
+    <span className="client-dashboard-page__metric-icon" aria-hidden="true">{icon}</span>
+    <span className="client-dashboard-page__metric-arrow" aria-hidden="true"><ArrowRight size={16} /></span>
+    <strong>{value}</strong>
+    <span>{label}</span>
+    <small>{detail}</small>
+  </>;
+  return onClick
+    ? <button type="button" className={`client-dashboard-page__metric client-dashboard-page__metric--${tone}`} onClick={onClick}>{content}</button>
+    : <article className={`client-dashboard-page__metric client-dashboard-page__metric--${tone}`}>{content}</article>;
+}
+
 export function ClientDashboard({ setPage }: PageProps) {
   const sess = session.get();
+  const clientId = sess.cliente?.id;
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [resumo, setResumo] = useState<any>({});
-  const [ativos, setAtivos] = useState<ApiAtivo[]>([]);
-  const [incidentes, setIncidentes] = useState<ApiIncidente[]>([]);
+  const [detail, setDetail] = useState<ApiClienteDetalhe | null>(null);
+  const [notifications, setNotifications] = useState<ApiNotificacao[]>([]);
   const [refreshToken, setRefreshToken] = useState(0);
 
   useEffect(() => {
@@ -161,126 +194,162 @@ export function ClientDashboard({ setPage }: PageProps) {
   }, []);
 
   useEffect(() => {
-    Promise.all([
-      dashboardApi() as Promise<any>,
-      ativosApi(),
-      incidentesApi(),
-    ])
-      .then(([d, a, i]) => {
-        setResumo(d || {});
-        setAtivos(a || []);
-        setIncidentes(i || []);
+    if (!clientId) {
+      setErr('A sessão não tem uma organização associada.');
+      setLoading(false);
+      return undefined;
+    }
+    let active = true;
+    setLoading(true);
+    setErr(null);
+    Promise.all([clienteDetalheApi(clientId), notificacoesApi(8)])
+      .then(([nextDetail, nextNotifications]) => {
+        if (!active) return;
+        setDetail(nextDetail);
+        setNotifications(nextNotifications.filter((notification) => notification.cliente_id === clientId));
       })
-      .catch((e) => setErr(e?.message || 'Erro'))
-      .finally(() => setLoading(false));
-  }, [refreshToken]);
+      .catch((cause) => {
+        if (active) setErr(cause?.message || 'Não foi possível carregar o Dashboard.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => { active = false; };
+  }, [clientId, refreshToken]);
 
-  const criticidade = [
-    { t: 'Alta', n: ativos.filter(a => (a.criticalidade || '').toLowerCase().includes('alt') || (a.criticalidade || '').toLowerCase().includes('crit')).length, c: '#ef4444' },
-    { t: 'Média', n: ativos.filter(a => (a.criticalidade || '').toLowerCase().includes('med')).length, c: '#f59e0b' },
-    { t: 'Baixa', n: ativos.filter(a => (a.criticalidade || '').toLowerCase().includes('baix')).length, c: '#10b981' },
+  const dashboard = useMemo(() => {
+    const client = detail?.cliente;
+    const assets = detail?.ativos ?? [];
+    const incidents = detail?.incidentes ?? [];
+    const documents = detail?.documentos ?? [];
+    const assessments = detail?.avaliacoes ?? [];
+    const openIncidents = incidents.filter((incident) => incident.estado === 'ABERTO').length;
+    const pentestDocuments = documents.filter(isPentestDocument);
+    const recommendations = [
+      ...assessments.filter((assessment) => assessment.recomendacoes).map((assessment) => ({
+        id: `assessment-${assessment.id}`,
+        source: 'Avaliação de risco',
+        priority: assessment.nivel_risco || 'Sem prioridade indicada',
+        text: assessment.recomendacoes!,
+      })),
+      ...incidents.filter((incident) => incident.recomendacoes).map((incident) => ({
+        id: `incident-${incident.id}`,
+        source: incident.codigo || `Incidente #${incident.id}`,
+        priority: incident.gravidade || incident.severidade || 'Sem prioridade indicada',
+        text: incident.recomendacoes!,
+      })),
+    ];
+    return { client, assets, incidents, documents, assessments, openIncidents, pentestDocuments, recommendations };
+  }, [detail]);
+
+  if (loading) return <Loader text="A carregar o Dashboard da organização..." />;
+  if (err || !detail || !dashboard.client) return <ErrorCard msg={err || 'Organização não encontrada.'} />;
+
+  const securityScore = dashboard.client.pontuacao;
+  const scoreLabel = securityScore === null || securityScore === undefined ? '—' : securityScore;
+  const classification = dashboard.client.nivel_risco || 'Sem avaliação';
+  const nIS2State = dashboard.client.estado_conformidade || 'Sem dados disponíveis';
+  const team = [
+    ...detail.gestores.map((manager) => ({ id: `manager-${manager.id}`, role: 'Gestor associado', name: manager.nome, email: manager.email, initial: manager.nome.charAt(0) })),
+    ...detail.contactos.map((contact) => ({
+      id: `contact-${contact.id}`,
+      role: contact.tipo === 'RESPONSAVEL_SEGURANCA' ? 'Responsável de Segurança' : contact.tipo === 'CONTACTO_PERMANENTE' ? 'Contacto Permanente' : contact.cargo || 'Contacto',
+      name: contact.nome,
+      email: contact.email,
+      initial: contact.nome.charAt(0),
+    })),
   ];
 
-  if (loading) return <Loader />;
-  if (err) return <ErrorCard msg={err} />;
-
-  const clienteNome = sess.cliente?.nome || 'Cliente';
-  const abertos = incidentes.filter((incidente) => incidente.estado === 'ABERTO').length;
-  const hasCriticidade = criticidade.some((item) => item.n > 0);
-
   return (
-    <div>
-      <PageHeader
-        title={`Bem-vindo, ${clienteNome}`}
-        subtitle="Painel de controlo da sua segurança e conformidade"
-      />
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
-        <StatCard label="Meus Ativos" value={ativos.length} icon="💻" color="bg-blue-50" />
-        <StatCard label="Incidentes Abertos" value={abertos} icon="🚨" color="bg-rose-50" />
-        <StatCard label="Conformidade NIS2" value={resumo.conformidade_estado || '—'} icon="🛡️" color="bg-emerald-50" />
-        <StatCard label="Score Risco" value={resumo.score_risco ?? '—'} icon="⭐" color="bg-amber-50" />
-      </div>
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 lg:col-span-2">
-          <h3 className="mb-4 font-display text-lg font-semibold text-slate-900">Evolução (6 meses)</h3>
-          <div className="flex h-72 items-center justify-center text-center text-sm text-slate-500">
-            Sem série histórica disponível.
-          </div>
+    <div className="client-dashboard-page">
+      <header className="client-dashboard-page__header">
+        <div>
+          <h1>Dashboard</h1>
+          <p>{dashboard.client.nome} <span aria-hidden="true">·</span> {formatDashboardDate(new Date().toISOString())}</p>
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-6">
-          <h3 className="mb-4 font-display text-lg font-semibold text-slate-900">Ativos por Criticidade</h3>
-          {hasCriticidade ? (
-            <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={criticidade.filter((item) => item.n > 0)}
-                    dataKey="n"
-                    nameKey="t"
-                    outerRadius={95}
-                    label={(p) => {
-                      const item = p.payload as { t?: string; n?: number } | undefined;
-                      return `${item?.t ?? ''}: ${item?.n ?? p.value ?? ''}`;
-                    }}
-                  >
-                    {criticidade.filter((item) => item.n > 0).map((item) => <Cell key={item.t} fill={item.c} />)}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          ) : <div className="flex h-72 items-center justify-center text-center text-sm text-slate-500">Sem ativos classificados disponíveis.</div>}
-        </div>
-      </div>
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6">
-          <div className="mb-4 flex justify-between items-center">
-            <h3 className="font-display text-lg font-semibold text-slate-900">Últimos Incidentes</h3>
-            <button onClick={() => setPage('cli-incidents')} className="text-xs text-blue-600 hover:underline">Ver todos →</button>
+        <button type="button" onClick={() => setPage('cli-workspace')} className="client-dashboard-page__workspace-link">
+          Área de Trabalho <ArrowRight size={17} aria-hidden="true" />
+        </button>
+      </header>
+
+      <section className="client-dashboard-page__summary" aria-label="Resumo de segurança">
+        <article className="client-dashboard-page__score-card">
+          <span className="client-dashboard-page__eyebrow">Score de Segurança</span>
+          <div className={`client-dashboard-page__score${securityScore === null || securityScore === undefined ? ' is-empty' : ''}`}>
+            <strong>{scoreLabel}</strong>
+            <span>{securityScore === null || securityScore === undefined ? 'Sem avaliação' : 'Avaliação atual'}</span>
           </div>
-          <DataTable
-            data={incidentes.slice(0, 5)}
-            emptyText="Sem incidentes registados"
-            columns={[
-              { key: 'codigo', label: 'Ref.', width: '70px', render: (r) => <span className="font-mono text-xs">{r.codigo || `#${r.id}`}</span> },
-              { key: 'titulo', label: 'Incidente', render: (r) => (
-                <div>
-                  <div className="font-medium text-slate-900">{r.titulo}</div>
-                  <div className="text-xs text-slate-500">{r.detetado_em ? new Date(r.detetado_em).toLocaleDateString('pt-PT') : '—'}</div>
-                </div>
-              )},
-              { key: 'severidade', label: 'Sev.', render: (r) => <span className={`badge ${severityColor(r.severidade)}`}>{r.severidade || '—'}</span> },
-              { key: 'estado', label: 'Estado', render: (r) => <span className={`badge ${r.estado === 'ABERTO' ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>{r.estado || '—'}</span> },
-            ]}
-          />
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-6">
-          <div className="mb-4 flex justify-between items-center">
-            <h3 className="font-display text-lg font-semibold text-slate-900">Atalhos Rápidos</h3>
+          <div className="client-dashboard-page__classification">
+            <span>Classificação</span>
+            <strong>{classification}</strong>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { p: 'cli-assets', l: 'Meus Ativos', i: '💻', c: 'from-blue-500 to-cyan-500' },
-              { p: 'cli-incidents', l: 'Incidentes', i: '🚨', c: 'from-rose-500 to-pink-500' },
-              { p: 'cli-documents', l: 'Documentos', i: '📄', c: 'from-violet-500 to-purple-500' },
-              { p: 'cli-requests', l: 'Pedidos', i: '📨', c: 'from-amber-500 to-orange-500' },
-              { p: 'cli-risk', l: 'Riscos', i: '⚠️', c: 'from-rose-500 to-amber-500' },
-              { p: 'cli-nis2', l: 'NIS2', i: '🛡️', c: 'from-emerald-500 to-teal-500' },
-              { p: 'cli-reports', l: 'Relatórios', i: '📈', c: 'from-indigo-500 to-blue-500' },
-              { p: 'cli-communication', l: 'Contacto', i: '💬', c: 'from-sky-500 to-blue-500' },
-            ].map(x => (
-              <button
-                key={x.p}
-                onClick={() => setPage(x.p as Page)}
-                className="rounded-xl border border-slate-200 bg-white hover:bg-slate-50 p-4 text-left transition group"
-              >
-                <div className={`h-10 w-10 rounded-lg bg-gradient-to-br ${x.c} flex items-center justify-center text-lg mb-2 group-hover:scale-110 transition`}>{x.i}</div>
-                <div className="font-semibold text-sm text-slate-800">{x.l}</div>
-              </button>
-            ))}
-          </div>
+          <dl className="client-dashboard-page__score-indicators">
+            <div><dt>Ativos críticos</dt><dd>{dashboard.assets.filter(isCriticalAsset).length}</dd></div>
+            <div><dt>Incidentes abertos</dt><dd>{dashboard.openIncidents}</dd></div>
+            <div><dt>Documentos ativos</dt><dd>{dashboard.documents.length}</dd></div>
+            <div><dt>Conformidade NIS2</dt><dd title={nIS2State}>{nIS2State}</dd></div>
+          </dl>
+        </article>
+        <div className="client-dashboard-page__metrics" aria-label="Indicadores da organização">
+          <DashboardMetric label="Documentos" value={dashboard.documents.length} detail={dashboard.documents.length ? 'Registos autorizados' : 'Sem documentos disponíveis'} icon={<FileText size={20} />} onClick={() => setPage('cli-documents')} />
+          <DashboardMetric label="Findings totais" value="—" detail="Sem fonte de findings" icon={<ClipboardCheck size={20} />} tone="violet" />
+          <DashboardMetric label="Findings críticos" value="—" detail="Sem fonte de findings" icon={<TriangleAlert size={20} />} tone="rose" />
+          <DashboardMetric label="Pentests" value={dashboard.pentestDocuments.length} detail="Documentos classificados como Pentest" icon={<ShieldCheck size={20} />} tone="blue" onClick={() => setPage('cli-workspace')} />
+          <DashboardMetric label="Incidentes" value={dashboard.incidents.length} detail={`${dashboard.openIncidents} abertos`} icon={<TriangleAlert size={20} />} tone="amber" onClick={() => setPage('cli-incidents')} />
+          <DashboardMetric label="Score NIS2" value="—" detail={nIS2State} icon={<ShieldCheck size={20} />} tone="green" onClick={() => setPage('cli-reports')} />
         </div>
-      </div>
+      </section>
+
+      <section className="client-dashboard-page__insight-grid">
+        <article className="client-dashboard-page__panel client-dashboard-page__team">
+          <header><UsersRound size={20} aria-hidden="true" /><h2>Equipa de Segurança</h2></header>
+          {team.length ? <ul>{team.map((member) => <li key={member.id}>
+            <span className="client-dashboard-page__avatar" aria-hidden="true">{member.initial.toUpperCase()}</span>
+            <span><strong>{member.name}</strong><small>{member.role}</small><a href={`mailto:${member.email}`}>{member.email}</a></span>
+          </li>)}</ul> : <p className="client-dashboard-page__empty-copy">Sem contactos de segurança disponíveis.</p>}
+          <button type="button" onClick={() => setPage('cli-communication')} className="client-dashboard-page__text-link"><MessageSquare size={16} aria-hidden="true" /> Ir para Comunicação</button>
+        </article>
+        <article className="client-dashboard-page__panel client-dashboard-page__recommendations">
+          <header><ClipboardCheck size={20} aria-hidden="true" /><div><h2>Recomendações</h2><p>Ações pendentes identificadas</p></div></header>
+          {dashboard.recommendations.length ? <ul>{dashboard.recommendations.slice(0, 4).map((recommendation) => <li key={recommendation.id}>
+            <span className="client-dashboard-page__recommendation-priority">{recommendation.priority}</span>
+            <span><strong>{recommendation.source}</strong><p>{recommendation.text}</p></span>
+          </li>)}</ul> : <p className="client-dashboard-page__empty-copy">Não existem recomendações pendentes.</p>}
+        </article>
+      </section>
+
+      <section className="client-dashboard-page__lists-grid">
+        <article className="client-dashboard-page__panel client-dashboard-page__record-list">
+          <header><FileText size={20} aria-hidden="true" /><h2>Documentos Recentes</h2><button type="button" onClick={() => setPage('cli-documents')}>Ver todos <ArrowRight size={15} aria-hidden="true" /></button></header>
+          {dashboard.documents.length ? <ul>{dashboard.documents.slice(0, 4).map((document) => <li key={document.id}><FileText size={17} aria-hidden="true" /><span><strong title={document.titulo}>{document.titulo}</strong><small>{document.tipo || document.categoria || 'Tipo não indicado'} <span aria-hidden="true">·</span> {formatDashboardDate(document.submetido_em)}</small></span><em>Ativo</em></li>)}</ul> : <p className="client-dashboard-page__empty-copy">Sem documentos disponíveis.</p>}
+        </article>
+        <article className="client-dashboard-page__panel client-dashboard-page__record-list">
+          <header><TriangleAlert size={20} aria-hidden="true" /><h2>Incidentes Recentes</h2><button type="button" onClick={() => setPage('cli-incidents')}>Ver todos <ArrowRight size={15} aria-hidden="true" /></button></header>
+          {dashboard.incidents.length ? <ul>{dashboard.incidents.slice(0, 4).map((incident) => <li key={incident.id}><span className={`client-dashboard-page__severity-dot client-dashboard-page__severity-dot--${(incident.gravidade || incident.severidade || '').toLowerCase()}`} aria-hidden="true" /><span><strong title={incident.titulo}>{incident.titulo}</strong><small>{incident.codigo || `#${incident.id}`} <span aria-hidden="true">·</span> {formatDashboardDate(incident.data_hora_incidente || incident.detetado_em)}</small></span><em>{incident.gravidade || incident.severidade || '—'}</em></li>)}</ul> : <p className="client-dashboard-page__empty-copy">Sem incidentes registados.</p>}
+        </article>
+        <article className="client-dashboard-page__panel client-dashboard-page__record-list">
+          <header><BellRing size={20} aria-hidden="true" /><h2>Atividade Recente</h2></header>
+          {notifications.length ? <ul>{notifications.slice(0, 4).map((notification) => <li key={notification.id}><BellRing size={17} aria-hidden="true" /><span><strong title={notification.titulo}>{notification.titulo}</strong><small>{formatDashboardDate(notification.criado_em)}</small></span></li>)}</ul> : <p className="client-dashboard-page__empty-copy">Sem atividade recente disponível.</p>}
+        </article>
+      </section>
+
+      <button type="button" onClick={() => setPage('cli-communication')} className="client-dashboard-page__communication">
+        <span><MessageSquare size={24} aria-hidden="true" /></span>
+        <span><strong>Comunicação com o Gestor</strong><small>Sem mensagens recentes</small></span>
+        <ArrowRight size={20} aria-hidden="true" />
+      </button>
+
+      <section className="client-dashboard-page__bottom-grid">
+        <article className="client-dashboard-page__panel client-dashboard-page__nis2">
+          <header><ShieldCheck size={20} aria-hidden="true" /><div><h2>Estado NIS2</h2><p>Avaliação de conformidade atual</p></div></header>
+          {dashboard.assessments[0] ? <dl><div><dt>Estado</dt><dd>{dashboard.client.estado_conformidade || '—'}</dd></div><div><dt>Risco</dt><dd>{dashboard.client.nivel_risco || '—'}</dd></div><div><dt>Pontuação</dt><dd>{dashboard.client.pontuacao ?? '—'}</dd></div><div><dt>Data</dt><dd>{formatDashboardDate(dashboard.assessments[0].data_avaliacao)}</dd></div></dl> : <p className="client-dashboard-page__empty-copy">Sem avaliação NIS2 disponível.</p>}
+          <button type="button" onClick={() => setPage('cli-reports')} className="client-dashboard-page__text-link">Ver relatórios <ArrowRight size={16} aria-hidden="true" /></button>
+        </article>
+        <article className="client-dashboard-page__panel client-dashboard-page__pentests">
+          <header><ShieldCheck size={20} aria-hidden="true" /><h2>Pentests</h2></header>
+          {dashboard.pentestDocuments.length ? <ul>{dashboard.pentestDocuments.slice(0, 3).map((document) => <li key={document.id}><span><strong title={document.titulo}>{document.titulo}</strong><small>{formatDashboardDate(document.submetido_em)}</small></span></li>)}</ul> : <p className="client-dashboard-page__empty-copy">Sem pentests registados.</p>}
+        </article>
+      </section>
     </div>
   );
 }
@@ -288,11 +357,11 @@ export function ClientDashboard({ setPage }: PageProps) {
 export function ClientWorkspace({ setPage }: PageProps) {
   return (
     <div>
-      <PageHeader title="Espaço de Trabalho" subtitle="Aceda a todos os recursos da sua conta" />
+      <PageHeader title="Área de Trabalho" subtitle="Aceda aos recursos disponíveis para a sua organização" />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {[
           { p: 'cli-assets', t: 'Gestão de Ativos', d: 'Inventário dos seus sistemas e dispositivos', i: '💻', c: 'from-blue-500 to-cyan-500' },
-          { p: 'cli-incidents', t: 'Incidentes', d: 'Reportar e acompanhar incidentes de segurança', i: '🚨', c: 'from-rose-500 to-pink-500' },
+          { p: 'cli-incidents', t: 'Incidentes', d: 'Consulte os incidentes de segurança da sua organização', i: '🚨', c: 'from-rose-500 to-pink-500' },
           { p: 'cli-documents', t: 'Documentos', d: 'Submeter e descarregar documentos da sua conta', i: '📄', c: 'from-violet-500 to-purple-500' },
           { p: 'cli-requests', t: 'Pedidos / Suporte', d: 'Abrir e acompanhar pedidos de suporte', i: '📨', c: 'from-amber-500 to-orange-500' },
           { p: 'cli-nis2', t: 'Conformidade NIS2', d: 'Ver o estado de conformidade com a diretiva', i: '🛡️', c: 'from-emerald-500 to-teal-500' },
