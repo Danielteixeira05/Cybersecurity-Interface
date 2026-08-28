@@ -1,8 +1,9 @@
 import { Op } from 'sequelize';
+import { env } from '../config/env.js';
 import { getModels } from '../models/index.js';
 import { httpError } from '../middleware/errors.js';
 import { recordAudit } from './audit-log.service.js';
-import { hashPassword } from './passwords.js';
+import { generateTemporaryPassword, hashPassword } from './passwords.js';
 
 const CREATABLE_PROFILES = new Set(['ADMINISTRADOR', 'COLABORADOR', 'CLIENTE']);
 
@@ -71,10 +72,10 @@ async function getProfile(code) {
   return profile;
 }
 
-async function assertClientsExist(clientIds) {
+async function assertClientsExist(clientIds, transaction) {
   if (clientIds.length === 0) return;
   const { Client } = getModels();
-  const count = await Client.count({ where: { id: clientIds, ativo: true } });
+  const count = await Client.count({ where: { id: clientIds, ativo: true }, transaction });
   if (count !== clientIds.length) throw httpError(400, 'Um ou mais clientes não existem ou estão inativos.');
 }
 
@@ -88,7 +89,7 @@ async function validateClientAssociation(profileCode, clientIds, userId = null, 
   if (profileCode === 'COLABORADOR' && clientIds.length === 0) {
     throw httpError(400, 'Um Gestor tem de ter pelo menos um cliente associado.');
   }
-  await assertClientsExist(clientIds);
+  await assertClientsExist(clientIds, transaction);
 
   // A restrição SQL existente permite apenas um contacto principal por
   // organização. Esse papel é reservado à conta Cliente; os Gestores nunca
@@ -163,25 +164,39 @@ export async function getUser(id) {
 }
 
 export async function createUser(input, actorId) {
+  if (env.readOnlyMode) throw httpError(403, 'A criação de utilizadores está desativada em modo de leitura.');
   const profileCode = cleanText(input.perfil_codigo, 20, { required: true }).toUpperCase();
   if (!CREATABLE_PROFILES.has(profileCode)) throw httpError(400, 'Perfil inválido.');
   const clientIds = deduplicatedClientIds(input.clientes_ids ?? (input.cliente_id ? [input.cliente_id] : []));
-  const password = typeof input.password === 'string' ? input.password : '';
-  if (password.length < 12) throw httpError(400, 'A password tem de ter pelo menos 12 caracteres.');
+  if (input.ativo !== undefined && input.ativo !== true) {
+    throw httpError(400, 'As novas contas têm de ser criadas ativas.');
+  }
+  if (profileCode === 'ADMINISTRADOR' && input.confirmar_admin !== true) {
+    throw httpError(400, 'Confirme a criação da conta de Administrador.');
+  }
 
   const payload = {
     nome: cleanText(input.nome, 120, { required: true }),
     email: validEmail(input.email),
     telefone: cleanText(input.telefone, 30) || null,
     nif: cleanText(input.nif, 9) || null,
-    password_hash: await hashPassword(password),
   };
   const profile = await getProfile(profileCode);
   const { sequelize, User } = getModels();
+  let temporaryPassword;
   const id = await sequelize.transaction(async (transaction) => {
     await validateClientAssociation(profileCode, clientIds, null, transaction);
+    const existing = await User.findOne({
+      where: { email: { [Op.iLike]: payload.email } },
+      attributes: ['id'],
+      transaction,
+    });
+    if (existing) throw httpError(409, 'Já existe uma conta registada com este email.');
+
+    temporaryPassword = generateTemporaryPassword();
     const user = await User.create({
       ...payload,
+      password_hash: await hashPassword(temporaryPassword),
       perfil_id: profile.id,
       ativo: true,
       criado_em: new Date(),
@@ -197,7 +212,7 @@ export async function createUser(input, actorId) {
     }, transaction);
     return user.id;
   });
-  return getUser(id);
+  return { user: await getUser(id), temporaryPassword };
 }
 
 export async function updateUser(id, input, actorId) {

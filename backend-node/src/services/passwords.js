@@ -1,6 +1,13 @@
 import crypto from 'node:crypto';
 import bcrypt from 'bcrypt';
 
+const PASSWORD_SETS = Object.freeze([
+  'ABCDEFGHJKLMNPQRSTUVWXYZ',
+  'abcdefghijkmnopqrstuvwxyz',
+  '23456789',
+  '!@#$%^&*_-+=',
+]);
+
 function timingSafeBase64Equal(expected, actual) {
   const expectedBuffer = Buffer.from(expected, 'base64');
   const actualBuffer = Buffer.from(actual, 'base64');
@@ -26,4 +33,27 @@ export async function hashPassword(plainPassword) {
     throw new Error('A password tem de ter pelo menos 12 caracteres.');
   }
   return bcrypt.hash(plainPassword, 12);
+}
+
+/**
+ * Gera uma password temporária apenas em memória para a resposta de criação.
+ * Cada conjunto obrigatório contribui com pelo menos um carácter e a seleção
+ * usa exclusivamente primitivas criptograficamente seguras do Node.
+ */
+export function generateTemporaryPassword(length = 16) {
+  if (!Number.isSafeInteger(length) || length < 12) {
+    throw new Error('O tamanho da password temporária tem de ser pelo menos 12 caracteres.');
+  }
+
+  const alphabet = PASSWORD_SETS.join('');
+  const characters = PASSWORD_SETS.map((set) => set[crypto.randomInt(set.length)]);
+  while (characters.length < length) {
+    characters.push(alphabet[crypto.randomInt(alphabet.length)]);
+  }
+
+  for (let index = characters.length - 1; index > 0; index -= 1) {
+    const swapIndex = crypto.randomInt(index + 1);
+    [characters[index], characters[swapIndex]] = [characters[swapIndex], characters[index]];
+  }
+  return characters.join('');
 }

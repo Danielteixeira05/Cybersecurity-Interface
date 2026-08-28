@@ -64,12 +64,24 @@ export interface CriarUtilizadorPayload {
   email: string;
   telefone?: string | null;
   nif?: string | null;
-  password: string;
   perfil_codigo: PerfilCodigo;
   clientes_ids?: number[];
+  ativo?: true;
+  confirmar_admin?: boolean;
 }
 
-export interface AtualizarUtilizadorPayload extends Partial<Omit<CriarUtilizadorPayload, 'perfil_codigo'>> {
+export interface CriarUtilizadorResposta {
+  user: ApiUtilizador;
+  temporaryPassword: string;
+}
+
+export interface AtualizarUtilizadorPayload {
+  nome?: string;
+  email?: string;
+  telefone?: string | null;
+  nif?: string | null;
+  password?: string;
+  clientes_ids?: number[];
   ativo?: boolean;
 }
 
@@ -768,9 +780,9 @@ export async function utilizadoresApi(perfil?: string): Promise<ApiUtilizador[]>
   return Array.isArray(rows) ? rows as ApiUtilizador[] : [];
 }
 
-export async function criarUtilizadorApi(payload: CriarUtilizadorPayload): Promise<ApiUtilizador> {
+export async function criarUtilizadorApi(payload: CriarUtilizadorPayload): Promise<CriarUtilizadorResposta> {
   await ensureCsrfToken();
-  return apiFetch<ApiUtilizador>('/api/users/', { method: 'POST', body: JSON.stringify(payload) });
+  return apiFetch<CriarUtilizadorResposta>('/api/users/', { method: 'POST', body: JSON.stringify(payload) });
 }
 
 export async function atualizarUtilizadorApi(id: number, payload: AtualizarUtilizadorPayload): Promise<ApiUtilizador> {

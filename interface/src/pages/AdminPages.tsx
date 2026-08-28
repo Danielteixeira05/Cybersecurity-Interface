@@ -396,6 +396,9 @@ export function AdminUsers({ setPage }: PageProps) {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [confirmAdminCreation, setConfirmAdminCreation] = useState(false);
+  const [createdAccount, setCreatedAccount] = useState<{ user: ApiUtilizador; temporaryPassword: string } | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const emptyDraft = (): { nome: string; email: string; telefone: string; nif: string; password: string; perfil_codigo: PerfilCodigo; clientes_ids: number[]; ativo: boolean } => ({ nome: '', email: '', telefone: '', nif: '', password: '', perfil_codigo: 'COLABORADOR', clientes_ids: [], ativo: true });
   const [draft, setDraft] = useState(emptyDraft);
 
@@ -423,6 +426,7 @@ export function AdminUsers({ setPage }: PageProps) {
     setDraft(emptyDraft());
     setFormError(null);
     setNotice(null);
+    setConfirmAdminCreation(false);
     setFormOpen(true);
   };
 
@@ -436,18 +440,20 @@ export function AdminUsers({ setPage }: PageProps) {
     });
     setFormError(null);
     setNotice(null);
+    setConfirmAdminCreation(false);
     setFormOpen(true);
   };
 
   const save = async () => {
+    if (saving) return;
     setSaving(true);
     setFormError(null);
     try {
       if (!draft.nome || !draft.email) throw new Error('Nome e email são obrigatórios.');
-      if (!editing && draft.password.length < 12) throw new Error('A password inicial tem de ter pelo menos 12 caracteres.');
       if (draft.perfil_codigo === 'CLIENTE' && draft.clientes_ids.length !== 1) throw new Error('Uma conta Cliente requer exatamente uma organização.');
       if (draft.perfil_codigo === 'COLABORADOR' && draft.clientes_ids.length === 0) throw new Error('Uma conta Gestor requer pelo menos uma organização.');
       if (draft.perfil_codigo === 'ADMINISTRADOR' && draft.clientes_ids.length) throw new Error('Uma conta Administrador não pode ter organizações associadas.');
+      if (!editing && draft.perfil_codigo === 'ADMINISTRADOR' && !confirmAdminCreation) throw new Error('Confirme a criação da conta de Administrador.');
       if (editing) {
         await atualizarUtilizadorApi(editing.id, {
           nome: draft.nome, email: draft.email, telefone: draft.telefone || null, nif: draft.nif || null,
@@ -455,15 +461,42 @@ export function AdminUsers({ setPage }: PageProps) {
           ...(draft.password ? { password: draft.password } : {}),
         });
       } else {
-        await criarUtilizadorApi(draft);
+        const created = await criarUtilizadorApi({
+          nome: draft.nome,
+          email: draft.email,
+          telefone: draft.telefone || null,
+          nif: draft.nif || null,
+          perfil_codigo: draft.perfil_codigo,
+          clientes_ids: draft.clientes_ids,
+          ativo: true,
+          confirmar_admin: draft.perfil_codigo === 'ADMINISTRADOR' ? confirmAdminCreation : undefined,
+        });
+        setCreatedAccount(created);
+        setCopyFeedback(null);
       }
-      setNotice(editing ? 'Utilizador atualizado com sucesso.' : 'Utilizador criado com sucesso.');
+      setNotice(editing ? 'Utilizador atualizado com sucesso.' : null);
       setFormOpen(false);
       load();
     } catch (cause) {
       setFormError(cause instanceof Error ? cause.message : 'Não foi possível guardar o utilizador.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const closeCreatedAccount = () => {
+    setCreatedAccount(null);
+    setCopyFeedback(null);
+    setDraft(emptyDraft());
+  };
+
+  const copyTemporaryPassword = async () => {
+    if (!createdAccount) return;
+    try {
+      await navigator.clipboard.writeText(createdAccount.temporaryPassword);
+      setCopyFeedback('Password copiada para a área de transferência.');
+    } catch {
+      setCopyFeedback('Não foi possível copiar automaticamente. Copie a password apresentada antes de fechar.');
     }
   };
 
@@ -515,14 +548,33 @@ export function AdminUsers({ setPage }: PageProps) {
             <label className="text-sm font-medium text-slate-700">Email<input type="email" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
             <label className="text-sm font-medium text-slate-700">Telefone<input value={draft.telefone} onChange={(event) => setDraft({ ...draft, telefone: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
             <label className="text-sm font-medium text-slate-700">NIF<input value={draft.nif} maxLength={9} onChange={(event) => setDraft({ ...draft, nif: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
-            {!editing && <label className="text-sm font-medium text-slate-700">Perfil<select value={draft.perfil_codigo} onChange={(event) => setDraft({ ...draft, perfil_codigo: event.target.value as typeof draft.perfil_codigo, clientes_ids: [] })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"><option value="ADMINISTRADOR">Administrador</option><option value="COLABORADOR">Gestor</option><option value="CLIENTE">Cliente</option></select></label>}
-            <label className="text-sm font-medium text-slate-700">{editing ? 'Nova password (opcional)' : 'Password inicial'}<input type="password" value={draft.password} onChange={(event) => setDraft({ ...draft, password: event.target.value })} minLength={12} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
-            {draft.perfil_codigo !== 'ADMINISTRADOR' && <label className="text-sm font-medium text-slate-700 md:col-span-2">Organizações associadas<select multiple value={draft.clientes_ids.map(String)} onChange={(event) => setDraft({ ...draft, clientes_ids: Array.from(event.currentTarget.selectedOptions, (option) => Number(option.value)) })} className="mt-1 min-h-28 w-full rounded-xl border border-slate-200 px-3 py-2">{clientOptions.filter((client) => client.ativo !== false).map((client) => <option key={client.id} value={client.id}>{client.nome}</option>)}</select><span className="mt-1 block text-xs text-slate-500">Cliente: uma organização. Gestor: uma ou mais organizações.</span></label>}
+            {!editing && <label className="text-sm font-medium text-slate-700">Perfil<select value={draft.perfil_codigo} onChange={(event) => { setDraft({ ...draft, perfil_codigo: event.target.value as typeof draft.perfil_codigo, clientes_ids: [] }); setConfirmAdminCreation(false); }} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2"><option value="ADMINISTRADOR">Administrador</option><option value="COLABORADOR">Gestor / Colaborador</option><option value="CLIENTE">Cliente</option></select></label>}
+            {editing ? <label className="text-sm font-medium text-slate-700">Nova password (opcional)<input type="password" value={draft.password} onChange={(event) => setDraft({ ...draft, password: event.target.value })} minLength={12} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label> : <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-800">A password temporária é gerada com segurança depois de guardar e apresentada apenas uma vez.</div>}
+            {draft.perfil_codigo !== 'ADMINISTRADOR' && <label className="text-sm font-medium text-slate-700 md:col-span-2">Organizações associadas<select multiple={draft.perfil_codigo === 'COLABORADOR'} value={draft.perfil_codigo === 'COLABORADOR' ? draft.clientes_ids.map(String) : String(draft.clientes_ids[0] ?? '')} onChange={(event) => setDraft({ ...draft, clientes_ids: draft.perfil_codigo === 'COLABORADOR' ? Array.from(event.currentTarget.selectedOptions, (option) => Number(option.value)) : (event.target.value ? [Number(event.target.value)] : []) })} className="mt-1 min-h-12 w-full rounded-xl border border-slate-200 px-3 py-2">{draft.perfil_codigo === 'CLIENTE' && <option value="">Selecione uma organização</option>}{clientOptions.filter((client) => client.ativo !== false).map((client) => <option key={client.id} value={client.id}>{client.nome}{client.nif ? ` — NIF ${client.nif}` : ''}</option>)}</select><span className="mt-1 block text-xs text-slate-500">Cliente: uma organização. Gestor: uma ou mais organizações.</span></label>}
           </div>
+          {!editing && <label className="mt-4 inline-flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked readOnly />Conta criada ativa</label>}
+          {!editing && draft.perfil_codigo === 'ADMINISTRADOR' && <label className="mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><input type="checkbox" checked={confirmAdminCreation} onChange={(event) => setConfirmAdminCreation(event.target.checked)} className="mt-0.5" /><span>Confirmo que pretendo criar uma conta com permissões de Administrador.</span></label>}
           {editing && <label className="mt-4 inline-flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={draft.ativo} onChange={(event) => setDraft({ ...draft, ativo: event.target.checked })} />Conta ativa</label>}
           {formError && <p className="mt-3 text-sm text-rose-700" role="alert">{formError}</p>}
           <div className="mt-5 flex gap-3"><button type="button" disabled={saving} onClick={save} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'A guardar...' : 'Guardar'}</button><button type="button" onClick={() => setFormOpen(false)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700">Cancelar</button></div>
         </section>
+      )}
+      {createdAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-labelledby="created-user-title">
+          <section className="max-h-[calc(100vh-2rem)] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+            <h2 id="created-user-title" className="font-display text-xl font-bold text-slate-900">Conta criada com sucesso</h2>
+            <p className="mt-2 text-sm text-slate-600">Guarde a password temporária agora: não será possível voltar a consultá-la.</p>
+            <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
+              <div><dt className="text-slate-500">Nome</dt><dd className="font-medium text-slate-900">{createdAccount.user.nome}</dd></div>
+              <div><dt className="text-slate-500">Email</dt><dd className="font-medium text-slate-900">{createdAccount.user.email}</dd></div>
+              <div><dt className="text-slate-500">Perfil</dt><dd className="font-medium text-slate-900">{createdAccount.user.perfil_nome}</dd></div>
+              <div><dt className="text-slate-500">Organizações</dt><dd className="font-medium text-slate-900">{Array.isArray(createdAccount.user.clientes) && createdAccount.user.clientes.length ? createdAccount.user.clientes.map((client) => client.nome).join(', ') : 'Sem organizações associadas'}</dd></div>
+            </dl>
+            <label className="mt-5 block text-sm font-medium text-slate-700">Password temporária<input readOnly value={createdAccount.temporaryPassword} aria-label="Password temporária" className="mt-1 w-full rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 font-mono text-slate-900" /></label>
+            {copyFeedback && <p className="mt-2 text-sm text-slate-600" role="status">{copyFeedback}</p>}
+            <div className="mt-6 flex flex-wrap justify-end gap-3"><button type="button" onClick={copyTemporaryPassword} className="rounded-xl border border-blue-200 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50">Copiar password</button><button type="button" onClick={closeCreatedAccount} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">Fechar</button></div>
+          </section>
+        </div>
       )}
       {loading ? <Loader /> : err ? <ErrorCard msg={err} /> : (
         <DataTable

@@ -16,7 +16,10 @@ export async function detail(request, response, next) {
 }
 
 export async function create(request, response, next) {
-  try { return response.status(201).json(await createUser(request.body ?? {}, Number(request.auth.sub))); } catch (error) { return next(error); }
+  try {
+    const created = await createUser(request.body ?? {}, Number(request.auth.sub));
+    return response.set('Cache-Control', 'no-store').status(201).json(created);
+  } catch (error) { return next(error); }
 }
 
 export async function update(request, response, next) {
