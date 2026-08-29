@@ -16,6 +16,7 @@ import { usersRouter } from './routes/users.routes.js';
 import { assetsRouter } from './routes/assets.routes.js';
 import { incidentsRouter } from './routes/incidents.routes.js';
 import { notificationsRouter } from './routes/notifications.routes.js';
+import { conversationsRouter } from './routes/conversations.routes.js';
 import { legacyList as legacyUsersList } from './controllers/users.controller.js';
 import { errorHandler, notFound } from './middleware/errors.js';
 
@@ -37,6 +38,7 @@ app.use('/api/users', requireCsrf, usersRouter);
 app.use('/api/assets', requireCsrf, assetsRouter);
 app.use('/api/incidents', requireCsrf, incidentsRouter);
 app.use('/api/notifications', requireCsrf, notificationsRouter);
+app.use('/api/conversations', requireCsrf, conversationsRouter);
 app.use('/api/public', requireCsrf, publicCmsRouter);
 app.use('/api/admin', requireCsrf, adminCmsRouter);
 // Rotas de compatibilidade para permitir a transição gradual do cliente React atual.

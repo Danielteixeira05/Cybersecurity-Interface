@@ -187,6 +187,27 @@ export interface ApiNotificacao {
   atualizado_em?: string;
 }
 
+export interface ApiMensagemConversa {
+  id: number;
+  conversa_id: number;
+  remetente_id: number;
+  conteudo: string;
+  criado_em: string;
+  remetente: { id: number; nome: string; perfil_codigo: PerfilCodigo | null } | null;
+}
+
+export interface ApiConversa {
+  id: number;
+  cliente_id: number;
+  cliente: { id: number; nome: string; nif: string | null } | null;
+  ativo: boolean;
+  criado_em: string;
+  atualizado_em: string;
+  ultima_mensagem: ApiMensagemConversa | null;
+  nao_lidas: number;
+  gestores: Array<{ id: number; nome: string }>;
+}
+
 export interface CriarAtivoPayload {
   cliente_id: number;
   nome: string;
@@ -922,6 +943,38 @@ export async function notificacoesApi(limit = 50): Promise<ApiNotificacao[]> {
 export async function marcarNotificacaoLidaApi(id: number): Promise<ApiNotificacao> {
   await ensureCsrfToken();
   return normaliseNotificacao(await apiFetch(`/api/notifications/${id}/read`, { method: 'PATCH', body: JSON.stringify({}) }));
+}
+
+export async function conversasApi(): Promise<ApiConversa[]> {
+  const result = await apiFetch<{ items?: ApiConversa[] }>('/api/conversations/');
+  return Array.isArray(result?.items) ? result.items : [];
+}
+
+export async function garantirConversaApi(clienteId?: number): Promise<ApiConversa> {
+  await ensureCsrfToken();
+  return apiFetch<ApiConversa>('/api/conversations/ensure', {
+    method: 'POST',
+    body: JSON.stringify(clienteId ? { cliente_id: clienteId } : {}),
+  });
+}
+
+export async function mensagensConversaApi(conversaId: number, before?: number): Promise<{ items: ApiMensagemConversa[]; next_cursor: string | null }> {
+  const query = new URLSearchParams({ limit: '50' });
+  if (before) query.set('before', String(before));
+  return apiFetch<{ items: ApiMensagemConversa[]; next_cursor: string | null }>(`/api/conversations/${conversaId}/messages?${query.toString()}`);
+}
+
+export async function enviarMensagemConversaApi(conversaId: number, conteudo: string): Promise<ApiMensagemConversa> {
+  await ensureCsrfToken();
+  return apiFetch<ApiMensagemConversa>(`/api/conversations/${conversaId}/messages`, {
+    method: 'POST',
+    body: JSON.stringify({ conteudo }),
+  });
+}
+
+export async function marcarConversaLidaApi(conversaId: number): Promise<{ conversa_id: number; ultima_mensagem_id: number | null; atualizado_em: string }> {
+  await ensureCsrfToken();
+  return apiFetch(`/api/conversations/${conversaId}/read`, { method: 'PATCH', body: JSON.stringify({}) });
 }
 export async function documentosApi(clienteId?: number): Promise<ApiDocumento[]> {
   const qs = clienteId ? `?cliente_id=${clienteId}` : '';

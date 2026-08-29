@@ -306,6 +306,7 @@ const ADMIN_ITEMS: SideItem[] = [
   { key: 'admin-logs', label: 'Logs', icon: ICON.logs },
   { key: 'admin-site-content', label: 'Conteúdo', icon: ICON.content },
   { key: 'admin-permissions', label: 'Permissões', icon: ICON.permissions },
+  { key: 'admin-communication', label: 'Comunicação', icon: ICON.communication },
 ];
 
 const MANAGER_ITEMS: SideItem[] = [
@@ -314,6 +315,7 @@ const MANAGER_ITEMS: SideItem[] = [
   { key: 'mgr-clients', label: 'Clientes', icon: ICON.clients },
   { key: 'mgr-documents', label: 'Documentos', icon: ICON.documents },
   { key: 'mgr-incidents', label: 'Incidentes', icon: ICON.incidents },
+  { key: 'mgr-communication', label: 'Comunicação', icon: ICON.communication },
 ];
 
 const CLIENT_ITEMS: SideItem[] = [

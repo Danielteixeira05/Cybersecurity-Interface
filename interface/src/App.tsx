@@ -19,10 +19,11 @@ import {
 import {
   ClientDashboard, ClientWorkspace, ClientDocuments, ClientReports,
   ClientProfile, ClientAssets, ClientIncidents,
-  ClientNIS2, ClientRisk, ClientRequests, ClientCommunication, ClientPentests,
+  ClientNIS2, ClientRisk, ClientRequests, ClientPentests,
 } from './pages/ClientPages';
 import { AUTH_EXPIRED_EVENT, defaultHomePageForRole, meApi, session } from './apiClient';
 import { RealtimeProvider } from './realtime';
+import { CommunicationPage } from './pages/CommunicationPage';
 
 const PAGE_PATHS: Partial<Record<Page, string>> = {
   home: '/',
@@ -45,6 +46,7 @@ const PAGE_PATHS: Partial<Record<Page, string>> = {
   'admin-logs': '/administrador/logs',
   'admin-site-content': '/administrador/conteudo',
   'admin-permissions': '/administrador/permissoes',
+  'admin-communication': '/administrador/comunicacao',
   'mgr-dashboard': '/gestor',
   'mgr-analytics': '/gestor/analises',
   'mgr-clients': '/gestor/clientes',
@@ -58,6 +60,7 @@ const PAGE_PATHS: Partial<Record<Page, string>> = {
   'mgr-pentests': '/gestor/pentests',
   'mgr-evidence': '/gestor/evidencias',
   'mgr-excel': '/gestor/importar-excel',
+  'mgr-communication': '/gestor/comunicacao',
   'cli-dashboard': '/cliente',
   'cli-workspace': '/cliente/area-trabalho',
   'cli-documents': '/cliente/documentos',
@@ -265,6 +268,7 @@ export default function App() {
       {page === 'admin-logs' && <AdminLogs />}
       {page === 'admin-site-content' && <AdminSiteContent />}
       {page === 'admin-permissions' && <AdminPermissions />}
+      {page === 'admin-communication' && <CommunicationPage role="admin" />}
       {page === 'admin-client-detail' && <MgrClientDetail setPage={setPage} backPage="admin-clients" backLabel="Administrador" />}
       {page === 'admin-user-client' && <MgrClientDetail setPage={setPage} backPage="admin-users" backLabel="Utilizadores" />}
       {page === 'admin-user-manager' && <AdminManagerDetail setPage={setPage} />}
@@ -285,6 +289,7 @@ export default function App() {
       {page === 'mgr-reports' && <MgrReports setPage={setPage} />}
       {page === 'mgr-pentests' && <MgrPentests setPage={setPage} />}
       {page === 'mgr-evidence' && <MgrEvidence setPage={setPage} />}
+      {page === 'mgr-communication' && <CommunicationPage role="manager" />}
 
       {/* CLIENT PAGES */}
       {page === 'cli-dashboard' && <ClientDashboard setPage={setPage} />}
@@ -297,7 +302,7 @@ export default function App() {
       {page === 'cli-nis2' && <ClientNIS2 />}
       {page === 'cli-risk' && <ClientRisk />}
       {page === 'cli-requests' && <ClientRequests setPage={setPage} />}
-      {page === 'cli-communication' && <ClientCommunication setPage={setPage} />}
+      {page === 'cli-communication' && <CommunicationPage role="client" />}
       {page === 'cli-pentests' && <ClientPentests />}
     </AppLayout>
     </RealtimeProvider>

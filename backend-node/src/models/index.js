@@ -182,6 +182,30 @@ export function getModels() {
     atualizado_em: updatedAt,
   }, 'notificacoes_utilizadores');
 
+  const Conversation = define('Conversation', {
+    id,
+    cliente_id: { type: DataTypes.BIGINT, allowNull: false },
+    ativo: { type: DataTypes.BOOLEAN, allowNull: false },
+    criado_em: createdAt,
+    atualizado_em: updatedAt,
+  }, 'conversas');
+
+  const Message = define('Message', {
+    id,
+    conversa_id: { type: DataTypes.BIGINT, allowNull: false },
+    remetente_id: { type: DataTypes.BIGINT, allowNull: false },
+    conteudo: { type: DataTypes.TEXT, allowNull: false },
+    criado_em: createdAt,
+    ativo: { type: DataTypes.BOOLEAN, allowNull: false },
+  }, 'mensagens');
+
+  const ConversationRead = define('ConversationRead', {
+    conversa_id: { type: DataTypes.BIGINT, primaryKey: true },
+    utilizador_id: { type: DataTypes.BIGINT, primaryKey: true },
+    ultima_mensagem_id: DataTypes.BIGINT,
+    atualizado_em: updatedAt,
+  }, 'conversas_leituras');
+
   const Document = define('Document', {
     id,
     cliente_id: { type: DataTypes.BIGINT, allowNull: false },
@@ -298,6 +322,17 @@ export function getModels() {
   Notification.belongsTo(Client, { foreignKey: 'cliente_id', as: 'cliente' });
   Incident.hasMany(Notification, { foreignKey: 'incidente_id', as: 'notificacoes' });
   Notification.belongsTo(Incident, { foreignKey: 'incidente_id', as: 'incidente' });
+  Client.hasMany(Conversation, { foreignKey: 'cliente_id', as: 'conversas' });
+  Conversation.belongsTo(Client, { foreignKey: 'cliente_id', as: 'cliente' });
+  Conversation.hasMany(Message, { foreignKey: 'conversa_id', as: 'mensagens' });
+  Message.belongsTo(Conversation, { foreignKey: 'conversa_id', as: 'conversa' });
+  User.hasMany(Message, { foreignKey: 'remetente_id', as: 'mensagensEnviadas' });
+  Message.belongsTo(User, { foreignKey: 'remetente_id', as: 'remetente' });
+  Conversation.hasMany(ConversationRead, { foreignKey: 'conversa_id', as: 'leituras' });
+  ConversationRead.belongsTo(Conversation, { foreignKey: 'conversa_id', as: 'conversa' });
+  User.hasMany(ConversationRead, { foreignKey: 'utilizador_id', as: 'leiturasConversa' });
+  ConversationRead.belongsTo(User, { foreignKey: 'utilizador_id', as: 'utilizador' });
+  ConversationRead.belongsTo(Message, { foreignKey: 'ultima_mensagem_id', as: 'ultimaMensagem' });
   Client.hasMany(Document, { foreignKey: 'cliente_id', as: 'documentos' });
   Document.belongsTo(Client, { foreignKey: 'cliente_id', as: 'cliente' });
   Client.hasMany(Request, { foreignKey: 'cliente_id', as: 'pedidos' });
@@ -309,7 +344,8 @@ export function getModels() {
 
   models = {
     sequelize, Profile, User, Client, UserClient, ClientContact, ConformityStatus,
-    RiskAssessment, Asset, Incident, Notification, Document, RequestStatus, Request, ActivityLog,
+    RiskAssessment, Asset, Incident, Notification, Conversation, Message, ConversationRead,
+    Document, RequestStatus, Request, ActivityLog,
     SiteContent, News, ContactMessage,
   };
   return models;

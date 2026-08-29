@@ -7167,3 +7167,65 @@ button.client-dashboard-page__metric:hover {
   .client-dashboard-page__panel,
   .client-dashboard-page__score-card { padding: 1rem; }
 }
+
+/* Comunicação persistente: estilos limitados ao módulo de chat. */
+.communication-page { max-width: 90rem; margin: 0 auto; color: #12213a; }
+.communication-page__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
+.communication-page__eyebrow { display: inline-flex; align-items: center; gap: 0.35rem; color: #2563eb; font-size: 0.78rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+.communication-page__header h1 { margin: 0.32rem 0 0; color: #0b1f3a; font-size: clamp(1.6rem, 2vw, 2rem); font-weight: 800; letter-spacing: -0.03em; }
+.communication-page__header p { max-width: 44rem; margin: 0.28rem 0 0; color: #647a9e; font-size: 0.95rem; }
+.communication-page__role { display: inline-flex; align-items: center; gap: 0.35rem; flex: none; border: 1px solid #c9ddff; border-radius: 999px; background: #eff6ff; padding: 0.48rem 0.72rem; color: #1d4ed8; font-size: 0.8rem; font-weight: 800; }
+.communication-page__alert { display: flex; align-items: center; gap: 0.55rem; margin-bottom: 1rem; border: 1px solid #fecaca; border-radius: 0.75rem; background: #fff1f2; padding: 0.75rem 0.9rem; color: #b42318; font-size: 0.9rem; }
+.communication-page__layout { display: grid; grid-template-columns: minmax(16.5rem, 23rem) minmax(0, 1fr); min-height: min(43rem, calc(100vh - 11rem)); overflow: hidden; border: 1px solid #dce5f1; border-radius: 1rem; background: #fff; box-shadow: 0 10px 28px rgba(26, 59, 111, 0.07); }
+.communication-page__sidebar { display: flex; min-width: 0; flex-direction: column; border-right: 1px solid #e5edf7; background: #fbfdff; }
+.communication-page__search { display: flex; align-items: center; gap: 0.5rem; margin: 0.85rem; border: 1px solid #d8e3f2; border-radius: 0.65rem; background: #fff; padding: 0 0.7rem; color: #7083a1; }
+.communication-page__search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; padding: 0.68rem 0; color: #12213a; font-size: 0.86rem; }
+.communication-page__search input::placeholder { color: #91a1ba; }
+.communication-page__conversation-list { min-height: 0; overflow-y: auto; padding: 0 0.5rem 0.65rem; }
+.communication-page__conversation-list button { position: relative; display: grid; width: 100%; grid-template-columns: minmax(0, 1fr) auto; gap: 0.15rem 0.55rem; border: 0; border-radius: 0.7rem; background: transparent; padding: 0.76rem 0.72rem; text-align: left; color: #334b70; cursor: pointer; }
+.communication-page__conversation-list button:hover { background: #eef5ff; }
+.communication-page__conversation-list button.is-selected { background: #e4efff; box-shadow: inset 3px 0 0 #2563eb; }
+.communication-page__conversation-list strong { overflow: hidden; color: #12213a; font-size: 0.88rem; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.communication-page__conversation-list small { color: #7488a7; font-size: 0.72rem; }
+.communication-page__conversation-list span { overflow: hidden; grid-column: 1 / -1; color: #657995; font-size: 0.77rem; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+.communication-page__conversation-list b { position: absolute; right: 0.65rem; bottom: 0.65rem; min-width: 1.25rem; border-radius: 999px; background: #2563eb; padding: 0.1rem 0.35rem; color: #fff; font-size: 0.68rem; text-align: center; }
+.communication-page__thread { display: grid; min-width: 0; grid-template-rows: auto minmax(0, 1fr) auto auto; }
+.communication-page__thread-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-bottom: 1px solid #e5edf7; padding: 1rem 1.25rem; }
+.communication-page__thread-header h2 { margin: 0; color: #10203a; font-size: 1rem; font-weight: 800; }
+.communication-page__thread-header > div > span { display: block; margin-top: 0.15rem; color: #7083a1; font-size: 0.77rem; }
+.communication-page__participants { display: flex; align-items: center; gap: 0.4rem; max-width: 52%; color: #45648d; font-size: 0.78rem; text-align: right; }
+.communication-page__messages { min-height: 14rem; overflow-y: auto; background: linear-gradient(180deg, #fbfdff 0%, #f7faff 100%); padding: 1rem 1.25rem; }
+.communication-page__message { max-width: min(78%, 44rem); margin: 0 0 0.8rem; border: 1px solid #dce7f5; border-radius: 0.85rem 0.85rem 0.85rem 0.2rem; background: #fff; padding: 0.68rem 0.78rem; box-shadow: 0 2px 7px rgba(36, 71, 121, 0.05); }
+.communication-page__message.is-mine { margin-right: 0; margin-left: auto; border-color: #1f65ef; border-radius: 0.85rem 0.85rem 0.2rem 0.85rem; background: #2164e9; color: #fff; }
+.communication-page__message-meta { display: flex; align-items: baseline; gap: 0.45rem; margin-bottom: 0.28rem; }
+.communication-page__message-meta strong { font-size: 0.76rem; font-weight: 800; }
+.communication-page__message-meta span { color: #6f82a1; font-size: 0.68rem; }
+.communication-page__message.is-mine .communication-page__message-meta span { color: #dceaff; }
+.communication-page__message p { margin: 0; overflow-wrap: anywhere; font-size: 0.9rem; line-height: 1.45; white-space: pre-wrap; }
+.communication-page__composer { border-top: 1px solid #e5edf7; background: #fff; padding: 0.85rem 1.1rem 0.7rem; }
+.communication-page__composer textarea { display: block; box-sizing: border-box; width: 100%; resize: vertical; border: 1px solid #cfdbec; border-radius: 0.68rem; outline-color: #2563eb; padding: 0.62rem 0.7rem; color: #162741; font: inherit; font-size: 0.88rem; }
+.communication-page__composer > div { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin-top: 0.5rem; }
+.communication-page__composer > div > span { color: #8294af; font-size: 0.72rem; }
+.communication-page__composer button { display: inline-flex; align-items: center; gap: 0.4rem; border: 0; border-radius: 0.58rem; background: #2563eb; padding: 0.54rem 0.78rem; color: #fff; font-size: 0.83rem; font-weight: 800; cursor: pointer; }
+.communication-page__composer button:hover:not(:disabled) { background: #174fc4; }
+.communication-page__composer button:disabled { cursor: not-allowed; opacity: 0.55; }
+.communication-page__hint { display: flex; align-items: center; gap: 0.3rem; margin: 0; border-top: 1px solid #eff4fa; padding: 0.48rem 1.1rem; color: #8092ac; font-size: 0.71rem; }
+.communication-page__state { display: flex; align-items: center; justify-content: center; gap: 0.55rem; min-height: 7rem; padding: 1rem; color: #71839d; font-size: 0.86rem; text-align: center; }
+.communication-page__empty-thread { flex-direction: column; height: 100%; }
+.communication-page__empty-thread strong { color: #233a5e; }
+.communication-page__empty-thread span { max-width: 26rem; font-size: 0.8rem; }
+.communication-page__spinner { animation: communication-page-spin 0.85s linear infinite; }
+
+@keyframes communication-page-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 767.98px) {
+  .communication-page__header { align-items: flex-start; flex-direction: column; }
+  .communication-page__layout { grid-template-columns: 1fr; min-height: calc(100vh - 10rem); }
+  .communication-page__sidebar { max-height: 17rem; border-right: 0; border-bottom: 1px solid #e5edf7; }
+  .communication-page__conversation-list { display: flex; overflow-x: auto; padding-bottom: 0.7rem; }
+  .communication-page__conversation-list button { min-width: 13rem; }
+  .communication-page__thread { min-height: 32rem; }
+  .communication-page__thread-header { align-items: flex-start; flex-direction: column; }
+  .communication-page__participants { max-width: none; text-align: left; }
+  .communication-page__message { max-width: 90%; }
+}

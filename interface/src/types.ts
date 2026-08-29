@@ -6,11 +6,11 @@ export type Page =
   // Admin
   | 'admin-dashboard' | 'admin-analytics' | 'admin-users' | 'admin-clients' | 'admin-assets' | 'admin-documents'
   | 'admin-incidents' | 'admin-logs' | 'admin-site-content' | 'admin-permissions'
-  | 'admin-client-detail' | 'admin-user-client' | 'admin-user-manager'
+  | 'admin-client-detail' | 'admin-user-client' | 'admin-user-manager' | 'admin-communication'
   // Manager
   | 'mgr-dashboard' | 'mgr-analytics' | 'mgr-clients' | 'mgr-client-detail' | 'mgr-assets' | 'mgr-incidents'
   | 'mgr-documents' | 'mgr-risk' | 'mgr-nis2' | 'mgr-pentests' | 'mgr-evidence'
-  | 'mgr-reports' | 'mgr-requests' | 'mgr-excel'
+  | 'mgr-reports' | 'mgr-requests' | 'mgr-excel' | 'mgr-communication'
   // Client
   | 'cli-dashboard' | 'cli-workspace' | 'cli-documents' | 'cli-reports'
   // legacy (kept for deep links)
