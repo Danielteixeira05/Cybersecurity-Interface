@@ -11,13 +11,15 @@ import {
   uploadConfig,
   uploadDocument,
   uploadVersion,
+  updateUploadLimit,
 } from '../controllers/documents.controller.js';
 
 export const documentsRouter = Router();
 documentsRouter.use(authenticate, requireRoles('admin', 'manager', 'client'));
 documentsRouter.get('/', list);
 documentsRouter.get('/config', uploadConfig);
-documentsRouter.post('/', requireRoles('client'), receiveDocumentFile, uploadDocument);
+documentsRouter.patch('/config/upload-limit', requireRoles('admin'), updateUploadLimit);
+documentsRouter.post('/', receiveDocumentFile, uploadDocument);
 documentsRouter.get('/:documentId', detail);
 documentsRouter.get('/:documentId/download', download);
 documentsRouter.get('/:documentId/history', history);

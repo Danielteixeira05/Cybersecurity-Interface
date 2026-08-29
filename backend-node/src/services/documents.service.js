@@ -8,6 +8,7 @@ import { recordAudit } from './audit-log.service.js';
 import { createDocumentNotifications } from './notifications.service.js';
 import { emitDocumentChanged, emitNotification } from '../socket/events.js';
 import { ALLOWED_DOCUMENT_TYPES, createVercelBlobStorage, validateDocumentFile } from './document-storage.service.js';
+import { readDocumentUploadLimit } from './document-upload-config.service.js';
 
 export const DOCUMENT_CATEGORIES = Object.freeze([
   'PENTEST', 'PLANO_SEGURANCA', 'RELATORIO_CNCS', 'FORMACAO',
@@ -135,6 +136,20 @@ async function activeClientIds(auth) {
   return ids;
 }
 
+async function submissionClientId(auth, input) {
+  const requested = requestedClientId(input.cliente_id);
+  if (auth.role === 'client') {
+    const [clientId] = await activeClientIds(auth);
+    if (requested && requested !== Number(clientId)) {
+      throw httpError(403, 'O Cliente não pode submeter documentos para outra organização.');
+    }
+    return Number(clientId);
+  }
+  if (!requested) throw httpError(400, 'Selecione a organização a que o documento pertence.');
+  await assertClientAccess(auth, requested);
+  return requested;
+}
+
 async function listWhere(auth, filters = {}) {
   const allowedIds = await activeClientIds(auth);
   const filterClientId = requestedClientId(filters.cliente_id);
@@ -183,7 +198,7 @@ async function findAuthorizedDocument(auth, documentId, { includeInactive = fals
 }
 
 async function effectiveUploadLimitBytes() {
-  return Math.min(env.maxUploadMb, env.documentUploadSafetyMaxMb) * 1024 * 1024;
+  return (await readDocumentUploadLimit()).maxUploadMb * 1024 * 1024;
 }
 
 async function getDocumentWithDetails(auth, documentId) {
@@ -221,9 +236,8 @@ export async function documentHistory(auth, documentId) {
 }
 
 async function createSubmission(auth, input, file, previousDocument = null) {
-  if (auth.role !== 'client') throw httpError(403, 'A submissão documental está reservada ao Cliente associado.');
   assertWritable();
-  const [clientId] = await activeClientIds(auth);
+  const clientId = await submissionClientId(auth, input);
   const maximumBytes = await effectiveUploadLimitBytes();
   const fields = documentFields(input);
   const validatedFile = await validateDocumentFile(file, maximumBytes);
@@ -289,7 +303,7 @@ export async function submitDocumentVersion(auth, documentId, input, file) {
   if (auth.role !== 'client' || Number(previous.submetido_por) !== Number(auth.sub) || previous.estado !== 'REQUER_ALTERACOES') {
     throw httpError(403, 'Só o autor pode submeter nova versão quando foram pedidas alterações.');
   }
-  return createSubmission(auth, input, file, previous);
+  return createSubmission(auth, { ...input, cliente_id: Number(previous.cliente_id) }, file, previous);
 }
 
 export async function reviewDocument(auth, documentId, input) {
@@ -349,9 +363,14 @@ export async function downloadDocument(auth, documentId) {
 
 export async function documentUploadConfig(auth) {
   await activeClientIds(auth);
-  const bytes = await effectiveUploadLimitBytes();
+  const uploadLimit = await readDocumentUploadLimit();
   return {
-    max_upload_mb: Math.floor(bytes / (1024 * 1024)),
+    max_upload_mb: uploadLimit.maxUploadMb,
+    ...(auth.role === 'admin' ? {
+      configured_upload_mb: uploadLimit.configuredUploadMb,
+      uses_fallback_upload_limit: uploadLimit.usesFallback,
+      can_update_upload_limit: true,
+    } : {}),
     allowed_extensions: Object.keys(ALLOWED_DOCUMENT_TYPES),
     categories: DOCUMENT_CATEGORIES,
     states: DOCUMENT_STATES,

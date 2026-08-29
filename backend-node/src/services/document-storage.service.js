@@ -43,12 +43,6 @@ function isSafeCsv(buffer) {
   }
 }
 
-export function configuredDocumentSafetyLimitBytes() {
-  const raw = Number(process.env.DOCUMENT_UPLOAD_SAFETY_MAX_MB ?? 50);
-  const mb = Number.isFinite(raw) && raw >= 1 && raw <= 100 ? raw : 50;
-  return Math.trunc(mb * 1024 * 1024);
-}
-
 export async function validateDocumentFile(file, maximumBytes) {
   if (!file?.buffer || !Buffer.isBuffer(file.buffer)) throw httpError(400, 'É obrigatório selecionar um ficheiro.');
   const originalName = safeOriginalName(file.originalname);

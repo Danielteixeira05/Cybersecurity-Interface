@@ -120,7 +120,11 @@ export async function createDocumentNotifications({ document, eventType, actorId
   const isSubmission = eventType === 'DOCUMENTO_SUBMETIDO' || eventType === 'DOCUMENTO_NOVA_VERSAO';
   const authorId = isSubmission ? null : await activeDocumentAuthorId(row, transaction);
   const recipients = isSubmission
-    ? [...new Set([...(await activeAdminIds(transaction)), ...(await activeRecipientIdsForClient(row.cliente_id, 'COLABORADOR', transaction))])]
+    ? [...new Set([
+      ...(await activeAdminIds(transaction)),
+      ...(await activeRecipientIdsForClient(row.cliente_id, 'COLABORADOR', transaction)),
+      ...(await activeRecipientIdsForClient(row.cliente_id, 'CLIENTE', transaction, { principalOnly: true })),
+    ])].filter((userId) => userId !== Number(actorId))
     : [...new Set([
       ...(await activeRecipientIdsForClient(row.cliente_id, 'CLIENTE', transaction, { principalOnly: true })),
       ...(authorId ? [authorId] : []),

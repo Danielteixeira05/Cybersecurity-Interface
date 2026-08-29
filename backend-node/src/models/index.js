@@ -276,6 +276,16 @@ export function getModels() {
     criado_em: createdAt,
   }, 'logs_atividade');
 
+  const SystemConfiguration = define('SystemConfiguration', {
+    id,
+    chave: { type: DataTypes.STRING, allowNull: false },
+    valor: { type: DataTypes.STRING, allowNull: false },
+    descricao: DataTypes.STRING,
+    atualizado_por: DataTypes.BIGINT,
+    criado_em: createdAt,
+    atualizado_em: updatedAt,
+  }, 'configuracoes_sistema');
+
   const SiteContent = define('SiteContent', {
     id,
     // Campos confirmados no contrato Django/SQL existente. Não usar um
@@ -365,6 +375,8 @@ export function getModels() {
   DocumentReview.belongsTo(User, { foreignKey: 'autor_id', as: 'autor' });
   Document.hasMany(Notification, { foreignKey: 'documento_id', as: 'notificacoes' });
   Notification.belongsTo(Document, { foreignKey: 'documento_id', as: 'documento' });
+  SystemConfiguration.belongsTo(User, { foreignKey: 'atualizado_por', as: 'atualizadoPor' });
+  User.hasMany(SystemConfiguration, { foreignKey: 'atualizado_por', as: 'configuracoesAtualizadas' });
   Client.hasMany(Request, { foreignKey: 'cliente_id', as: 'pedidos' });
   Request.belongsTo(Client, { foreignKey: 'cliente_id', as: 'cliente' });
   Request.belongsTo(RequestStatus, { foreignKey: 'estado_id', as: 'estado' });
@@ -375,7 +387,7 @@ export function getModels() {
   models = {
     sequelize, Profile, User, Client, UserClient, ClientContact, ConformityStatus,
     RiskAssessment, Asset, Incident, Notification, Conversation, Message, ConversationRead,
-    Document, DocumentReview, RequestStatus, Request, ActivityLog,
+    Document, DocumentReview, RequestStatus, Request, ActivityLog, SystemConfiguration,
     SiteContent, News, ContactMessage,
   };
   return models;

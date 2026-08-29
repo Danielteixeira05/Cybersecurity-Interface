@@ -1,6 +1,7 @@
 import { io, type Socket } from 'socket.io-client';
 
 let socket: Socket | null = null;
+export const SOCKET_IO_PATH = '/api/socket-io/socket.io';
 
 function socketUrl() {
   const configured = import.meta.env.VITE_SOCKET_URL?.trim();
@@ -15,6 +16,7 @@ export function realtimeSocket() {
     socket = io(socketUrl(), {
       autoConnect: false,
       withCredentials: true,
+      path: SOCKET_IO_PATH,
       transports: ['websocket'],
       reconnection: true,
       reconnectionAttempts: 5,

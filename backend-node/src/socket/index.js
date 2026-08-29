@@ -6,6 +6,9 @@ import { roleForProfile } from '../middleware/auth.js';
 import { clientIdsForUser } from '../services/clients.service.js';
 import { ADMIN_ROOM, roomForClient, roomForUser, setRealtimeServer } from './events.js';
 
+export const SOCKET_IO_PATH = '/api/socket-io/socket.io';
+export const SOCKET_IO_TRANSPORTS = Object.freeze(['websocket']);
+
 function cookieValue(header, name) {
   if (typeof header !== 'string') return null;
   const prefix = `${name}=`;
@@ -46,6 +49,8 @@ export function roomsForIdentity(identity) {
 
 export function createSocketServer(httpServer) {
   const io = new Server(httpServer, {
+    path: SOCKET_IO_PATH,
+    transports: SOCKET_IO_TRANSPORTS,
     cors: { origin: origins(), credentials: true, methods: ['GET', 'POST'] },
   });
   io.use(async (socket, next) => {

@@ -12,6 +12,7 @@ import {
   submitDocument,
   submitDocumentVersion,
 } from '../services/documents.service.js';
+import { updateDocumentUploadLimit } from '../services/document-upload-config.service.js';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -45,6 +46,10 @@ export const uploadVersion = responder((request) => submitDocumentVersion(reques
 export const review = responder((request) => reviewDocument(request.auth, request.params.documentId, request.body));
 export const deactivate = responder((request) => deactivateDocument(request.auth, request.params.documentId));
 export const uploadConfig = responder((request) => documentUploadConfig(request.auth));
+export const updateUploadLimit = responder(async (request) => {
+  await updateDocumentUploadLimit(request.auth, request.body);
+  return documentUploadConfig(request.auth);
+});
 
 export async function download(request, response, next) {
   try {

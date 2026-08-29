@@ -307,6 +307,9 @@ export interface ApiDocumentoDetalhe extends ApiDocumento {
 
 export interface ApiConfiguracaoDocumentos {
   max_upload_mb: number;
+  configured_upload_mb?: number | null;
+  uses_fallback_upload_limit?: boolean;
+  can_update_upload_limit?: boolean;
   categorias: string[];
   estados: string[];
 }
@@ -321,6 +324,7 @@ export interface FiltrosDocumentos {
 }
 
 export interface SubmeterDocumentoPayload {
+  cliente_id?: number;
   titulo: string;
   categoria: string;
   descricao?: string;
@@ -1069,6 +1073,24 @@ export async function configuracaoDocumentosApi(): Promise<ApiConfiguracaoDocume
   const raw = await apiFetch<Record<string, unknown>>('/api/documents/config');
   return {
     max_upload_mb: requiredNumber(raw.max_upload_mb, 'documentos.max_upload_mb'),
+    configured_upload_mb: typeof raw.configured_upload_mb === 'number' && Number.isSafeInteger(raw.configured_upload_mb) ? raw.configured_upload_mb : null,
+    uses_fallback_upload_limit: raw.uses_fallback_upload_limit === true,
+    can_update_upload_limit: raw.can_update_upload_limit === true,
+    categorias: Array.isArray(raw.categories) ? raw.categories.filter((item): item is string => typeof item === 'string') : [],
+    estados: Array.isArray(raw.states) ? raw.states.filter((item): item is string => typeof item === 'string') : [],
+  };
+}
+
+export async function atualizarLimiteUploadDocumentosApi(maxUploadMb: string): Promise<ApiConfiguracaoDocumentos> {
+  await ensureCsrfToken();
+  const raw = await apiFetch<Record<string, unknown>>('/api/documents/config/upload-limit', {
+    method: 'PATCH', body: JSON.stringify({ max_upload_mb: maxUploadMb }),
+  });
+  return {
+    max_upload_mb: requiredNumber(raw.max_upload_mb, 'documentos.max_upload_mb'),
+    configured_upload_mb: typeof raw.configured_upload_mb === 'number' && Number.isSafeInteger(raw.configured_upload_mb) ? raw.configured_upload_mb : null,
+    uses_fallback_upload_limit: raw.uses_fallback_upload_limit === true,
+    can_update_upload_limit: raw.can_update_upload_limit === true,
     categorias: Array.isArray(raw.categories) ? raw.categories.filter((item): item is string => typeof item === 'string') : [],
     estados: Array.isArray(raw.states) ? raw.states.filter((item): item is string => typeof item === 'string') : [],
   };
@@ -1076,6 +1098,7 @@ export async function configuracaoDocumentosApi(): Promise<ApiConfiguracaoDocume
 
 function documentFormData(payload: SubmeterDocumentoPayload): FormData {
   const form = new FormData();
+  if (payload.cliente_id) form.set('cliente_id', String(payload.cliente_id));
   form.set('titulo', payload.titulo);
   form.set('categoria', payload.categoria);
   if (payload.descricao) form.set('descricao', payload.descricao);

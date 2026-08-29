@@ -1,10 +1,7 @@
-import { createServer } from 'node:http';
-import { app } from './app.js';
 import { env } from './config/env.js';
-import { createSocketServer } from './socket/index.js';
+import { createRealtimeHttpServer } from './http-server.js';
 
-const httpServer = createServer(app);
-createSocketServer(httpServer);
+const httpServer = createRealtimeHttpServer();
 
 httpServer.listen(env.port, () => {
   console.log(`CiberBoxSecur Node API pronta em http://localhost:${env.port}`);

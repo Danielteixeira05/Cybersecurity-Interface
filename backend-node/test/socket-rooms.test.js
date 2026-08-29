@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { roomsForIdentity } from '../src/socket/index.js';
+import { roomsForIdentity, SOCKET_IO_PATH, SOCKET_IO_TRANSPORTS } from '../src/socket/index.js';
+
+test('Socket.IO usa path explícito e apenas WebSocket', () => {
+  assert.equal(SOCKET_IO_PATH, '/api/socket-io/socket.io');
+  assert.deepEqual(SOCKET_IO_TRANSPORTS, ['websocket']);
+});
 
 test('as salas do Socket são determinadas no servidor para Gestor', () => {
   assert.deepEqual(

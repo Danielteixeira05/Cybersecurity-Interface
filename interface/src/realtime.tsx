@@ -1,9 +1,10 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { marcarNotificacaoLidaApi, notificacoesApi, type ApiNotificacao } from './apiClient';
 import { closeRealtimeSocket, realtimeSocket } from './socketClient';
 
 export const INCIDENT_CHANGED_EVENT = 'ciberbox:incident-changed';
 export const DOCUMENT_CHANGED_EVENT = 'ciberbox:document-changed';
+export const REALTIME_RECONNECTED_EVENT = 'ciberbox:realtime-reconnected';
 
 type RealtimeState = {
   notifications: ApiNotificacao[];
@@ -18,6 +19,7 @@ const RealtimeContext = createContext<RealtimeState | null>(null);
 export function RealtimeProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<ApiNotificacao[]>([]);
   const [connected, setConnected] = useState(false);
+  const reconnectPending = useRef(false);
 
   const refreshNotifications = useCallback(async () => {
     try {
@@ -36,8 +38,18 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const socket = realtimeSocket();
-    const onConnect = () => { setConnected(true); void refreshNotifications(); };
-    const onDisconnect = () => setConnected(false);
+    const onConnect = () => {
+      const reconnected = reconnectPending.current;
+      reconnectPending.current = false;
+      setConnected(true);
+      void refreshNotifications();
+      if (reconnected) {
+        window.dispatchEvent(new Event(REALTIME_RECONNECTED_EVENT));
+        window.dispatchEvent(new Event(INCIDENT_CHANGED_EVENT));
+        window.dispatchEvent(new Event(DOCUMENT_CHANGED_EVENT));
+      }
+    };
+    const onDisconnect = () => { reconnectPending.current = true; setConnected(false); };
     const onNotification = () => { void refreshNotifications(); };
     const onIncident = () => window.dispatchEvent(new Event(INCIDENT_CHANGED_EVENT));
     const onDocument = () => window.dispatchEvent(new Event(DOCUMENT_CHANGED_EVENT));

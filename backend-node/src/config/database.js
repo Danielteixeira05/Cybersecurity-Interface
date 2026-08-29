@@ -14,7 +14,7 @@ export function getSequelize() {
     sequelize = new Sequelize(env.databaseUrl, {
       dialect: 'postgres',
       logging: false,
-      dialectOptions: env.nodeEnv === 'production' ? { ssl: { require: true, rejectUnauthorized: false } } : undefined,
+      dialectOptions: env.nodeEnv === 'production' ? { ssl: { require: true, rejectUnauthorized: true } } : undefined,
       pool: { max: 5, min: 0, idle: 10000 },
     });
   }

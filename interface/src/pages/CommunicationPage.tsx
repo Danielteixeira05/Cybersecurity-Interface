@@ -5,6 +5,7 @@ import {
   mensagensConversaApi, session, type ApiCliente, type ApiConversa, type ApiMensagemConversa,
 } from '../apiClient';
 import { realtimeSocket } from '../socketClient';
+import { REALTIME_RECONNECTED_EVENT } from '../realtime';
 import type { UserRole } from '../types';
 
 type CommunicationRole = Exclude<UserRole, null>;
@@ -37,10 +38,10 @@ export function CommunicationPage({ role }: { role: CommunicationRole }) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const stickToBottomRef = useRef(true);
 
-  const refreshConversations = useCallback(async () => {
+  const refreshConversations = useCallback(async ({ ensureClientConversation = false }: { ensureClientConversation?: boolean } = {}) => {
     const [availableClients, existingConversations] = await Promise.all([clientesApi(), conversasApi()]);
     let nextConversations = existingConversations;
-    if (isClient) {
+    if (isClient && ensureClientConversation) {
       const activeClient = session.get().cliente?.id;
       if (!activeClient) throw new Error('Não existe uma organização ativa associada a esta sessão.');
       const ensured = await garantirConversaApi();
@@ -57,11 +58,24 @@ export function CommunicationPage({ role }: { role: CommunicationRole }) {
     let alive = true;
     setLoading(true);
     setError(null);
-    refreshConversations()
+    refreshConversations({ ensureClientConversation: true })
       .catch((cause: unknown) => { if (alive) setError(cause instanceof Error ? cause.message : 'Não foi possível carregar as conversas.'); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [refreshConversations]);
+
+  useEffect(() => {
+    const syncAfterReconnect = () => {
+      void refreshConversations().catch(() => {});
+      if (selectedId) {
+        void mensagensConversaApi(selectedId)
+          .then(({ items }) => setMessages(items))
+          .catch(() => {});
+      }
+    };
+    window.addEventListener(REALTIME_RECONNECTED_EVENT, syncAfterReconnect);
+    return () => window.removeEventListener(REALTIME_RECONNECTED_EVENT, syncAfterReconnect);
+  }, [refreshConversations, selectedId]);
 
   const selectedConversation = conversations.find((conversation) => conversation.id === selectedId) ?? null;
 

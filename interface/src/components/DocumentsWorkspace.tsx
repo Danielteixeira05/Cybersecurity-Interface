@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { AlertCircle, Download, Eye, FilePlus2, FileText, History, LoaderCircle, RefreshCw, Search, ShieldCheck, Upload, X } from 'lucide-react';
+import { AlertCircle, Download, Eye, FilePlus2, FileText, History, LoaderCircle, RefreshCw, Search, Settings2, ShieldCheck, Upload, X } from 'lucide-react';
 import {
   configuracaoDocumentosApi,
   descarregarDocumentoApi,
@@ -9,6 +9,7 @@ import {
   reverDocumentoApi,
   submeterDocumentoApi,
   submeterVersaoDocumentoApi,
+  atualizarLimiteUploadDocumentosApi,
   clientesApi,
   type ApiCliente,
   type ApiConfiguracaoDocumentos,
@@ -109,6 +110,8 @@ export function DocumentsWorkspace({ role, title, subtitle, clientId, compact = 
   const [reviewTarget, setReviewTarget] = useState<ApiDocumento | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [uploadLimitDraft, setUploadLimitDraft] = useState('');
+  const [savingUploadLimit, setSavingUploadLimit] = useState(false);
 
   const pageTitle = title || (role === 'admin' ? 'Documentos da Plataforma' : role === 'manager' ? 'Documentos dos Clientes' : 'Os Meus Documentos');
   const pageSubtitle = subtitle || (role === 'client' ? 'Documentos privados associados à sua organização.' : 'Documentos das organizações a que tem acesso.');
@@ -132,6 +135,9 @@ export function DocumentsWorkspace({ role, title, subtitle, clientId, compact = 
 
   useEffect(() => { void reload(); }, [reload]);
   useEffect(() => {
+    setUploadLimitDraft(String(config.configured_upload_mb ?? config.max_upload_mb));
+  }, [config.configured_upload_mb, config.max_upload_mb]);
+  useEffect(() => {
     const refresh = () => { void reload(); };
     window.addEventListener(DOCUMENT_CHANGED_EVENT, refresh);
     return () => window.removeEventListener(DOCUMENT_CHANGED_EVENT, refresh);
@@ -139,7 +145,7 @@ export function DocumentsWorkspace({ role, title, subtitle, clientId, compact = 
 
   const visibleClients = useMemo(() => clients.filter((client) => client.ativo !== false), [clients]);
   const categories = config.categorias.length ? config.categorias : Array.from(new Set(documents.map((document) => document.categoria).filter((value): value is string => Boolean(value))));
-  const canSubmit = role === 'client';
+  const canSubmit = true;
   const canReview = role === 'manager' || role === 'admin';
 
   const applyFilters = (event: FormEvent) => {
@@ -199,6 +205,19 @@ export function DocumentsWorkspace({ role, title, subtitle, clientId, compact = 
     }
   };
 
+  const saveUploadLimit = async (event: FormEvent) => {
+    event.preventDefault();
+    setSavingUploadLimit(true);
+    setActionError(null);
+    try {
+      setConfig(await atualizarLimiteUploadDocumentosApi(uploadLimitDraft));
+    } catch (cause) {
+      setActionError(errorMessage(cause, 'Não foi possível atualizar o limite de upload.'));
+    } finally {
+      setSavingUploadLimit(false);
+    }
+  };
+
   return (
     <div className={compact ? '' : 'space-y-6'}>
       {!compact && <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -208,6 +227,11 @@ export function DocumentsWorkspace({ role, title, subtitle, clientId, compact = 
           {canSubmit && <button type="button" onClick={() => setUploadTarget('new')} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"><FilePlus2 size={17} />Submeter documento</button>}
         </div>
       </header>}
+
+      {!compact && role === 'admin' && config.can_update_upload_limit && <form onSubmit={saveUploadLimit} className="flex flex-col gap-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-4 sm:flex-row sm:items-end sm:justify-between">
+        <div><div className="flex items-center gap-2 font-semibold text-slate-900"><Settings2 size={17} className="text-blue-600" />Limite funcional de upload</div><p className="mt-1 text-sm text-slate-600">Aplicado imediatamente a todos os documentos e limitado pelo teto técnico do servidor.</p></div>
+        <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">MB<input required inputMode="numeric" pattern="[0-9]*" min="1" max="100" value={uploadLimitDraft} onChange={(event) => setUploadLimitDraft(event.target.value)} className="w-20 rounded-lg border border-slate-300 bg-white px-3 py-2 text-right font-normal" /><button disabled={savingUploadLimit} className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">{savingUploadLimit ? 'A guardar…' : 'Guardar limite'}</button></label>
+      </form>}
 
       {actionError && <div role="alert" className="flex items-start justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"><span className="flex gap-2"><AlertCircle size={18} className="mt-0.5 shrink-0" />{actionError}</span><button type="button" onClick={() => setActionError(null)} aria-label="Fechar aviso"><X size={18} /></button></div>}
 
@@ -231,7 +255,7 @@ export function DocumentsWorkspace({ role, title, subtitle, clientId, compact = 
       </section>}
 
       {selected && <DocumentDetailModal document={selected} role={role} busy={busy} onClose={() => setSelected(null)} onDownload={() => void download(selected)} onReview={() => setReviewTarget(selected)} onNewVersion={() => setUploadTarget(selected)} onDeactivate={() => void deactivate(selected)} />}
-      {uploadTarget && <UploadModal config={config} versionOf={uploadTarget === 'new' ? null : uploadTarget} onClose={() => setUploadTarget(null)} onSuccess={onUploaded} setActionError={setActionError} />}
+      {uploadTarget && <UploadModal role={role} clients={visibleClients} config={config} versionOf={uploadTarget === 'new' ? null : uploadTarget} onClose={() => setUploadTarget(null)} onSuccess={onUploaded} setActionError={setActionError} />}
       {reviewTarget && <ReviewModal document={reviewTarget} states={config.estados} onClose={() => setReviewTarget(null)} onSuccess={onReviewed} setActionError={setActionError} />}
     </div>
   );
@@ -249,15 +273,16 @@ function DocumentDetailModal({ document, role, busy, onClose, onDownload, onRevi
   </Modal>;
 }
 
-function UploadModal({ config, versionOf, onClose, onSuccess, setActionError }: { config: ApiConfiguracaoDocumentos; versionOf: ApiDocumento | null; onClose: () => void; onSuccess: () => Promise<void>; setActionError: (value: string | null) => void }) {
+function UploadModal({ role, clients, config, versionOf, onClose, onSuccess, setActionError }: { role: DocumentRole; clients: ApiCliente[]; config: ApiConfiguracaoDocumentos; versionOf: ApiDocumento | null; onClose: () => void; onSuccess: () => Promise<void>; setActionError: (value: string | null) => void }) {
   const [title, setTitle] = useState(versionOf?.titulo || '');
   const [category, setCategory] = useState(versionOf?.categoria || config.categorias[0] || 'OUTRO');
   const [description, setDescription] = useState(versionOf?.descricao || '');
   const [documentDate, setDocumentDate] = useState(versionOf?.data_documento || '');
+  const [clientId, setClientId] = useState(versionOf?.cliente_id ? String(versionOf.cliente_id) : '');
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const submit = async (event: FormEvent) => { event.preventDefault(); if (!file) { setActionError('Selecione um ficheiro antes de submeter.'); return; } setSubmitting(true); setActionError(null); try { const payload = { titulo: title, categoria: category, descricao: description, data_documento: documentDate, file }; if (versionOf) await submeterVersaoDocumentoApi(versionOf.id, payload); else await submeterDocumentoApi(payload); await onSuccess(); } catch (cause) { setActionError(errorMessage(cause)); } finally { setSubmitting(false); } };
-  return <Modal title={versionOf ? 'Submeter nova versão' : 'Submeter documento'} onClose={onClose}><form onSubmit={submit} className="space-y-4"><p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">Ficheiro privado. Limite atual: {config.max_upload_mb} MB.</p><label className="block text-sm font-semibold text-slate-700">Título<input required value={title} onChange={(event) => setTitle(event.target.value)} maxLength={180} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal" /></label><label className="block text-sm font-semibold text-slate-700">Categoria<select value={category} onChange={(event) => setCategory(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal">{config.categorias.map((item) => <option key={item} value={item}>{labelFor(item)}</option>)}</select></label><label className="block text-sm font-semibold text-slate-700">Data do documento<input type="date" value={documentDate} onChange={(event) => setDocumentDate(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal" /></label><label className="block text-sm font-semibold text-slate-700">Descrição<textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={6000} rows={3} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal" /></label><label className="block text-sm font-semibold text-slate-700">Ficheiro<input required type="file" accept=".pdf,.docx,.xlsx,.csv,.png,.jpg,.jpeg" onChange={(event) => setFile(event.target.files?.[0] || null)} className="mt-1 block w-full text-sm font-normal" /></label><div className="flex justify-end gap-2 border-t border-slate-200 pt-4"><button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold">Cancelar</button><button disabled={submitting} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"><Upload size={16} />{submitting ? 'A submeter…' : 'Submeter'}</button></div></form></Modal>;
+  const submit = async (event: FormEvent) => { event.preventDefault(); if (!file) { setActionError('Selecione um ficheiro antes de submeter.'); return; } if (role !== 'client' && !versionOf && !clientId) { setActionError('Selecione a organização a que o documento pertence.'); return; } setSubmitting(true); setActionError(null); try { const payload = { cliente_id: clientId ? Number(clientId) : undefined, titulo: title, categoria: category, descricao: description, data_documento: documentDate, file }; if (versionOf) await submeterVersaoDocumentoApi(versionOf.id, payload); else await submeterDocumentoApi(payload); await onSuccess(); } catch (cause) { setActionError(errorMessage(cause)); } finally { setSubmitting(false); } };
+  return <Modal title={versionOf ? 'Submeter nova versão' : 'Submeter documento'} onClose={onClose}><form onSubmit={submit} className="space-y-4"><p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">Ficheiro privado. Limite atual: {config.max_upload_mb} MB.</p>{role !== 'client' && !versionOf && <label className="block text-sm font-semibold text-slate-700">Organização<select required value={clientId} onChange={(event) => setClientId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal"><option value="">Selecionar organização</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.nome}{client.nif ? ` — NIF ${client.nif}` : ''}</option>)}</select></label>}<label className="block text-sm font-semibold text-slate-700">Título<input required value={title} onChange={(event) => setTitle(event.target.value)} maxLength={180} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal" /></label><label className="block text-sm font-semibold text-slate-700">Categoria<select value={category} onChange={(event) => setCategory(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal">{config.categorias.map((item) => <option key={item} value={item}>{labelFor(item)}</option>)}</select></label><label className="block text-sm font-semibold text-slate-700">Data do documento<input type="date" value={documentDate} onChange={(event) => setDocumentDate(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal" /></label><label className="block text-sm font-semibold text-slate-700">Descrição<textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={6000} rows={3} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal" /></label><label className="block text-sm font-semibold text-slate-700">Ficheiro<input required type="file" accept=".pdf,.docx,.xlsx,.csv,.png,.jpg,.jpeg" onChange={(event) => setFile(event.target.files?.[0] || null)} className="mt-1 block w-full text-sm font-normal" /></label><div className="flex justify-end gap-2 border-t border-slate-200 pt-4"><button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold">Cancelar</button><button disabled={submitting} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"><Upload size={16} />{submitting ? 'A submeter…' : 'Submeter'}</button></div></form></Modal>;
 }
 
 function ReviewModal({ document, states, onClose, onSuccess, setActionError }: { document: ApiDocumento; states: string[]; onClose: () => void; onSuccess: () => Promise<void>; setActionError: (value: string | null) => void }) {
