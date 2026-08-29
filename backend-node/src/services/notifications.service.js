@@ -7,7 +7,8 @@ function serialise(notification) {
   const row = notification.get ? notification.get({ plain: true }) : notification;
   return {
     id: Number(row.id),
-    incidente_id: Number(row.incidente_id),
+    incidente_id: row.incidente_id === null || row.incidente_id === undefined ? null : Number(row.incidente_id),
+    documento_id: row.documento_id === null || row.documento_id === undefined ? null : Number(row.documento_id),
     cliente_id: Number(row.cliente_id),
     tipo: row.tipo,
     titulo: row.titulo,
@@ -19,37 +20,42 @@ function serialise(notification) {
   };
 }
 
+async function activeRecipientIdsForClient(clientId, profileCode, transaction, { principalOnly = false } = {}) {
+  const { Profile, User, UserClient } = getModels();
+  const links = await UserClient.findAll({
+    where: { cliente_id: clientId, ativo: true, ...(principalOnly ? { principal: true } : {}) },
+    include: [{
+      model: User, as: 'utilizador', required: true, where: { ativo: true }, attributes: ['id'],
+      include: [{ model: Profile, as: 'perfil', required: true, where: { codigo: profileCode }, attributes: [] }],
+    }],
+    attributes: ['utilizador_id'], transaction,
+  });
+  return links.map((link) => Number(link.utilizador_id));
+}
+
+async function activeAdminIds(transaction) {
+  const { Profile, User } = getModels();
+  const admins = await User.findAll({
+    where: { ativo: true }, attributes: ['id'], transaction,
+    include: [{ model: Profile, as: 'perfil', required: true, where: { codigo: 'ADMINISTRADOR' }, attributes: [] }],
+  });
+  return admins.map((user) => Number(user.id));
+}
+
 function incidentLabel(incident) {
   return incident.codigo || `#${incident.id}`;
 }
 
 async function nis2RecipientIds(clientId, transaction) {
-  const { Profile, User, UserClient } = getModels();
-  const admins = await User.findAll({
-    where: { ativo: true },
-    include: [{ model: Profile, as: 'perfil', where: { codigo: 'ADMINISTRADOR' }, attributes: [] }],
-    attributes: ['id'], transaction,
-  });
-  const managerLinks = await UserClient.findAll({
-    where: { cliente_id: clientId, ativo: true },
-    include: [{
-      model: User, as: 'utilizador', required: true, where: { ativo: true }, attributes: ['id'],
-      include: [{ model: Profile, as: 'perfil', required: true, where: { codigo: 'COLABORADOR' }, attributes: [] }],
-    }],
-    attributes: ['utilizador_id'], transaction,
-  });
-  const clientLinks = await UserClient.findAll({
-    where: { cliente_id: clientId, ativo: true, principal: true },
-    include: [{
-      model: User, as: 'utilizador', required: true, where: { ativo: true }, attributes: ['id'],
-      include: [{ model: Profile, as: 'perfil', required: true, where: { codigo: 'CLIENTE' }, attributes: [] }],
-    }],
-    attributes: ['utilizador_id'], transaction,
-  });
+  const [admins, managerLinks, clientLinks] = await Promise.all([
+    activeAdminIds(transaction),
+    activeRecipientIdsForClient(clientId, 'COLABORADOR', transaction),
+    activeRecipientIdsForClient(clientId, 'CLIENTE', transaction, { principalOnly: true }),
+  ]);
   return [...new Set([
-    ...admins.map((user) => Number(user.id)),
-    ...managerLinks.map((link) => Number(link.utilizador_id)),
-    ...clientLinks.map((link) => Number(link.utilizador_id)),
+    ...admins,
+    ...managerLinks,
+    ...clientLinks,
   ])];
 }
 
@@ -89,6 +95,71 @@ export async function createNis2Notifications({ incident, actorId, transaction }
   return created;
 }
 
+const DOCUMENT_NOTIFICATION_TYPES = new Set(['DOCUMENTO_SUBMETIDO', 'DOCUMENTO_REVISTO', 'DOCUMENTO_NOVA_VERSAO']);
+
+function documentLabel(document) {
+  return document.titulo || `#${document.id}`;
+}
+
+async function activeDocumentAuthorId(document, transaction) {
+  if (!document.submetido_por) return null;
+  const { User } = getModels();
+  const user = await User.findOne({ where: { id: document.submetido_por, ativo: true }, attributes: ['id'], transaction });
+  return user ? Number(user.id) : null;
+}
+
+/**
+ * Persiste notificações documentais antes da emissão Socket.IO. O índice único
+ * parcial evita duplicados; uma revisão posterior atualiza e volta a assinalar
+ * como não lida a mesma notificação do documento/destinatário/tipo.
+ */
+export async function createDocumentNotifications({ document, eventType, actorId, transaction, estado }) {
+  if (!DOCUMENT_NOTIFICATION_TYPES.has(eventType)) throw httpError(400, 'Tipo de notificação documental inválido.');
+  const { Notification } = getModels();
+  const row = document.get ? document.get({ plain: true }) : document;
+  const isSubmission = eventType === 'DOCUMENTO_SUBMETIDO' || eventType === 'DOCUMENTO_NOVA_VERSAO';
+  const authorId = isSubmission ? null : await activeDocumentAuthorId(row, transaction);
+  const recipients = isSubmission
+    ? [...new Set([...(await activeAdminIds(transaction)), ...(await activeRecipientIdsForClient(row.cliente_id, 'COLABORADOR', transaction))])]
+    : [...new Set([
+      ...(await activeRecipientIdsForClient(row.cliente_id, 'CLIENTE', transaction, { principalOnly: true })),
+      ...(authorId ? [authorId] : []),
+    ])];
+
+  const title = isSubmission
+    ? `Documento submetido: ${documentLabel(row)}`
+    : `Documento revisto: ${documentLabel(row)}`;
+  const message = isSubmission
+    ? 'Existe um documento pendente de consulta na organização autorizada.'
+    : `O estado do documento foi atualizado para ${estado ?? row.estado}.`;
+  const notifications = [];
+  for (const userId of recipients) {
+    const existing = await Notification.findOne({ where: { utilizador_id: userId, documento_id: row.id, tipo: eventType }, transaction });
+    const values = {
+      cliente_id: row.cliente_id,
+      titulo: title,
+      mensagem: message,
+      lida: false,
+      lida_em: null,
+      atualizado_em: new Date(),
+    };
+    const notification = existing
+      ? await existing.update(values, { transaction })
+      : await Notification.create({
+        utilizador_id: userId, documento_id: row.id, incidente_id: null, tipo: eventType,
+        criado_em: new Date(), ...values,
+      }, { transaction });
+    notifications.push({ utilizador_id: userId, ...serialise(notification) });
+  }
+  if (notifications.length) {
+    await recordAudit({
+      userId: actorId, action: 'NOTIFICAR_DOCUMENTO', entity: 'documentos', entityId: Number(row.id),
+      details: { cliente_id: Number(row.cliente_id), tipo: eventType, destinatarios: notifications.map((item) => item.utilizador_id) },
+    }, transaction);
+  }
+  return notifications;
+}
+
 export async function listNotifications(auth, { limit } = {}) {
   const { Notification } = getModels();
   const requested = Number(limit ?? 50);
@@ -112,7 +183,11 @@ export async function markNotificationRead(auth, notificationId) {
       await notification.update({ lida: true, lida_em: new Date(), atualizado_em: new Date() }, { transaction });
       await recordAudit({
         userId: Number(auth.sub), action: 'LER_NOTIFICACAO', entity: 'notificacoes_utilizadores', entityId: id,
-        details: { incidente_id: Number(notification.incidente_id), cliente_id: Number(notification.cliente_id) },
+        details: {
+          incidente_id: notification.incidente_id === null ? null : Number(notification.incidente_id),
+          documento_id: notification.documento_id === null ? null : Number(notification.documento_id),
+          cliente_id: Number(notification.cliente_id),
+        },
       }, transaction);
     });
   }

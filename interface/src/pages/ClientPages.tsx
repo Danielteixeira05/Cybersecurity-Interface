@@ -12,6 +12,7 @@ import {
   type ApiPedido, type ApiAvaliacao, type ApiClienteDetalhe, type ApiNotificacao,
 } from '../apiClient';
 import { AssetsWorkspace, IncidentsWorkspace } from '../components/OperationalResources';
+import { DocumentsWorkspace } from '../components/DocumentsWorkspace';
 import { INCIDENT_CHANGED_EVENT } from '../realtime';
 
 interface PageProps {
@@ -397,47 +398,7 @@ export function ClientIncidents() {
 }
 
 export function ClientDocuments({ setPage }: PageProps) {
-  const [data, setData] = useState<ApiDocumento[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    documentosApi()
-      .then(setData)
-      .catch((e) => setErr(e?.message || 'Erro'))
-      .finally(() => setLoading(false));
-  }, []);
-
-  return (
-    <div>
-      <PageHeader
-        title="Documentos"
-        subtitle={`${data.length} documentos associados à sua conta`}
-        actions={
-          <>
-            <button onClick={() => setPage('cli-reports')} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-              Relatórios
-            </button>
-            <button className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">+ Submeter</button>
-          </>
-        }
-      />
-      {loading ? <Loader /> : err ? <ErrorCard msg={err} /> : (
-        <DataTable
-          data={data}
-          columns={[
-            { key: 'id', label: 'ID', width: '50px', render: (r) => <span className="font-mono text-xs">#{r.id}</span> },
-            { key: 'titulo', label: 'Título', render: (r) => <div className="font-medium text-slate-900">{r.titulo}</div> },
-            { key: 'tipo', label: 'Tipo', render: (r) => <span className="badge bg-blue-50 text-blue-700">{r.tipo || '—'}</span> },
-            { key: 'formato', label: 'Formato', render: (r) => <span className="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded">{r.formato || '—'}</span> },
-            { key: 'tamanho_bytes', label: 'Tamanho', render: (r) => `${((r.tamanho_bytes || 0) / 1024).toFixed(1)} KB` },
-            { key: 'submetido_em', label: 'Submetido', render: (r) => r.submetido_em ? new Date(r.submetido_em).toLocaleDateString('pt-PT') : '—' },
-            { key: 'id', label: '', width: '80px', render: () => <button className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium hover:bg-slate-50">Download</button> },
-          ]}
-        />
-      )}
-    </div>
-  );
+  return <DocumentsWorkspace role="client" title="Documentos" subtitle="Documentos privados associados à sua organização." />;
 }
 
 export function ClientRequests({ setPage }: PageProps) {

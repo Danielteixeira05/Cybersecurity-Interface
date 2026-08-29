@@ -17,6 +17,7 @@ import {
   type ApiNoticia, type PerfilCodigo, session,
 } from '../apiClient';
 import { AssetsWorkspace, IncidentsWorkspace } from '../components/OperationalResources';
+import { DocumentsWorkspace } from '../components/DocumentsWorkspace';
 import { INCIDENT_CHANGED_EVENT } from '../realtime';
 
 // ========== UI HELPERS ==========
@@ -807,64 +808,7 @@ export function AdminAssets() {
 
 // ========== ADMIN DOCUMENTS ==========
 export function AdminDocuments() {
-  const [data, setData] = useState<ApiDocumento[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    documentosApi()
-      .then(setData)
-      .catch((e) => setErr(e?.message || 'Erro'))
-      .finally(() => setLoading(false));
-  }, []);
-
-  return (
-    <div>
-      <PageHeader
-        title="Documentos da Plataforma"
-        subtitle={`${data.length} documentos armazenados e encriptados`}
-        actions={
-          <button className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
-            + Submeter Documento
-          </button>
-        }
-      />
-      {loading ? <Loader /> : err ? <ErrorCard msg={err} /> : (
-        <DataTable
-          data={data}
-          columns={[
-            { key: 'id', label: 'ID', width: '60px', render: (r) => <span className="font-mono text-xs text-slate-500">#{r.id}</span> },
-            { key: 'titulo', label: 'Título', render: (r) => (
-              <div>
-                <div className="font-medium text-slate-900">{r.titulo}</div>
-                <div className="text-xs text-slate-500">Cliente: {r.cliente_nome || '—'}</div>
-              </div>
-            )},
-            { key: 'tipo', label: 'Tipo', render: (r) => (
-              <span className="badge bg-blue-50 text-blue-700">{r.tipo || '—'}</span>
-            )},
-            { key: 'formato', label: 'Formato', render: (r) => (
-              <span className="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded text-slate-700">
-                {r.formato || '—'}
-              </span>
-            )},
-            { key: 'tamanho_bytes', label: 'Tamanho', render: (r) => {
-              const b = r.tamanho_bytes || 0;
-              return <span className="text-sm text-slate-600">{(b / 1024).toFixed(1)} KB</span>;
-            }},
-            { key: 'submetido_em', label: 'Submetido', render: (r) => r.submetido_em ? (
-              <span className="text-xs text-slate-600">{new Date(r.submetido_em).toLocaleDateString('pt-PT')}</span>
-            ) : '—' },
-            { key: 'cliente_id', label: 'Ação', width: '80px', render: () => (
-              <button className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
-                Download
-              </button>
-            )},
-          ]}
-        />
-      )}
-    </div>
-  );
+  return <DocumentsWorkspace role="admin" title="Documentos da Plataforma" subtitle="Documentos privados, versões e revisões da plataforma." />;
 }
 
 // ========== ADMIN INCIDENTS ==========

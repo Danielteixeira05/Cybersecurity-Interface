@@ -176,9 +176,10 @@ export interface ApiIncidente {
 
 export interface ApiNotificacao {
   id: number;
-  incidente_id: number;
+  incidente_id: number | null;
+  documento_id?: number | null;
   cliente_id: number;
-  tipo: 'INCIDENTE_NIS2';
+  tipo: 'INCIDENTE_NIS2' | 'DOCUMENTO_SUBMETIDO' | 'DOCUMENTO_REVISTO' | 'DOCUMENTO_NOVA_VERSAO';
   titulo: string;
   mensagem: string;
   lida: boolean;
@@ -275,6 +276,56 @@ export interface ApiDocumento {
   categoria?: string | null;
   nome_ficheiro_original?: string;
   tipo_mime?: string | null;
+  estado?: string | null;
+  versao?: string | null;
+  data_documento?: string | null;
+  documento_anterior_id?: number | null;
+  revisto_por?: number | null;
+  revisto_em?: string | null;
+  ativo?: boolean;
+  criado_em?: string;
+  atualizado_em?: string;
+  descricao?: string | null;
+  submetido_por?: { id: number; nome: string } | null;
+  revisor?: { id: number; nome: string } | null;
+}
+
+export interface ApiRevisaoDocumento {
+  id: number;
+  documento_id: number;
+  estado_anterior?: string | null;
+  estado_novo: string;
+  observacao?: string | null;
+  criado_em?: string;
+  autor?: { id: number; nome: string } | null;
+}
+
+export interface ApiDocumentoDetalhe extends ApiDocumento {
+  historico?: ApiRevisaoDocumento[];
+  versoes?: ApiDocumento[];
+}
+
+export interface ApiConfiguracaoDocumentos {
+  max_upload_mb: number;
+  categorias: string[];
+  estados: string[];
+}
+
+export interface FiltrosDocumentos {
+  cliente_id?: number;
+  q?: string;
+  categoria?: string;
+  estado?: string;
+  de?: string;
+  ate?: string;
+}
+
+export interface SubmeterDocumentoPayload {
+  titulo: string;
+  categoria: string;
+  descricao?: string;
+  data_documento?: string;
+  file: File;
 }
 
 export interface ApiPedido {
@@ -707,9 +758,10 @@ function normaliseNotificacao(value: unknown): ApiNotificacao {
   const raw = asRecord(value);
   return {
     id: requiredNumber(raw.id, 'notificacao.id'),
-    incidente_id: requiredNumber(raw.incidente_id, 'notificacao.incidente_id'),
+    incidente_id: numericValue(raw.incidente_id) ?? null,
+    documento_id: numericValue(raw.documento_id) ?? null,
     cliente_id: requiredNumber(raw.cliente_id, 'notificacao.cliente_id'),
-    tipo: 'INCIDENTE_NIS2',
+    tipo: (typeof raw.tipo === 'string' ? raw.tipo : 'INCIDENTE_NIS2') as ApiNotificacao['tipo'],
     titulo: requiredString(raw.titulo, 'notificacao.titulo'),
     mensagem: requiredString(raw.mensagem, 'notificacao.mensagem'),
     lida: raw.lida === true,
@@ -731,6 +783,13 @@ export function normaliseDocumento(value: unknown): ApiDocumento {
     tipo: tipo ?? null,
     formato: (raw.formato ?? raw.tipo_mime) as string | null | undefined,
     tamanho_bytes: numericValue(raw.tamanho_bytes) ?? null,
+    estado: typeof raw.estado === 'string' ? raw.estado : null,
+    versao: typeof raw.versao === 'string' ? raw.versao : null,
+    data_documento: typeof raw.data_documento === 'string' ? raw.data_documento : null,
+    documento_anterior_id: numericValue(raw.documento_anterior_id) ?? null,
+    revisto_por: numericValue(raw.revisto_por) ?? null,
+    revisto_em: typeof raw.revisto_em === 'string' ? raw.revisto_em : null,
+    ativo: typeof raw.ativo === 'boolean' ? raw.ativo : undefined,
   };
 }
 
@@ -976,10 +1035,89 @@ export async function marcarConversaLidaApi(conversaId: number): Promise<{ conve
   await ensureCsrfToken();
   return apiFetch(`/api/conversations/${conversaId}/read`, { method: 'PATCH', body: JSON.stringify({}) });
 }
-export async function documentosApi(clienteId?: number): Promise<ApiDocumento[]> {
-  const qs = clienteId ? `?cliente_id=${clienteId}` : '';
-  const result = await apiFetch<unknown>(`/api/documentos/${qs}`);
+export async function documentosApi(filters: FiltrosDocumentos | number = {}): Promise<ApiDocumento[]> {
+  const resolvedFilters: FiltrosDocumentos = typeof filters === 'number' ? { cliente_id: filters } : filters;
+  const search = new URLSearchParams();
+  Object.entries(resolvedFilters).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') search.set(key, String(value));
+  });
+  const qs = search.toString() ? `?${search.toString()}` : '';
+  const result = await apiFetch<unknown>(`/api/documents/${qs}`);
   return Array.isArray(result) ? result.map(normaliseDocumento) : [];
+}
+
+export async function documentoDetalheApi(documentId: number): Promise<ApiDocumentoDetalhe> {
+  const raw = await apiFetch<Record<string, unknown>>(`/api/documents/${documentId}`);
+  const document = normaliseDocumento(raw.documento);
+  const history = Array.isArray(raw.historico) ? raw.historico.map((entry) => {
+    const review = asRecord(entry);
+    return {
+      id: requiredNumber(review.id, 'revisao.id'),
+      documento_id: requiredNumber(review.documento_id, 'revisao.documento_id'),
+      estado_anterior: typeof review.estado_anterior === 'string' ? review.estado_anterior : null,
+      estado_novo: requiredString(review.estado_novo, 'revisao.estado_novo'),
+      observacao: typeof review.observacao === 'string' ? review.observacao : null,
+      criado_em: typeof review.criado_em === 'string' ? review.criado_em : undefined,
+      autor: review.autor && typeof review.autor === 'object' ? review.autor as ApiRevisaoDocumento['autor'] : null,
+    } satisfies ApiRevisaoDocumento;
+  }) : [];
+  const versions = Array.isArray(raw.versoes_relacionadas) ? raw.versoes_relacionadas.map(normaliseDocumento) : [];
+  return { ...document, historico: history, versoes: versions };
+}
+
+export async function configuracaoDocumentosApi(): Promise<ApiConfiguracaoDocumentos> {
+  const raw = await apiFetch<Record<string, unknown>>('/api/documents/config');
+  return {
+    max_upload_mb: requiredNumber(raw.max_upload_mb, 'documentos.max_upload_mb'),
+    categorias: Array.isArray(raw.categories) ? raw.categories.filter((item): item is string => typeof item === 'string') : [],
+    estados: Array.isArray(raw.states) ? raw.states.filter((item): item is string => typeof item === 'string') : [],
+  };
+}
+
+function documentFormData(payload: SubmeterDocumentoPayload): FormData {
+  const form = new FormData();
+  form.set('titulo', payload.titulo);
+  form.set('categoria', payload.categoria);
+  if (payload.descricao) form.set('descricao', payload.descricao);
+  if (payload.data_documento) form.set('data_documento', payload.data_documento);
+  form.set('file', payload.file);
+  return form;
+}
+
+export async function submeterDocumentoApi(payload: SubmeterDocumentoPayload): Promise<ApiDocumentoDetalhe> {
+  await ensureCsrfToken();
+  const raw = await apiFetch<Record<string, unknown>>('/api/documents', { method: 'POST', body: documentFormData(payload) });
+  return documentoDetalheDeResposta(raw);
+}
+
+export async function submeterVersaoDocumentoApi(documentId: number, payload: SubmeterDocumentoPayload): Promise<ApiDocumentoDetalhe> {
+  await ensureCsrfToken();
+  const raw = await apiFetch<Record<string, unknown>>(`/api/documents/${documentId}/versions`, { method: 'POST', body: documentFormData(payload) });
+  return documentoDetalheDeResposta(raw);
+}
+
+function documentoDetalheDeResposta(raw: Record<string, unknown>): ApiDocumentoDetalhe {
+  const document = normaliseDocumento(raw.documento);
+  return { ...document };
+}
+
+export async function reverDocumentoApi(documentId: number, payload: { estado: string; observacao?: string }): Promise<ApiDocumentoDetalhe> {
+  await ensureCsrfToken();
+  const raw = await apiFetch<Record<string, unknown>>(`/api/documents/${documentId}/review`, { method: 'PATCH', body: JSON.stringify(payload) });
+  return documentoDetalheDeResposta(raw);
+}
+
+export async function desativarDocumentoApi(documentId: number): Promise<ApiDocumento> {
+  await ensureCsrfToken();
+  return normaliseDocumento(await apiFetch(`/api/documents/${documentId}/deactivate`, { method: 'PATCH', body: JSON.stringify({}) }));
+}
+
+export async function descarregarDocumentoApi(documentId: number): Promise<{ blob: Blob; filename: string }> {
+  const response = await api.get<Blob>(`/api/documents/${documentId}/download`, { responseType: 'blob' });
+  const header = response.headers['content-disposition'];
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header || '')?.[1];
+  const simple = /filename="?([^";]+)"?/i.exec(header || '')?.[1];
+  return { blob: response.data, filename: encoded ? decodeURIComponent(encoded) : (simple || 'documento') };
 }
 export async function pedidosApi(clienteId?: number): Promise<ApiPedido[]> {
   const qs = clienteId ? `?cliente_id=${clienteId}` : '';

@@ -171,7 +171,8 @@ export function getModels() {
   const Notification = define('Notification', {
     id,
     utilizador_id: { type: DataTypes.BIGINT, allowNull: false },
-    incidente_id: { type: DataTypes.BIGINT, allowNull: false },
+    incidente_id: DataTypes.BIGINT,
+    documento_id: DataTypes.BIGINT,
     cliente_id: { type: DataTypes.BIGINT, allowNull: false },
     tipo: { type: DataTypes.STRING(40), allowNull: false },
     titulo: { type: DataTypes.STRING(180), allowNull: false },
@@ -222,7 +223,24 @@ export function getModels() {
     submetido_por: DataTypes.BIGINT,
     submetido_em: { type: DataTypes.DATE, allowNull: false },
     ativo: { type: DataTypes.BOOLEAN, allowNull: false },
+    estado: { type: DataTypes.STRING(30), allowNull: false },
+    versao: { type: DataTypes.STRING(40), allowNull: false },
+    data_documento: DataTypes.DATEONLY,
+    documento_anterior_id: DataTypes.BIGINT,
+    revisto_por: DataTypes.BIGINT,
+    revisto_em: DataTypes.DATE,
+    atualizado_em: updatedAt,
   }, 'documentos');
+
+  const DocumentReview = define('DocumentReview', {
+    id,
+    documento_id: { type: DataTypes.BIGINT, allowNull: false },
+    estado_anterior: DataTypes.STRING(30),
+    estado_novo: { type: DataTypes.STRING(30), allowNull: false },
+    observacao: DataTypes.TEXT,
+    autor_id: { type: DataTypes.BIGINT, allowNull: false },
+    criado_em: createdAt,
+  }, 'documentos_revisoes');
 
   const RequestStatus = define('RequestStatus', {
     id: smallId,
@@ -335,6 +353,18 @@ export function getModels() {
   ConversationRead.belongsTo(Message, { foreignKey: 'ultima_mensagem_id', as: 'ultimaMensagem' });
   Client.hasMany(Document, { foreignKey: 'cliente_id', as: 'documentos' });
   Document.belongsTo(Client, { foreignKey: 'cliente_id', as: 'cliente' });
+  User.hasMany(Document, { foreignKey: 'submetido_por', as: 'documentosSubmetidos' });
+  Document.belongsTo(User, { foreignKey: 'submetido_por', as: 'submetidoPor' });
+  User.hasMany(Document, { foreignKey: 'revisto_por', as: 'documentosRevistos' });
+  Document.belongsTo(User, { foreignKey: 'revisto_por', as: 'revistoPor' });
+  Document.belongsTo(Document, { foreignKey: 'documento_anterior_id', as: 'documentoAnterior' });
+  Document.hasMany(Document, { foreignKey: 'documento_anterior_id', as: 'versoesSeguintes' });
+  Document.hasMany(DocumentReview, { foreignKey: 'documento_id', as: 'revisoes' });
+  DocumentReview.belongsTo(Document, { foreignKey: 'documento_id', as: 'documento' });
+  User.hasMany(DocumentReview, { foreignKey: 'autor_id', as: 'revisoesDocumentos' });
+  DocumentReview.belongsTo(User, { foreignKey: 'autor_id', as: 'autor' });
+  Document.hasMany(Notification, { foreignKey: 'documento_id', as: 'notificacoes' });
+  Notification.belongsTo(Document, { foreignKey: 'documento_id', as: 'documento' });
   Client.hasMany(Request, { foreignKey: 'cliente_id', as: 'pedidos' });
   Request.belongsTo(Client, { foreignKey: 'cliente_id', as: 'cliente' });
   Request.belongsTo(RequestStatus, { foreignKey: 'estado_id', as: 'estado' });
@@ -345,7 +375,7 @@ export function getModels() {
   models = {
     sequelize, Profile, User, Client, UserClient, ClientContact, ConformityStatus,
     RiskAssessment, Asset, Incident, Notification, Conversation, Message, ConversationRead,
-    Document, RequestStatus, Request, ActivityLog,
+    Document, DocumentReview, RequestStatus, Request, ActivityLog,
     SiteContent, News, ContactMessage,
   };
   return models;

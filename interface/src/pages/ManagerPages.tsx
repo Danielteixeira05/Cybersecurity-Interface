@@ -16,6 +16,7 @@ import {
   type ApiDocumento, type ApiPedido, type ApiAvaliacao,
 } from '../apiClient';
 import { AssetsWorkspace, IncidentsWorkspace } from '../components/OperationalResources';
+import { DocumentsWorkspace } from '../components/DocumentsWorkspace';
 import { INCIDENT_CHANGED_EVENT } from '../realtime';
 
 interface PageProps {
@@ -670,41 +671,7 @@ export function MgrIncidents({ setPage }: PageProps) {
 }
 
 export function MgrDocuments() {
-  const [data, setData] = useState<ApiDocumento[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
-  const [q, setQ] = useState('');
-  const [type, setType] = useState('');
-
-  useEffect(() => {
-    documentosApi()
-      .then(setData)
-      .catch((e) => setErr(e?.message || 'Erro'))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const types = Array.from(new Set(data.map((document) => document.tipo || document.categoria).filter((value): value is string => Boolean(value))));
-  const filtered = data.filter((document) => {
-    const value = q.trim().toLowerCase();
-    const matchesSearch = !value || `${document.titulo} ${document.cliente_nome || ''} ${document.nome_ficheiro_original || ''}`.toLowerCase().includes(value);
-    return matchesSearch && (!type || document.tipo === type || document.categoria === type);
-  });
-  const formatBytes = (bytes?: number | null) => {
-    if (!bytes) return '—';
-    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
-  return (
-    <div className="mgr-visual-page mgr-documents-v98">
-      <PageHeader title="Documentos" subtitle="Documentos dos clientes sob a sua gestão." />
-      {loading ? <Loader /> : err ? <ErrorCard msg={err} /> : <>
-        <section className="mgr-documents-v98__summary" aria-label="Resumo de documentos"><div><FileText aria-hidden="true" /><span><strong>{data.length}</strong>Documentos</span></div><div><Building2 aria-hidden="true" /><span><strong>{new Set(data.map((document) => document.cliente_id)).size}</strong>Clientes</span></div><div><FolderOpen aria-hidden="true" /><span><strong>{types.length}</strong>Tipos</span></div></section>
-        <section className="mgr-documents-v98__filters" aria-label="Pesquisa de documentos"><label><Search size={18} aria-hidden="true" /><input value={q} onChange={(event) => setQ(event.target.value)} placeholder="Pesquisar documentos..." /></label><select value={type} onChange={(event) => setType(event.target.value)} aria-label="Filtrar por tipo"><option value="">Todos os tipos</option>{types.map((item) => <option key={item} value={item}>{item}</option>)}</select><span>{filtered.length} resultado{filtered.length === 1 ? '' : 's'}</span></section>
-        {filtered.length === 0 ? <DataTable<ApiDocumento> data={[]} columns={[]} emptyText="Nenhum documento corresponde aos filtros." /> : <section className="mgr-documents-v98__list" aria-label="Documentos disponíveis">{filtered.map((document) => <article key={document.id} className="mgr-documents-v98__item"><span className="mgr-documents-v98__icon"><FileText size={22} aria-hidden="true" /></span><div><h2>{document.titulo}</h2><p>{document.cliente_nome || 'Cliente não indicado'}</p><div><span className="badge bg-blue-50 text-blue-700">{document.tipo || document.categoria || '—'}</span><span>{document.formato || document.tipo_mime || 'Formato não indicado'}</span><span>{formatBytes(document.tamanho_bytes)}</span></div></div><time dateTime={document.submetido_em || undefined}>{document.submetido_em ? new Intl.DateTimeFormat('pt-PT', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(document.submetido_em)) : '—'}</time></article>)}</section>}
-      </>}
-    </div>
-  );
+  return <div className="mgr-visual-page"><DocumentsWorkspace role="manager" title="Documentos" subtitle="Documentos dos clientes sob a sua gestão." /></div>;
 }
 
 export function MgrRequests() {

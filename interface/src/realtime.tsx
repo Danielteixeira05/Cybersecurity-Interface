@@ -3,6 +3,7 @@ import { marcarNotificacaoLidaApi, notificacoesApi, type ApiNotificacao } from '
 import { closeRealtimeSocket, realtimeSocket } from './socketClient';
 
 export const INCIDENT_CHANGED_EVENT = 'ciberbox:incident-changed';
+export const DOCUMENT_CHANGED_EVENT = 'ciberbox:document-changed';
 
 type RealtimeState = {
   notifications: ApiNotificacao[];
@@ -39,6 +40,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     const onDisconnect = () => setConnected(false);
     const onNotification = () => { void refreshNotifications(); };
     const onIncident = () => window.dispatchEvent(new Event(INCIDENT_CHANGED_EVENT));
+    const onDocument = () => window.dispatchEvent(new Event(DOCUMENT_CHANGED_EVENT));
     const onFocus = () => { void refreshNotifications(); };
 
     socket.on('connect', onConnect);
@@ -48,6 +50,8 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     socket.on('incident:created', onIncident);
     socket.on('incident:updated', onIncident);
     socket.on('incident:deactivated', onIncident);
+    socket.on('document:submitted', onDocument);
+    socket.on('document:reviewed', onDocument);
     socket.on('summary:updated', onIncident);
     window.addEventListener('focus', onFocus);
     void refreshNotifications();
@@ -62,6 +66,8 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       socket.off('incident:created', onIncident);
       socket.off('incident:updated', onIncident);
       socket.off('incident:deactivated', onIncident);
+      socket.off('document:submitted', onDocument);
+      socket.off('document:reviewed', onDocument);
       socket.off('summary:updated', onIncident);
       closeRealtimeSocket();
     };

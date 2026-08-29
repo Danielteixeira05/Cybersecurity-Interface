@@ -5,6 +5,14 @@ const optional = (name) => {
   return value || undefined;
 };
 
+function positiveInteger(name, fallback) {
+  const value = optional(name);
+  if (value === undefined) return fallback;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > 100) throw new Error(`${name} tem de ser um inteiro entre 1 e 100.`);
+  return parsed;
+}
+
 function boolean(name, fallback = false) {
   const value = optional(name);
   if (value === undefined) return fallback;
@@ -25,6 +33,8 @@ export const env = Object.freeze({
   corsOrigin,
   socketCorsOrigins,
   readOnlyMode: boolean('READ_ONLY_MODE', false),
+  maxUploadMb: positiveInteger('MAX_UPLOAD_MB', 10),
+  documentUploadSafetyMaxMb: positiveInteger('DOCUMENT_UPLOAD_SAFETY_MAX_MB', 50),
 });
 
 export function missingDatabaseMessage() {

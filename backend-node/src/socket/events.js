@@ -31,7 +31,8 @@ export function emitNotification(notification) {
   io.to(roomForUser(notification.utilizador_id)).emit('notification:new', {
     id: Number(notification.id),
     tipo: notification.tipo,
-    incidente_id: Number(notification.incidente_id),
+    incidente_id: notification.incidente_id === null || notification.incidente_id === undefined ? null : Number(notification.incidente_id),
+    documento_id: notification.documento_id === null || notification.documento_id === undefined ? null : Number(notification.documento_id),
     cliente_id: Number(notification.cliente_id),
     data: notification.criado_em ?? new Date().toISOString(),
   });
@@ -40,9 +41,24 @@ export function emitNotification(notification) {
 export function emitNotificationRead(userId, notification) {
   if (!io) return;
   io.to(roomForUser(userId)).emit('notification:read', {
-    id: Number(notification.id), tipo: notification.tipo, incidente_id: Number(notification.incidente_id),
+    id: Number(notification.id), tipo: notification.tipo,
+    incidente_id: notification.incidente_id === null || notification.incidente_id === undefined ? null : Number(notification.incidente_id),
+    documento_id: notification.documento_id === null || notification.documento_id === undefined ? null : Number(notification.documento_id),
     cliente_id: Number(notification.cliente_id), data: notification.atualizado_em ?? new Date().toISOString(),
   });
+}
+
+/** Eventos documentais só chegam a utilizadores já autorizados pelo serviço. */
+export function emitDocumentChanged(kind, document, recipientIds) {
+  if (!io || !document) return;
+  const payload = {
+    id: Number(document.id), cliente_id: Number(document.cliente_id), estado: document.estado,
+    tipo: 'DOCUMENTO', data: new Date().toISOString(),
+  };
+  for (const userId of recipientIds) {
+    io.to(roomForUser(userId)).emit(`document:${kind}`, payload);
+    io.to(roomForUser(userId)).emit('summary:updated', payload);
+  }
 }
 
 /**
