@@ -3,5 +3,15 @@
     "api/socket-io.js": {
       "maxDuration": 300
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/api/socket-io/:path*",
+      "destination": "/api/socket-io"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "/api/[...path]"
+    }
+  ]
 }
