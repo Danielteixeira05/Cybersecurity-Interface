@@ -23,6 +23,21 @@ function boolean(name, fallback = false) {
 
 const nodeEnv = optional('NODE_ENV') ?? 'development';
 
+/**
+ * A Vercel recebe apenas o valor da variável, mas esta normalização também
+ * aceita o formato habitual copiado de um ficheiro .env. Não reduz a
+ * validação posterior do host Neon nem do pooler.
+ */
+export function normaliseDatabaseUrl(value) {
+  if (!value) return value;
+
+  let normalised = value.trim().replace(/^(?:export\s+)?DATABASE_URL\s*=\s*/i, '').trim();
+  if ((normalised.startsWith('"') && normalised.endsWith('"')) || (normalised.startsWith("'") && normalised.endsWith("'"))) {
+    normalised = normalised.slice(1, -1).trim();
+  }
+  return normalised;
+}
+
 function configuredOrigins(name, fallback) {
   const raw = optional(name) ?? fallback;
   const origins = raw.split(',').map((entry) => entry.trim()).filter(Boolean).map((entry) => {
@@ -45,10 +60,11 @@ const corsOrigin = configuredOrigins('CORS_ORIGIN', 'http://localhost:8443');
 const socketCorsOrigins = configuredOrigins('SOCKET_CORS_ORIGINS', corsOrigin);
 
 function productionDatabaseUrl(value) {
-  if (!value || nodeEnv !== 'production') return value;
+  const databaseUrl = normaliseDatabaseUrl(value);
+  if (!databaseUrl || nodeEnv !== 'production') return databaseUrl;
   let parsed;
   try {
-    parsed = new URL(value);
+    parsed = new URL(databaseUrl);
   } catch {
     throw new Error('DATABASE_URL de produção inválida.');
   }
