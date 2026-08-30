@@ -81,10 +81,12 @@ export async function validateDocumentFile(file, maximumBytes) {
   };
 }
 
-function assertBlobConfigured() {
-  if (!text(process.env.BLOB_READ_WRITE_TOKEN)) {
+function blobReadWriteToken() {
+  const token = text(process.env.BLOB_READ_WRITE_TOKEN);
+  if (!token) {
     throw httpError(503, 'Armazenamento privado de documentos ainda não está configurado.');
   }
+  return token;
 }
 
 const loadVercelBlobModule = () => import('@vercel/blob');
@@ -92,32 +94,34 @@ const loadVercelBlobModule = () => import('@vercel/blob');
 export function createVercelBlobStorage(loadBlobModule = loadVercelBlobModule) {
   return {
     async put({ key, buffer, contentType }) {
-      assertBlobConfigured();
+      const token = blobReadWriteToken();
       const { put } = await loadBlobModule();
       const result = await put(key, buffer, {
         access: 'private',
         addRandomSuffix: false,
         contentType,
+        token,
       });
       return { key: result.pathname || key };
     },
     async get(key) {
-      assertBlobConfigured();
+      const token = blobReadWriteToken();
       const { get } = await loadBlobModule();
-      const result = await get(key, { access: 'private' });
+      const result = await get(key, { access: 'private', token });
       if (!result) throw httpError(404, 'Ficheiro não encontrado no armazenamento privado.');
       const stream = result.stream ?? result.body;
       if (!stream) throw httpError(502, 'O armazenamento não devolveu o ficheiro solicitado.');
+      const metadata = result.blob ?? result;
       return {
         stream: typeof stream.pipe === 'function' ? stream : Readable.fromWeb(stream),
-        contentType: result.contentType ?? 'application/octet-stream',
-        size: result.size ?? undefined,
+        contentType: metadata.contentType ?? 'application/octet-stream',
+        size: metadata.size ?? undefined,
       };
     },
     async delete(key) {
-      assertBlobConfigured();
+      const token = blobReadWriteToken();
       const { del } = await loadBlobModule();
-      await del(key);
+      await del(key, { token });
     },
   };
 }

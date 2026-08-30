@@ -44,7 +44,7 @@ test('o armazenamento simulado persiste e remove apenas o objeto indicado', asyn
   assert.equal(storage.has('documents/teste/politica.pdf'), false);
 });
 
-test('o download privado envia access private ao Vercel Blob', async () => {
+test('o download privado usa o contrato real do Vercel Blob', async () => {
   const previous = process.env.BLOB_READ_WRITE_TOKEN;
   process.env.BLOB_READ_WRITE_TOKEN = 'token-exclusivo-do-teste';
 
@@ -56,9 +56,12 @@ test('o download privado envia access private ao Vercel Blob', async () => {
       async get(receivedKey, options) {
         calls.push({ key: receivedKey, options });
         return {
-          stream: Readable.from([pdf]),
-          contentType: 'application/pdf',
-          size: pdf.length,
+          statusCode: 200,
+          stream: Readable.toWeb(Readable.from([pdf])),
+          blob: {
+            contentType: 'application/pdf',
+            size: pdf.length,
+          },
         };
       },
     }));
@@ -67,7 +70,7 @@ test('o download privado envia access private ao Vercel Blob', async () => {
 
     assert.deepEqual(calls, [{
       key,
-      options: { access: 'private' },
+      options: { access: 'private', token: 'token-exclusivo-do-teste' },
     }]);
     assert.equal(object.contentType, 'application/pdf');
     assert.equal(object.size, pdf.length);
