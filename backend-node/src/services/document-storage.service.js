@@ -87,11 +87,13 @@ function assertBlobConfigured() {
   }
 }
 
-export function createVercelBlobStorage() {
+const loadVercelBlobModule = () => import('@vercel/blob');
+
+export function createVercelBlobStorage(loadBlobModule = loadVercelBlobModule) {
   return {
     async put({ key, buffer, contentType }) {
       assertBlobConfigured();
-      const { put } = await import('@vercel/blob');
+      const { put } = await loadBlobModule();
       const result = await put(key, buffer, {
         access: 'private',
         addRandomSuffix: false,
@@ -101,8 +103,8 @@ export function createVercelBlobStorage() {
     },
     async get(key) {
       assertBlobConfigured();
-      const { get } = await import('@vercel/blob');
-      const result = await get(key);
+      const { get } = await loadBlobModule();
+      const result = await get(key, { access: 'private' });
       if (!result) throw httpError(404, 'Ficheiro não encontrado no armazenamento privado.');
       const stream = result.stream ?? result.body;
       if (!stream) throw httpError(502, 'O armazenamento não devolveu o ficheiro solicitado.');
@@ -114,7 +116,7 @@ export function createVercelBlobStorage() {
     },
     async delete(key) {
       assertBlobConfigured();
-      const { del } = await import('@vercel/blob');
+      const { del } = await loadBlobModule();
       await del(key);
     },
   };
