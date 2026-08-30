@@ -1,7 +1,22 @@
 import { Sequelize } from 'sequelize';
+import pg from 'pg';
 import { env, missingDatabaseMessage } from './env.js';
 
 let sequelize;
+
+// A importação estática assegura que o trace da Vercel inclui pg, que o
+// Sequelize carrega dinamicamente por defeito.
+export const postgresDialectModule = pg;
+
+export function createSequelizeOptions(nodeEnv = env.nodeEnv) {
+  return {
+    dialect: 'postgres',
+    dialectModule: postgresDialectModule,
+    logging: false,
+    dialectOptions: nodeEnv === 'production' ? { ssl: { require: true, rejectUnauthorized: true } } : undefined,
+    pool: { max: 5, min: 0, idle: 10000 },
+  };
+}
 
 export function getSequelize() {
   if (!env.databaseUrl) {
@@ -11,12 +26,7 @@ export function getSequelize() {
   }
 
   if (!sequelize) {
-    sequelize = new Sequelize(env.databaseUrl, {
-      dialect: 'postgres',
-      logging: false,
-      dialectOptions: env.nodeEnv === 'production' ? { ssl: { require: true, rejectUnauthorized: true } } : undefined,
-      pool: { max: 5, min: 0, idle: 10000 },
-    });
+    sequelize = new Sequelize(env.databaseUrl, createSequelizeOptions());
   }
 
   return sequelize;
