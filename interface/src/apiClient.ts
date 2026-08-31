@@ -534,7 +534,7 @@ api.interceptors.request.use((config) => {
 
 export async function ensureCsrfToken(): Promise<void> {
   try {
-    const r = await apiFetch<{ csrfToken?: string; csrf_token?: string }>('/api/csrf/', { method: 'GET', credentials: 'include' });
+    const r = await apiFetch<{ csrfToken?: string; csrf_token?: string }>('/api/csrf', { method: 'GET', credentials: 'include' });
     if (r?.csrfToken) setCsrfToken(r.csrfToken);
     else if (r?.csrf_token) setCsrfToken(r.csrf_token);
   } catch {
@@ -620,7 +620,7 @@ export async function apiFetch<T = any>(
 
 export async function loginApi(payload: LoginPayload): Promise<ApiLoginResponse> {
   await ensureCsrfToken();
-  const res = await apiFetch<ApiLoginResponse>('/api/login/', {
+  const res = await apiFetch<ApiLoginResponse>('/api/login', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -644,7 +644,7 @@ export async function logoutApi(): Promise<void> {
 }
 
 export async function meApi(): Promise<ApiMeResponse> {
-  const res = await apiFetch<ApiMeResponse>('/api/me/');
+  const res = await apiFetch<ApiMeResponse>('/api/me');
   if (res && res.autenticado && res.utilizador) {
     res.role = mapPerfilToRole(res.utilizador.perfil_codigo);
     res.utilizador.role = res.role;
