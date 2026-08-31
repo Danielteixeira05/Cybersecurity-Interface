@@ -523,7 +523,21 @@ export const api = axios.create({
   },
 });
 
+export function canonicalApiEndpoint(endpoint: string): string {
+  if (!endpoint.startsWith('/api/')) return endpoint;
+
+  const suffixStart = endpoint.search(/[?#]/);
+  const path = suffixStart === -1 ? endpoint : endpoint.slice(0, suffixStart);
+  const suffix = suffixStart === -1 ? '' : endpoint.slice(suffixStart);
+
+  return `${path.replace(/\/+$/, '')}${suffix}`;
+}
+
 api.interceptors.request.use((config) => {
+  if (typeof config.url === 'string') {
+    config.url = canonicalApiEndpoint(config.url);
+  }
+
   const method = (config.method || 'get').toUpperCase();
   if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
     const token = getCsrfToken();
