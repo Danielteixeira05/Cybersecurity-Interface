@@ -149,7 +149,8 @@ function emptyIncident(clientId?: number): IncidentDraft {
 }
 
 export function IncidentsWorkspace({ role, clientId, title = 'Incidentes de Segurança', subtitle, compact = false, onChanged }: { role: OperationalRole; clientId?: number; title?: string; subtitle?: string; compact?: boolean; onChanged?: () => void }) {
-  const canManage = role === 'admin' || role === 'manager';
+  const canCreate = role === 'admin' || role === 'manager' || role === 'client';
+  const canEdit = role === 'admin' || role === 'manager';
   const canDeactivate = role === 'admin';
   const [items, setItems] = useState<ApiIncidente[]>([]);
   const [clients, setClients] = useState<ApiCliente[]>([]);
@@ -181,10 +182,10 @@ export function IncidentsWorkspace({ role, clientId, title = 'Incidentes de Segu
     window.addEventListener(INCIDENT_CHANGED_EVENT, refreshFromRealtime);
     return () => window.removeEventListener(INCIDENT_CHANGED_EVENT, refreshFromRealtime);
   }, [filters, load]);
-  const managerWithoutClients = role === 'manager' && !clientId && !loading && clients.length === 0;
+  const withoutAssociatedClient = canCreate && !clientId && !loading && clients.length === 0;
   const openCreate = () => {
-    if (managerWithoutClients) {
-      setError('Não existem clientes associados a este Gestor.');
+    if (withoutAssociatedClient) {
+      setError(role === 'client' ? 'Não existe uma organização ativa associada a esta conta.' : 'Não existem clientes associados a este Gestor.');
       return;
     }
     setEditing(null); setDraft(emptyIncident(clientId || clients[0]?.id)); setError(null); setSuccess(null); setFormOpen(true);
@@ -220,12 +221,12 @@ export function IncidentsWorkspace({ role, clientId, title = 'Incidentes de Segu
         {compact ? <h2>{title}</h2> : <h1>{title}</h1>}
         <p>{subtitle ?? 'Acompanhe, filtre e trate os incidentes das organizações sob a sua gestão.'}</p>
       </div>
-      {canManage && <button onClick={openCreate} disabled={managerWithoutClients} className="manager-incidents-page__primary-action"><Plus size={18} />Reportar Incidente</button>}
+      {canCreate && <button onClick={openCreate} disabled={withoutAssociatedClient} className="manager-incidents-page__primary-action"><Plus size={18} />Reportar Incidente</button>}
     </header>
 
     <Notice value={error} />
     <Notice value={success} tone="success" />
-    {managerWithoutClients && <Notice value="Não existem clientes associados a este Gestor." />}
+    {withoutAssociatedClient && <Notice value={role === 'client' ? 'Não existe uma organização ativa associada a esta conta.' : 'Não existem clientes associados a este Gestor.'} />}
 
     {!compact && <div className="manager-incidents-page__metrics" aria-label="Indicadores de incidentes">
       <article><span>Abertos</span><strong>{openCount}</strong></article>
@@ -249,10 +250,65 @@ export function IncidentsWorkspace({ role, clientId, title = 'Incidentes de Segu
         <button onClick={() => void load(filters)} className="manager-incidents-page__filter-action">Filtrar</button>
       </div>
 
-      {loading ? <div className="manager-incidents-page__empty">A carregar incidentes…</div> : items.length === 0 ? <div className="manager-incidents-page__empty"><strong>Sem incidentes disponíveis.</strong><span>{canManage ? 'Altere os filtros ou reporte um incidente para uma organização autorizada.' : 'Altere os filtros para consultar os incidentes da sua organização.'}</span></div> : <div className="manager-incidents-page__table-wrap"><table className="manager-incidents-page__table"><thead><tr><th>Código / Incidente</th><th>Cliente</th><th>Gravidade</th><th>Estado</th><th>NIS2</th><th>Deteção</th><th><span className="sr-only">Ações</span></th></tr></thead><tbody>{items.map((incident) => <tr key={incident.id}><td><div className="manager-incidents-page__code">{incident.codigo || `#${incident.id}`}</div><div className="manager-incidents-page__title">{incident.titulo}</div></td><td>{incident.cliente_nome || '—'}</td><td><span className={`badge ${badgeClass(incident.gravidade || incident.severidade)}`}>{label(incident.gravidade || incident.severidade)}</span></td><td><span className={`badge ${badgeClass(incident.estado)}`}>{label(incident.estado)}</span></td><td><span className={`badge ${incident.notificado_nis2 ? 'badge-blue' : 'badge-slate'}`}>{incident.notificado_nis2 ? 'Notificado' : '—'}</span></td><td className="manager-incidents-page__date">{formatDate(incident.data_hora_incidente || incident.detetado_em)}</td><td><div className="manager-incidents-page__row-actions"><button title="Ver detalhe" aria-label={`Ver detalhe de ${incident.titulo}`} onClick={() => void inspect(incident)}><Eye size={17} /></button>{canManage && <button title="Editar" aria-label={`Editar ${incident.titulo}`} onClick={() => openEdit(incident)}><Pencil size={17} /></button>}{canDeactivate && <button title="Desativar" aria-label={`Desativar ${incident.titulo}`} onClick={() => void deactivate(incident)} className="is-danger"><Power size={17} /></button>}</div></td></tr>)}</tbody></table></div>}
+      {loading ? <div className="manager-incidents-page__empty">A carregar incidentes…</div> : items.length === 0 ? <div className="manager-incidents-page__empty"><strong>Sem incidentes disponíveis.</strong><span>{canCreate ? 'Altere os filtros ou reporte um incidente para uma organização autorizada.' : 'Altere os filtros para consultar os incidentes da sua organização.'}</span></div> : <div className="manager-incidents-page__table-wrap"><table className="manager-incidents-page__table"><thead><tr><th>Código / Incidente</th><th>Cliente</th><th>Gravidade</th><th>Estado</th><th>NIS2</th><th>Deteção</th><th><span className="sr-only">Ações</span></th></tr></thead><tbody>{items.map((incident) => <tr key={incident.id}><td><div className="manager-incidents-page__code">{incident.codigo || `#${incident.id}`}</div><div className="manager-incidents-page__title">{incident.titulo}</div></td><td>{incident.cliente_nome || '—'}</td><td><span className={`badge ${badgeClass(incident.gravidade || incident.severidade)}`}>{label(incident.gravidade || incident.severidade)}</span></td><td><span className={`badge ${badgeClass(incident.estado)}`}>{label(incident.estado)}</span></td><td><span className={`badge ${incident.notificado_nis2 ? 'badge-blue' : 'badge-slate'}`}>{incident.notificado_nis2 ? 'Notificado' : '—'}</span></td><td className="manager-incidents-page__date">{formatDate(incident.data_hora_incidente || incident.detetado_em)}</td><td><div className="manager-incidents-page__row-actions"><button title="Ver detalhe" aria-label={`Ver detalhe de ${incident.titulo}`} onClick={() => void inspect(incident)}><Eye size={17} /></button>{canEdit && <button title="Editar" aria-label={`Editar ${incident.titulo}`} onClick={() => openEdit(incident)}><Pencil size={17} /></button>}{canDeactivate && <button title="Desativar" aria-label={`Desativar ${incident.titulo}`} onClick={() => void deactivate(incident)} className="is-danger"><Power size={17} /></button>}</div></td></tr>)}</tbody></table></div>}
     </Panel>
 
-    {formOpen && <div role="dialog" aria-modal="true" aria-label={editing ? 'Editar incidente' : 'Reportar incidente'} className="manager-incidents-page__dialog"><form onSubmit={submit} className="manager-incidents-page__form"><header><div><h2>{editing ? 'Editar Incidente' : 'Reportar Incidente'}</h2><p>Associe o incidente a uma organização autorizada e complete os campos essenciais.</p></div><button type="button" onClick={() => setFormOpen(false)} aria-label="Fechar formulário"><X size={20} /></button></header><fieldset><legend>Identificação</legend><div className="manager-incidents-page__form-grid"><Select label="Cliente" value={draft.cliente_id || ''} disabled={!!clientId} onChange={(value) => setDraft({ ...draft, cliente_id: Number(value) })}><option value="">Selecione</option>{clients.map((client) => <option key={client.id} value={client.id}>{clientOptionLabel(client)}</option>)}</Select><Input label="Código" required value={draft.codigo} onChange={(value) => setDraft({ ...draft, codigo: value })} placeholder="INC-2026-001" /><Input label="Tipo" required value={draft.tipo_incidente} onChange={(value) => setDraft({ ...draft, tipo_incidente: value })} /><Input label="Data e hora de deteção" required type="datetime-local" value={draft.data_hora_incidente} onChange={(value) => setDraft({ ...draft, data_hora_incidente: value })} /></div></fieldset><fieldset><legend>Classificação</legend><div className="manager-incidents-page__form-grid"><Select label="Gravidade" value={draft.gravidade} onChange={(value) => setDraft({ ...draft, gravidade: value })}>{CRITICALITIES.map((value) => <option key={value} value={value}>{label(value)}</option>)}</Select><Select label="Estado" value={draft.estado || 'ABERTO'} onChange={(value) => setDraft({ ...draft, estado: value })}>{INCIDENT_STATES.map((value) => <option key={value} value={value}>{label(value)}</option>)}</Select><Input label="Departamento" value={draft.departamento || ''} onChange={(value) => setDraft({ ...draft, departamento: value })} /><Input label="Utilizadores afetados" type="number" value={draft.utilizadores_afetados ?? 0} onChange={(value) => setDraft({ ...draft, utilizadores_afetados: Number(value) })} /></div></fieldset><label className="manager-incidents-page__description">Descrição<textarea required value={draft.descricao} onChange={(event) => setDraft({ ...draft, descricao: event.target.value })} placeholder="Descreva o que aconteceu, os sistemas afetados e o impacto." /></label><fieldset><legend>Contexto adicional</legend><div className="manager-incidents-page__form-grid"><Input label="Sistemas afetados" value={draft.sistemas_afetados || ''} onChange={(value) => setDraft({ ...draft, sistemas_afetados: value })} /><Input label="IP do atacante" value={draft.ip_atacante || ''} onChange={(value) => setDraft({ ...draft, ip_atacante: value })} /><Input label="Data de encerramento" type="datetime-local" value={draft.encerrado_em || ''} onChange={(value) => setDraft({ ...draft, encerrado_em: value || null })} /></div></fieldset><div className="manager-incidents-page__toggles"><label><input type="checkbox" checked={draft.dados_comprometidos || false} onChange={(event) => setDraft({ ...draft, dados_comprometidos: event.target.checked })} />Dados comprometidos</label><label><input type="checkbox" checked={draft.notificado_nis2 || false} disabled={editing?.notificado_nis2 === true} onChange={(event) => setDraft({ ...draft, notificado_nis2: event.target.checked })} />Notificado às autoridades NIS2 (CNCS/ENISA)</label>{editing && canDeactivate && <label><input type="checkbox" checked={draft.ativo} onChange={(event) => setDraft({ ...draft, ativo: event.target.checked })} />Incidente ativo</label>}</div><footer><button type="button" onClick={() => setFormOpen(false)} className="manager-incidents-page__secondary-action">Cancelar</button><button disabled={saving || !draft.cliente_id} className="manager-incidents-page__submit">{saving ? 'A guardar…' : editing ? 'Guardar alterações' : 'Reportar incidente'}</button></footer></form></div>}
+    {formOpen && (
+      <div role="dialog" aria-modal="true" aria-label={editing ? 'Editar incidente' : 'Reportar incidente'} className="manager-incidents-page__dialog">
+        <form onSubmit={submit} className="manager-incidents-page__form">
+          <header>
+            <div>
+              <h2>{editing ? 'Editar Incidente' : 'Reportar Incidente'}</h2>
+              <p>{role === 'client' ? 'O report é registado para a sua organização com estado inicial Aberto. O tratamento e a notificação NIS2 são feitos pelo Gestor ou Administrador.' : 'Associe o incidente a uma organização autorizada e complete os campos essenciais.'}</p>
+            </div>
+            <button type="button" onClick={() => setFormOpen(false)} aria-label="Fechar formulário"><X size={20} /></button>
+          </header>
+          <fieldset>
+            <legend>Identificação</legend>
+            <div className="manager-incidents-page__form-grid">
+              <Select label="Cliente" value={draft.cliente_id || ''} disabled={!!clientId || role === 'client'} onChange={(value) => setDraft({ ...draft, cliente_id: Number(value) })}>
+                <option value="">Selecione</option>
+                {clients.map((client) => <option key={client.id} value={client.id}>{clientOptionLabel(client)}</option>)}
+              </Select>
+              <Input label="Código" required value={draft.codigo} onChange={(value) => setDraft({ ...draft, codigo: value })} placeholder="INC-2026-001" />
+              <Input label="Tipo" required value={draft.tipo_incidente} onChange={(value) => setDraft({ ...draft, tipo_incidente: value })} />
+              <Input label="Data e hora de deteção" required type="datetime-local" value={draft.data_hora_incidente} onChange={(value) => setDraft({ ...draft, data_hora_incidente: value })} />
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>Classificação</legend>
+            <div className="manager-incidents-page__form-grid">
+              <Select label="Gravidade" value={draft.gravidade} onChange={(value) => setDraft({ ...draft, gravidade: value })}>
+                {CRITICALITIES.map((value) => <option key={value} value={value}>{label(value)}</option>)}
+              </Select>
+              <Select label="Estado" value={draft.estado || 'ABERTO'} disabled={role === 'client'} onChange={(value) => setDraft({ ...draft, estado: value })}>
+                {(role === 'client' ? ['ABERTO'] : INCIDENT_STATES).map((value) => <option key={value} value={value}>{label(value)}</option>)}
+              </Select>
+              <Input label="Departamento" value={draft.departamento || ''} onChange={(value) => setDraft({ ...draft, departamento: value })} />
+              <Input label="Utilizadores afetados" type="number" value={draft.utilizadores_afetados ?? 0} onChange={(value) => setDraft({ ...draft, utilizadores_afetados: Number(value) })} />
+            </div>
+          </fieldset>
+          <label className="manager-incidents-page__description">Descrição<textarea required value={draft.descricao} onChange={(event) => setDraft({ ...draft, descricao: event.target.value })} placeholder="Descreva o que aconteceu, os sistemas afetados e o impacto." /></label>
+          <fieldset>
+            <legend>Contexto adicional</legend>
+            <div className="manager-incidents-page__form-grid">
+              <Input label="Sistemas afetados" value={draft.sistemas_afetados || ''} onChange={(value) => setDraft({ ...draft, sistemas_afetados: value })} />
+              <Input label="IP do atacante" value={draft.ip_atacante || ''} onChange={(value) => setDraft({ ...draft, ip_atacante: value })} />
+              {role !== 'client' && <Input label="Data de encerramento" type="datetime-local" value={draft.encerrado_em || ''} onChange={(value) => setDraft({ ...draft, encerrado_em: value || null })} />}
+            </div>
+          </fieldset>
+          <div className="manager-incidents-page__toggles">
+            <label><input type="checkbox" checked={draft.dados_comprometidos || false} onChange={(event) => setDraft({ ...draft, dados_comprometidos: event.target.checked })} />Dados comprometidos</label>
+            {role !== 'client' && <label><input type="checkbox" checked={draft.notificado_nis2 || false} disabled={editing?.notificado_nis2 === true} onChange={(event) => setDraft({ ...draft, notificado_nis2: event.target.checked })} />Notificado às autoridades NIS2 (CNCS/ENISA)</label>}
+            {editing && canDeactivate && <label><input type="checkbox" checked={draft.ativo} onChange={(event) => setDraft({ ...draft, ativo: event.target.checked })} />Incidente ativo</label>}
+          </div>
+          <footer>
+            <button type="button" onClick={() => setFormOpen(false)} className="manager-incidents-page__secondary-action">Cancelar</button>
+            <button disabled={saving || !draft.cliente_id} className="manager-incidents-page__submit">{saving ? 'A guardar…' : editing ? 'Guardar alterações' : role === 'client' ? 'Submeter report' : 'Reportar incidente'}</button>
+          </footer>
+        </form>
+      </div>
+    )}
     {selected && <div role="dialog" aria-modal="true" aria-label="Detalhe do incidente" className="manager-incidents-page__dialog"><div className="manager-incidents-page__detail"><header><div><p>{selected.codigo || `#${selected.id}`}</p><h2>{selected.titulo}</h2><span>{selected.cliente_nome || '—'}</span></div><button onClick={() => setSelected(null)} aria-label="Fechar detalhe"><X size={20} /></button></header><dl><div><dt>Gravidade</dt><dd><span className={`badge ${badgeClass(selected.gravidade || selected.severidade)}`}>{label(selected.gravidade || selected.severidade)}</span></dd></div><div><dt>Estado</dt><dd><span className={`badge ${badgeClass(selected.estado)}`}>{label(selected.estado)}</span></dd></div><div><dt>NIS2</dt><dd>{selected.notificado_nis2 ? 'Notificado' : '—'}</dd></div><div><dt>Deteção</dt><dd>{formatDate(selected.data_hora_incidente || selected.detetado_em)}</dd></div><div><dt>Encerramento</dt><dd>{formatDate(selected.encerrado_em || selected.resolvido_em)}</dd></div></dl><section><h3>Descrição</h3><p>{selected.descricao || '—'}</p></section>{selected.sistemas_afetados && <section><h3>Sistemas afetados</h3><p>{selected.sistemas_afetados}</p></section>}</div></div>}
   </section>;
 }

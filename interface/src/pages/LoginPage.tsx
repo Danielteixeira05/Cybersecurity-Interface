@@ -96,7 +96,7 @@ export default function LoginPage({ setRole, setPage }: Props) {
 
             <form onSubmit={handleSubmit} className="mt-8 space-y-5">
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">Email</label>
+                <label htmlFor="login-email" className="mb-1.5 block text-sm font-medium text-slate-700">Email</label>
                 <div className="relative">
                   <svg
                     viewBox="0 0 24 24"
@@ -109,6 +109,7 @@ export default function LoginPage({ setRole, setPage }: Props) {
                     <path d="M3 7l9 6 9-6" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                   <input
+                    id="login-email"
                     type="email"
                     required
                     value={email}
@@ -120,7 +121,7 @@ export default function LoginPage({ setRole, setPage }: Props) {
               </div>
 
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">Senha</label>
+                <label htmlFor="login-password" className="mb-1.5 block text-sm font-medium text-slate-700">Senha</label>
                 <div className="relative">
                   <svg
                     viewBox="0 0 24 24"
@@ -133,6 +134,7 @@ export default function LoginPage({ setRole, setPage }: Props) {
                     <path d="M7 11V7a5 5 0 0110 0v4" />
                   </svg>
                   <input
+                    id="login-password"
                     type={showPassword ? 'text' : 'password'}
                     required
                     value={password}

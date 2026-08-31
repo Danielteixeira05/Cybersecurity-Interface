@@ -116,6 +116,21 @@ export function normaliseIncidentPayload(input, current = {}) {
   };
 }
 
+// O enunciado permite ao Cliente registar o report do incidente, mas atribui o
+// tratamento operacional ao Gestor. A submissão inicial não pode encerrar o
+// incidente, desativá-lo nem comunicar NIS2 em nome da organização.
+export function normaliseClientIncidentSubmission(input) {
+  const requestedState = input.estado;
+  if (requestedState !== undefined && String(requestedState).trim().toUpperCase() !== 'ABERTO') {
+    throw httpError(403, 'O Cliente apenas pode submeter incidentes com estado inicial Aberto.');
+  }
+  if (input.ativo === false) throw httpError(403, 'O Cliente não pode desativar um incidente.');
+  if (input.notificado_nis2 !== undefined && input.notificado_nis2 !== false) {
+    throw httpError(403, 'A notificação NIS2 é confirmada pelo Gestor ou Administrador.');
+  }
+  return { ...input, estado: 'ABERTO', ativo: true, notificado_nis2: false };
+}
+
 async function assertActiveClient(clientId, transaction) {
   const { Client } = getModels();
   const client = await Client.findOne({ where: { id: clientId, ativo: true }, transaction });
@@ -190,7 +205,8 @@ function closure(data, input, current, actor) {
 }
 
 export async function createIncident(auth, input) {
-  const data = normaliseIncidentPayload(input, {});
+  const submission = auth.role === 'client' ? normaliseClientIncidentSubmission(input) : input;
+  const data = normaliseIncidentPayload(submission, {});
   await assertClientAccess(auth, data.cliente_id);
   const { sequelize, Incident } = getModels();
   const result = await sequelize.transaction(async (transaction) => {
@@ -199,7 +215,7 @@ export async function createIncident(auth, input) {
     const now = new Date();
     const incident = await Incident.create({
       ...data,
-      ...closure(data, input, {}, null),
+      ...closure(data, submission, {}, null),
       notificado_nis2_em: data.notificado_nis2 ? now : null,
       notificado_nis2_por: data.notificado_nis2 ? Number(auth.sub) : null,
       criado_por: Number(auth.sub), criado_em: now, atualizado_em: now,

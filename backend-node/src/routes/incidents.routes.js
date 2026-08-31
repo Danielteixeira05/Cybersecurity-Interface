@@ -4,7 +4,8 @@ import { authenticate, requireRoles } from '../middleware/auth.js';
 
 export const incidentsRouter = Router();
 incidentsRouter.use(authenticate, requireRoles('admin', 'manager', 'client'));
-// Clientes apenas consultam. A autorização também é validada no serviço para
-// evitar que a troca manual de URL/ID contorne o controlo de acesso.
-incidentsRouter.route('/').get(list).post(requireRoles('admin', 'manager'), create);
+// O Cliente pode submeter o report inicial apenas para a sua organização. A
+// autorização por associação continua a ser confirmada no serviço; edição e
+// desativação mantêm-se reservadas ao tratamento interno.
+incidentsRouter.route('/').get(list).post(requireRoles('admin', 'manager', 'client'), create);
 incidentsRouter.route('/:incidentId').get(detail).patch(requireRoles('admin', 'manager'), update);

@@ -142,5 +142,10 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
 
+# Artefactos locais do Playwright
+interface/test-results/
+interface/playwright-report/
+interface/blob-report/
+
 # Ligação local do projeto Vercel
 /.vercel/

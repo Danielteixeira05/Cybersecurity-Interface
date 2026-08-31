@@ -1,0 +1,77 @@
+name: Quality
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend-node
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend-node/package-lock.json
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - name: Validate whitespace
+        run: git diff --check $(git hash-object -t tree /dev/null) HEAD
+
+  frontend:
+    name: Frontend checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: interface
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: interface/package-lock.json
+      - run: npm ci
+      - run: npm exec -- tsc --noEmit
+      - run: npm run test:unit
+      - run: npm run build
+
+  browser-smoke:
+    name: Browser E2E smoke
+    runs-on: ubuntu-latest
+    needs: frontend
+    defaults:
+      run:
+        working-directory: interface
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: interface/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e:ci
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: interface/playwright-report/
+          if-no-files-found: ignore

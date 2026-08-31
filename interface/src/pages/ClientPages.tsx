@@ -394,7 +394,7 @@ export function ClientAssets() {
 }
 
 export function ClientIncidents() {
-  return <IncidentsWorkspace role="client" title="Incidentes" subtitle="Consulte os incidentes da sua organização" />;
+  return <IncidentsWorkspace role="client" title="Incidentes" subtitle="Consulte os incidentes da sua organização ou submeta um novo report" />;
 }
 
 export function ClientDocuments({ setPage }: PageProps) {

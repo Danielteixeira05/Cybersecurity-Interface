@@ -157,12 +157,17 @@ export default function App() {
   useEffect(() => {
     const handleExpiredSession = () => {
       setRole(null);
+      const requestedPage = pageFromPathname(location.pathname);
+      if (PUBLIC_PAGE_KEYS.has(requestedPage)) {
+        setPageState(requestedPage);
+        return;
+      }
       setPageState('login');
       navigate(PAGE_PATHS.login!, { replace: true });
     };
     window.addEventListener(AUTH_EXPIRED_EVENT, handleExpiredSession);
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleExpiredSession);
-  }, [navigate]);
+  }, [location.pathname, navigate]);
 
   useEffect(() => {
     let active = true;
