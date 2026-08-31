@@ -51,6 +51,38 @@ export async function listDocuments(auth, clientId) {
   });
 }
 
+export async function listRiskAssessments(auth, clientId) {
+  const { RiskAssessment, ConformityStatus, Client } = getModels();
+  const rows = await RiskAssessment.findAll({
+    where: await accessibleWhere(auth, clientId),
+    include: [
+      { model: ConformityStatus, as: 'estadoConformidade', attributes: ['codigo', 'nome'] },
+      { model: Client, as: 'cliente', attributes: ['nome'] },
+    ],
+    order: [['data_avaliacao', 'DESC'], ['id', 'DESC']],
+  });
+
+  return rows.map((row) => {
+    const item = row.get({ plain: true });
+    const score = item.pontuacao === null || item.pontuacao === undefined
+      ? null
+      : Number(item.pontuacao);
+
+    return {
+      ...item,
+      id: Number(item.id),
+      cliente_id: Number(item.cliente_id),
+      estado_conformidade_id: Number(item.estado_conformidade_id),
+      cliente_nome: item.cliente?.nome ?? null,
+      estado_conformidade_codigo: item.estadoConformidade?.codigo ?? null,
+      estado_conformidade_nome: item.estadoConformidade?.nome ?? null,
+      pontuacao: score,
+      score,
+      cliente: undefined,
+      estadoConformidade: undefined,
+    };
+  });
+}
 export async function listRequests(auth, clientId) {
   const { Request, RequestStatus, Client } = getModels();
   return (await Request.findAll({

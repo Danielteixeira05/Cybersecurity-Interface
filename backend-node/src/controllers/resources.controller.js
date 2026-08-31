@@ -1,5 +1,5 @@
 import { httpError } from '../middleware/errors.js';
-import { listAssets, listDocuments, listIncidents, listRequests } from '../services/resources.service.js';
+import { listAssets, listDocuments, listIncidents, listRequests, listRiskAssessments } from '../services/resources.service.js';
 
 function clientIdFromQuery(request) {
   const raw = request.query.cliente_id;
@@ -23,3 +23,4 @@ export const assets = responder(listAssets);
 export const incidents = responder(listIncidents);
 export const documents = responder(listDocuments);
 export const requests = responder(listRequests);
+export const assessments = responder(listRiskAssessments);
