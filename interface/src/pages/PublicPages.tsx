@@ -33,6 +33,7 @@ import {
   conteudosPublicosApi, enviarContactoPublicoApi, noticiaPublicaDetalheApi, noticiasPublicasApi, session,
   type ApiConteudoSite, type ApiNoticia,
 } from '../apiClient';
+import { PUBLIC_CONTENT_KEYS } from '../publicContentCms';
 import type { Page } from '../types';
 
 interface PageProps {
@@ -529,7 +530,62 @@ const CONTACT_SERVICE_OPTIONS = [
 
 const CONTACT_CERTIFICATIONS = ['ISO 27001', 'CNCS', 'NIS2', 'RGPD'] as const;
 
+function usePublicSiteContents() {
+  const [contents, setContents] = useState<ApiConteudoSite[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    conteudosPublicosApi()
+      .then((rows) => { if (active) setContents(rows); })
+      .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : 'Não foi possível carregar o conteúdo publicado.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+
+  return { contents, loading, error };
+}
+
+function firstContent(contents: ApiConteudoSite[], chave: string) {
+  return contents.find((content) => content.chave === chave);
+}
+
+function repeatedContent(contents: ApiConteudoSite[], chave: string) {
+  return contents.filter((content) => content.chave === chave);
+}
+
+function contentText(value: string | null | undefined, fallback: string) {
+  return value?.trim() || fallback;
+}
+
+function contentLines(value: string | null | undefined) {
+  return (value ?? '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+}
+
+function highlightedHeading(value: string) {
+  const [before, ...after] = value.split('|');
+  const highlight = after.join('|').trim();
+  return highlight ? <>{before.trim()} <span>{highlight}</span></> : value;
+}
+
+function contactScheduleRows(value: string | null | undefined) {
+  return contentLines(value).map((line) => {
+    const [label, ...time] = line.split('|');
+    return { label: label.trim(), time: time.join('|').trim() };
+  }).filter((row) => row.label && row.time);
+}
+
 function PublicFooter({ setPage }: PageProps) {
+  const { contents } = usePublicSiteContents();
+  const channelRows = repeatedContent(contents, PUBLIC_CONTENT_KEYS.contactChannel);
+  const contacts = channelRows.length
+    ? channelRows.map((content, index) => ({
+      id: content.id,
+      label: contentText(content.corpo, contentText(content.subtitulo, content.titulo)),
+      icon: HOME_FOOTER_CONTACTS[index % HOME_FOOTER_CONTACTS.length].icon,
+    }))
+    : HOME_FOOTER_CONTACTS;
   const navigateTo = (target: Page) => {
     window.scrollTo({ top: 0, behavior: 'auto' });
     setPage(target);
@@ -578,10 +634,10 @@ function PublicFooter({ setPage }: PageProps) {
           <div className="col-12 col-md-4">
             <h2 className="home-footer__heading">Contacto</h2>
             <ul className="home-footer__contacts">
-              {HOME_FOOTER_CONTACTS.map((contact) => {
+              {contacts.map((contact) => {
                 const Icon = contact.icon;
                 return (
-                  <li key={contact.label}>
+                  <li key={'id' in contact ? contact.id : contact.label}>
                     <span className="home-footer__contact-icon" aria-hidden="true">
                       <Icon />
                     </span>
@@ -813,6 +869,7 @@ export function MissionPage({ setPage }: PageProps) {
 }
 
 export function ServicesPage({ setPage }: PageProps) {
+  const { contents, loading: loadingContent, error: contentError } = usePublicSiteContents();
   const navigateTo = (target: Page) => {
     window.scrollTo({ top: 0, behavior: 'auto' });
     setPage(target);
@@ -831,9 +888,63 @@ export function ServicesPage({ setPage }: PageProps) {
     navigateTo(target);
   };
 
+  const hero = firstContent(contents, PUBLIC_CONTENT_KEYS.servicesHero);
+  const catalog = firstContent(contents, PUBLIC_CONTENT_KEYS.servicesCatalog);
+  const processHeader = firstContent(contents, PUBLIC_CONTENT_KEYS.servicesProcessHeader);
+  const nis2Header = firstContent(contents, PUBLIC_CONTENT_KEYS.servicesNis2Header);
+  const nis2Cta = firstContent(contents, PUBLIC_CONTENT_KEYS.servicesNis2Cta);
+  const finalCta = firstContent(contents, PUBLIC_CONTENT_KEYS.servicesFinalCta);
+  const proofRows = repeatedContent(contents, PUBLIC_CONTENT_KEYS.servicesProof);
+  const serviceRows = repeatedContent(contents, PUBLIC_CONTENT_KEYS.service);
+  const processRows = repeatedContent(contents, PUBLIC_CONTENT_KEYS.servicesProcessStep);
+  const nis2RequirementRows = repeatedContent(contents, PUBLIC_CONTENT_KEYS.servicesNis2Requirement);
+  const proofPoints = proofRows.length
+    ? proofRows.map((content, index) => ({
+      id: content.id,
+      title: content.titulo,
+      detail: contentText(content.subtitulo, contentText(content.corpo, '—')),
+      icon: SERVICE_PROOF_POINTS[index % SERVICE_PROOF_POINTS.length].icon,
+      accent: SERVICE_PROOF_POINTS[index % SERVICE_PROOF_POINTS.length].accent,
+    }))
+    : SERVICE_PROOF_POINTS;
+  const services = serviceRows.length
+    ? serviceRows.map((content, index) => {
+      const presentation = PUBLIC_SERVICES[index % PUBLIC_SERVICES.length];
+      return {
+        id: content.id,
+        title: content.titulo,
+        price: contentText(content.subtitulo, 'Sob consulta'),
+        features: contentLines(content.corpo).length ? contentLines(content.corpo) : ['Consulte-nos para uma proposta personalizada.'],
+        icon: presentation.icon,
+        accent: presentation.accent,
+        nis2: /\bnis2\b/i.test([content.titulo, content.subtitulo, content.corpo].filter(Boolean).join(' ')),
+      };
+    })
+    : PUBLIC_SERVICES;
+  const processSteps = processRows.length
+    ? processRows.map((content, index) => ({
+      id: content.id,
+      step: String(index + 1).padStart(2, '0'),
+      title: content.titulo,
+      description: contentText(content.corpo, 'Informação a disponibilizar pelo Back Office.'),
+      icon: SERVICE_PROCESS_STEPS[index % SERVICE_PROCESS_STEPS.length].icon,
+    }))
+    : SERVICE_PROCESS_STEPS;
+  const nis2Requirements = nis2RequirementRows.length
+    ? nis2RequirementRows.map((content, index) => ({
+      id: content.id,
+      title: content.titulo,
+      description: contentText(content.corpo, 'Informação a disponibilizar pelo Back Office.'),
+      icon: NIS2_REQUIREMENTS[index % NIS2_REQUIREMENTS.length].icon,
+      accent: NIS2_REQUIREMENTS[index % NIS2_REQUIREMENTS.length].accent,
+    }))
+    : NIS2_REQUIREMENTS;
+  const nis2CtaLink = nis2Cta?.imagem_url?.trim() || (nis2Cta ? '' : 'https://www.cncs.gov.pt/');
+
   return (
     <>
-      <main className="public-subpage services-page" data-public-page="services">
+      <main className="public-subpage services-page" data-public-page="services" aria-busy={loadingContent}>
+        {contentError && <p className="visually-hidden" role="status">Conteúdo publicado temporariamente indisponível; é apresentada a informação institucional disponível.</p>}
         <section
           className="public-page-hero phase2-public-hero services-page__hero"
           aria-labelledby="services-page-title"
@@ -844,13 +955,12 @@ export function ServicesPage({ setPage }: PageProps) {
             <div className="row justify-content-center">
               <div className="col-12 col-lg-10 col-xl-9">
                 <div className="public-page-hero__content">
-                  <span className="public-page-kicker">Os Nossos Serviços · Equipa Certificada</span>
+                  <span className="public-page-kicker">{contentText(hero?.subtitulo, 'Os Nossos Serviços · Equipa Certificada')}</span>
                   <h1 id="services-page-title" className="public-page-title">
-                    Proteção abrangente para <span>cada ameaça.</span>
+                    {highlightedHeading(contentText(hero?.titulo, 'Proteção abrangente para |cada ameaça.'))}
                   </h1>
                   <p className="public-page-lead">
-                    Do SOC 24/7 à conformidade NIS2, a nossa equipa certificada cobre todo o ciclo de vida da
-                    cibersegurança empresarial.
+                    {contentText(hero?.corpo, 'Do SOC 24/7 à conformidade NIS2, a nossa equipa certificada cobre todo o ciclo de vida da cibersegurança empresarial.')}
                   </p>
                   <div className="public-page-hero__actions">
                     <button
@@ -878,10 +988,10 @@ export function ServicesPage({ setPage }: PageProps) {
         <section className="service-proof-strip" aria-label="Compromissos do serviço" data-page-section="service-proof">
           <div className="container-xl">
             <div className="row g-3 g-xl-4">
-              {SERVICE_PROOF_POINTS.map((point) => {
+              {proofPoints.map((point) => {
                 const Icon = point.icon;
                 return (
-                  <div className="col-12 col-sm-6 col-xl-3" key={point.title}>
+                  <div className="col-12 col-sm-6 col-xl-3" key={'id' in point ? point.id : point.title}>
                     <article className="service-proof-card">
                       <span className={`service-proof-card__icon service-proof-card__icon--${point.accent}`} aria-hidden="true">
                         <Icon />
@@ -905,16 +1015,16 @@ export function ServicesPage({ setPage }: PageProps) {
         >
           <div className="container-xl">
             <header className="services-section-heading">
-              <p className="services-section-heading__eyebrow">Catálogo de Serviços</p>
-              <h2 id="services-catalog-title">O que oferecemos</h2>
-              <p>Todos os serviços são prestados pela nossa equipa certificada com SLAs documentados.</p>
+              <p className="services-section-heading__eyebrow">{contentText(catalog?.subtitulo, 'Catálogo de Serviços')}</p>
+              <h2 id="services-catalog-title">{contentText(catalog?.titulo, 'O que oferecemos')}</h2>
+              <p>{contentText(catalog?.corpo, 'Todos os serviços são prestados pela nossa equipa certificada com SLAs documentados.')}</p>
             </header>
 
             <div className="row g-4 services-catalog-grid">
-              {PUBLIC_SERVICES.map((service) => {
+              {services.map((service) => {
                 const Icon = service.icon;
                 return (
-                  <div className="col-12 col-md-6 col-xl-4" key={service.title}>
+                  <div className="col-12 col-md-6 col-xl-4" key={'id' in service ? service.id : service.title}>
                     <article className="service-detail-card">
                       <div className="service-detail-card__topline">
                         <span
@@ -956,16 +1066,16 @@ export function ServicesPage({ setPage }: PageProps) {
         >
           <div className="container-xl">
             <header className="services-section-heading">
-              <p className="services-section-heading__eyebrow">Como Trabalhamos</p>
-              <h2 id="services-process-title">O nosso processo</h2>
-              <p>Metodologia estruturada para garantir resultados consistentes em cada projeto.</p>
+              <p className="services-section-heading__eyebrow">{contentText(processHeader?.subtitulo, 'Como Trabalhamos')}</p>
+              <h2 id="services-process-title">{contentText(processHeader?.titulo, 'O nosso processo')}</h2>
+              <p>{contentText(processHeader?.corpo, 'Metodologia estruturada para garantir resultados consistentes em cada projeto.')}</p>
             </header>
 
             <div className="row g-5 g-xl-4">
-              {SERVICE_PROCESS_STEPS.map((item) => {
+              {processSteps.map((item) => {
                 const Icon = item.icon;
                 return (
-                  <div className="col-12 col-sm-6 col-xl-3" key={item.step}>
+                  <div className="col-12 col-sm-6 col-xl-3" key={'id' in item ? item.id : item.step}>
                     <article className="service-process-step">
                       <div className="service-process-step__icon" aria-hidden="true">
                         <Icon />
@@ -984,20 +1094,16 @@ export function ServicesPage({ setPage }: PageProps) {
         <section className="services-nis2" aria-labelledby="services-nis2-title" data-page-section="services-nis2">
           <div className="container-xl">
             <header className="services-section-heading services-section-heading--nis2">
-              <p className="services-section-heading__eyebrow">Diretiva NIS2</p>
-              <h2 id="services-nis2-title">O que é a NIS2 e o que implica para a sua empresa?</h2>
-              <p>
-                A Diretiva NIS2 (Network and Information Security 2) é a lei europeia de cibersegurança mais
-                abrangente até à data. Entrou em vigor em outubro de 2024 e obriga milhares de organizações
-                portuguesas a adotarem medidas concretas de segurança.
-              </p>
+              <p className="services-section-heading__eyebrow">{contentText(nis2Header?.subtitulo, 'Diretiva NIS2')}</p>
+              <h2 id="services-nis2-title">{contentText(nis2Header?.titulo, 'O que é a NIS2 e o que implica para a sua empresa?')}</h2>
+              <p>{contentText(nis2Header?.corpo, 'A Diretiva NIS2 (Network and Information Security 2) é a lei europeia de cibersegurança mais abrangente até à data. Entrou em vigor em outubro de 2024 e obriga milhares de organizações portuguesas a adotarem medidas concretas de segurança.')}</p>
             </header>
 
             <div className="row g-4 services-nis2__grid">
-              {NIS2_REQUIREMENTS.map((requirement) => {
+              {nis2Requirements.map((requirement) => {
                 const Icon = requirement.icon;
                 return (
-                  <div className="col-12 col-md-6 col-xl-4" key={requirement.title}>
+                  <div className="col-12 col-md-6 col-xl-4" key={'id' in requirement ? requirement.id : requirement.title}>
                     <article className="nis2-requirement-card">
                       <span
                         className={`nis2-requirement-card__icon nis2-requirement-card__icon--${requirement.accent}`}
@@ -1018,18 +1124,9 @@ export function ServicesPage({ setPage }: PageProps) {
                 <Shield />
               </span>
               <div className="nis2-assessment__content">
-                <h3 id="nis2-assessment-title">Não tem a certeza se a sua organização é abrangida?</h3>
-                <p>
-                  A CiberBoxSecur realiza gratuitamente uma avaliação inicial de conformidade NIS2 para determinar
-                  as suas obrigações e os passos a seguir.
-                </p>
-                <p>
-                  Consulte também o portal oficial do CNCS em{' '}
-                  <a href="https://www.cncs.gov.pt/" target="_blank" rel="noreferrer">
-                    cncs.gov.pt
-                  </a>
-                  .
-                </p>
+                <h3 id="nis2-assessment-title">{contentText(nis2Cta?.titulo, 'Não tem a certeza se a sua organização é abrangida?')}</h3>
+                <p>{contentText(nis2Cta?.corpo, 'A CiberBoxSecur realiza gratuitamente uma avaliação inicial de conformidade NIS2 para determinar as suas obrigações e os passos a seguir.')}</p>
+                {nis2CtaLink && <p>Consulte também <a href={nis2CtaLink} target="_blank" rel="noreferrer">a informação oficial</a>.</p>}
               </div>
               <button type="button" onClick={() => navigateTo('contact')}>
                 Avaliação Gratuita <ArrowRight aria-hidden="true" />
@@ -1041,12 +1138,11 @@ export function ServicesPage({ setPage }: PageProps) {
         <section className="services-final-cta" aria-labelledby="services-final-cta-title" data-page-section="services-final-cta">
           <div className="container-xl">
             <div className="services-final-cta__panel">
-              <p className="services-final-cta__eyebrow">Comece Hoje</p>
+              <p className="services-final-cta__eyebrow">{contentText(finalCta?.subtitulo, 'Comece Hoje')}</p>
               <h2 id="services-final-cta-title">
-                Pronto para Proteger o
-                <span>Seu Negócio?</span>
+                {highlightedHeading(contentText(finalCta?.titulo, 'Pronto para Proteger o|Seu Negócio?'))}
               </h2>
-              <p>Agende uma demonstração gratuita e veja como a CiberBoxSecur pode proteger a sua empresa.</p>
+              <p>{contentText(finalCta?.corpo, 'Agende uma demonstração gratuita e veja como a CiberBoxSecur pode proteger a sua empresa.')}</p>
               <div className="services-final-cta__actions">
                 <button type="button" className="services-final-cta__primary" onClick={() => navigateTo('contact')}>
                   Pedir Demonstração <ArrowRight aria-hidden="true" />
@@ -1296,6 +1392,32 @@ export function NewsDetailPage({ setPage, selectedArticleId, onSelectArticle }: 
 export function ContactPage({ setPage }: PageProps) {
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const { contents, loading: loadingContent, error: contentError } = usePublicSiteContents();
+  const hero = firstContent(contents, PUBLIC_CONTENT_KEYS.contactHero);
+  const formContent = firstContent(contents, PUBLIC_CONTENT_KEYS.contactForm);
+  const scheduleContent = firstContent(contents, PUBLIC_CONTENT_KEYS.contactSchedule);
+  const channelRows = repeatedContent(contents, PUBLIC_CONTENT_KEYS.contactChannel);
+  const serviceRows = repeatedContent(contents, PUBLIC_CONTENT_KEYS.service);
+  const certificationRows = repeatedContent(contents, PUBLIC_CONTENT_KEYS.contactCertification);
+  const channels = channelRows.length
+    ? channelRows.map((content, index) => ({
+      id: content.id,
+      title: content.titulo,
+      value: contentText(content.corpo, contentText(content.subtitulo, '—')),
+      icon: CONTACT_CHANNELS[index % CONTACT_CHANNELS.length].icon,
+      tone: CONTACT_CHANNELS[index % CONTACT_CHANNELS.length].tone,
+    }))
+    : CONTACT_CHANNELS;
+  const serviceOptions = serviceRows.length ? serviceRows.map((service) => service.titulo) : CONTACT_SERVICE_OPTIONS;
+  const scheduleRows = scheduleContent
+    ? contactScheduleRows(scheduleContent.corpo).length
+      ? contactScheduleRows(scheduleContent.corpo)
+      : [{ label: contentText(scheduleContent.subtitulo, 'Horário'), time: '—' }]
+    : [
+      { label: 'Segunda – Sexta', time: '09:00 – 18:00' },
+      { label: 'SOC (clientes ativos)', time: '24 / 7' },
+    ];
+  const certifications = certificationRows.length ? certificationRows.map((content) => ({ id: content.id, label: content.titulo })) : CONTACT_CERTIFICATIONS.map((label) => ({ id: label, label }));
 
   async function submitContact(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1323,7 +1445,8 @@ export function ContactPage({ setPage }: PageProps) {
 
   return (
     <>
-      <main className="public-subpage contact-page contact-v97" data-public-page="contact">
+      <main className="public-subpage contact-page contact-v97" data-public-page="contact" aria-busy={loadingContent}>
+        {contentError && <p className="visually-hidden" role="status">Conteúdo publicado temporariamente indisponível; é apresentada a informação institucional disponível.</p>}
         <section className="contact-v97__hero" aria-labelledby="contact-page-title">
           <span className="contact-v97__hero-orb contact-v97__hero-orb--violet" aria-hidden="true" />
           <span className="contact-v97__hero-orb contact-v97__hero-orb--blue" aria-hidden="true" />
@@ -1333,15 +1456,12 @@ export function ContactPage({ setPage }: PageProps) {
             <div className="contact-v97__hero-content">
               <span className="contact-v97__badge">
                 <span aria-hidden="true" />
-                Fale Connosco · Resposta em 1 dia útil
+                {contentText(hero?.subtitulo, 'Fale Connosco · Resposta em 1 dia útil')}
               </span>
               <h1 id="contact-page-title">
-                Estamos prontos para <span>proteger a sua empresa.</span>
+                {highlightedHeading(contentText(hero?.titulo, 'Estamos prontos para|proteger a sua empresa.'))}
               </h1>
-              <p>
-                Contacte a nossa equipa de especialistas para uma avaliação gratuita ou para saber mais sobre os
-                nossos serviços.
-              </p>
+              <p>{contentText(hero?.corpo, 'Contacte a nossa equipa de especialistas para uma avaliação gratuita ou para saber mais sobre os nossos serviços.')}</p>
             </div>
           </div>
         </section>
@@ -1355,8 +1475,8 @@ export function ContactPage({ setPage }: PageProps) {
                     <Send />
                   </span>
                   <div>
-                    <h2>Envie-nos uma mensagem</h2>
-                    <p>Respondemos em menos de 1 dia útil</p>
+                    <h2>{contentText(formContent?.titulo, 'Envie-nos uma mensagem')}</h2>
+                    <p>{contentText(formContent?.subtitulo, 'Respondemos em menos de 1 dia útil')}</p>
                   </div>
                 </header>
 
@@ -1423,9 +1543,9 @@ export function ContactPage({ setPage }: PageProps) {
                         id="contact-service"
                         name="service"
                         className="form-select contact-v97__control contact-v97__select"
-                        defaultValue={CONTACT_SERVICE_OPTIONS[0]}
+                        defaultValue={serviceOptions[0]}
                       >
-                        {CONTACT_SERVICE_OPTIONS.map((service) => <option key={service}>{service}</option>)}
+                        {serviceOptions.map((service) => <option key={service}>{service}</option>)}
                       </select>
                     </div>
 
@@ -1463,10 +1583,10 @@ export function ContactPage({ setPage }: PageProps) {
                 <h2 id="contact-office-title">O nosso escritório</h2>
 
                 <div className="contact-v97__channels">
-                  {CONTACT_CHANNELS.map((channel) => {
+                  {channels.map((channel) => {
                     const Icon = channel.icon;
                     return (
-                      <article className="contact-v97__channel" key={channel.title}>
+                      <article className="contact-v97__channel" key={'id' in channel ? channel.id : channel.title}>
                         <span className={`contact-v97__channel-icon contact-v97__channel-icon--${channel.tone}`} aria-hidden="true">
                           <Icon />
                         </span>
@@ -1482,23 +1602,21 @@ export function ContactPage({ setPage }: PageProps) {
                 <section className="contact-v97__schedule" aria-labelledby="contact-hours-title">
                   <header>
                     <Clock3 aria-hidden="true" />
-                    <h3 id="contact-hours-title">Horário de Atendimento</h3>
+                    <h3 id="contact-hours-title">{contentText(scheduleContent?.titulo, 'Horário de Atendimento')}</h3>
                   </header>
-                  <div>
-                    <span>Segunda – Sexta</span>
-                    <strong>09:00 – 18:00</strong>
-                  </div>
-                  <div className="contact-v97__schedule-soc">
-                    <span>SOC (clientes ativos)</span>
-                    <strong>24 / 7</strong>
-                  </div>
+                  {scheduleRows.map((entry, index) => (
+                    <div className={index === 1 ? 'contact-v97__schedule-soc' : undefined} key={`${entry.label}-${entry.time}`}>
+                      <span>{entry.label}</span>
+                      <strong>{entry.time}</strong>
+                    </div>
+                  ))}
                 </section>
 
                 <div className="contact-v97__certifications" aria-label="Certificações e conformidade">
-                  {CONTACT_CERTIFICATIONS.map((certification) => (
-                    <span key={certification}>
+                  {certifications.map((certification) => (
+                    <span key={certification.id}>
                       <Award aria-hidden="true" />
-                      {certification}
+                      {certification.label}
                     </span>
                   ))}
                 </div>
