@@ -437,14 +437,14 @@ export interface ApiMeResponse {
   role?: UserRole;
 }
 
-const DEV_MODE = typeof import.meta !== 'undefined' && !!import.meta.env?.DEV;
-
 export function getApiBaseUrl(): string {
   const env = (typeof import.meta !== 'undefined' && import.meta.env) || ({} as Record<string, string | undefined>);
-  const explicit = env.VITE_API_URL;
-  if (typeof explicit === 'string' && explicit.length > 0) return explicit.replace(/\/$/, '');
-  if (DEV_MODE) return '';
-  return 'https://cybersecurity-api.vercel.app';
+  const explicit = env.VITE_API_URL?.trim();
+  if (explicit) return explicit.replace(/\/+$/, '');
+
+  // Sem configuracao explicita, usa /api na mesma origem. Em desenvolvimento,
+  // o Vite encaminha estes pedidos para VITE_API_PROXY_TARGET.
+  return '';
 }
 
 export interface ApiConteudoSite {

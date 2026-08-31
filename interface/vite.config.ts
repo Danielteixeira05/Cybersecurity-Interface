@@ -1,14 +1,15 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const apiTarget = 'https://cybersecurity-api.vercel.app'
 
 export default defineConfig(({ mode }) => {
   const emitSourcemaps = mode === 'development'
+  const environment = loadEnv(mode, __dirname, '')
+  const apiTarget = environment.VITE_API_PROXY_TARGET?.trim() || 'http://localhost:3001'
 
   return {
     base: '/',
@@ -36,10 +37,7 @@ export default defineConfig(({ mode }) => {
           target: apiTarget,
           changeOrigin: true,
           secure: true,
-          headers: {
-            Origin: apiTarget,
-            Referer: `${apiTarget}/`,
-          },
+          ws: true,
         },
       },
     },

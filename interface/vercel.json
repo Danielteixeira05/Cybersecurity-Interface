@@ -5,10 +5,6 @@
   "outputDirectory": "dist",
   "regions": ["fra1"],
 
-  "env": {
-    "VITE_API_URL": ""
-  },
-
   "headers": [
     {
       "source": "/assets/(.*)",
@@ -28,18 +24,6 @@
   ],
 
   "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "https://cybersecurity-api.vercel.app/api/:path*"
-    },
-    {
-      "source": "/media/:path*",
-      "destination": "https://cybersecurity-api.vercel.app/media/:path*"
-    },
-    {
-      "source": "/static/:path*",
-      "destination": "https://cybersecurity-api.vercel.app/static/:path*"
-    },
     {
       "source": "/login",
       "destination": "/index.html"
