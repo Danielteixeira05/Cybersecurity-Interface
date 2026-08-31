@@ -86,7 +86,7 @@ function serialise(incident) {
   };
 }
 
-function incidentPayload(input, current = {}) {
+export function normaliseIncidentPayload(input, current = {}) {
   const requestedState = input.estado === undefined ? current.estado ?? 'ABERTO' : input.estado;
   const estado = enumValue(requestedState, 'Estado', STATES, undefined, { required: true });
   return {
@@ -190,7 +190,7 @@ function closure(data, input, current, actor) {
 }
 
 export async function createIncident(auth, input) {
-  const data = incidentPayload(input, {});
+  const data = normaliseIncidentPayload(input, {});
   await assertClientAccess(auth, data.cliente_id);
   const { sequelize, Incident } = getModels();
   const result = await sequelize.transaction(async (transaction) => {
@@ -225,7 +225,7 @@ export async function updateIncident(auth, incidentId, input) {
   if (!incident) throw httpError(404, 'Incidente não encontrado.');
   await assertClientAccess(auth, incident.cliente_id);
   const current = incident.get({ plain: true });
-  const data = incidentPayload(input, current);
+  const data = normaliseIncidentPayload(input, current);
   await assertClientAccess(auth, data.cliente_id);
   if (auth.role !== 'admin' && input.ativo === false) {
     throw httpError(403, 'Apenas o Administrador pode desativar um incidente.');
@@ -259,4 +259,29 @@ export async function updateIncident(auth, incidentId, input) {
   emitIncidentChanged(result.kind, saved);
   for (const notification of result.notifications) emitNotification(notification);
   return saved;
+}
+
+/**
+ * Cria um incidente no contexto de uma importação Excel. Uma importação nunca
+ * assinala NIS2 automaticamente: essa notificação exige confirmação explícita
+ * no workflow normal de incidentes.
+ */
+export async function createIncidentFromImport(auth, input, { transaction, importId }) {
+  const data = normaliseIncidentPayload({ ...input, notificado_nis2: false }, {});
+  await assertClientAccess(auth, data.cliente_id);
+  await assertActiveClient(data.cliente_id, transaction);
+  await assertCodeAvailable(data.cliente_id, data.codigo, null, transaction);
+  const responsible = data.estado === 'ENCERRADO' ? await actorName(Number(auth.sub), transaction) : null;
+  const { Incident } = getModels();
+  return Incident.create({
+    ...data,
+    ...closure(data, input, {}, responsible),
+    importacao_id: Number(importId),
+    notificado_nis2: false,
+    notificado_nis2_em: null,
+    notificado_nis2_por: null,
+    criado_por: Number(auth.sub),
+    criado_em: new Date(),
+    atualizado_em: new Date(),
+  }, { transaction });
 }

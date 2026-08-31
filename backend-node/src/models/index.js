@@ -265,6 +265,30 @@ export function getModels() {
     fechado_em: DataTypes.DATE,
   }, 'pedidos');
 
+  const ExcelImport = define('ExcelImport', {
+    id,
+    cliente_id: { type: DataTypes.BIGINT, allowNull: false },
+    tipo: { type: DataTypes.STRING(20), allowNull: false },
+    nome_ficheiro_original: { type: DataTypes.STRING(255), allowNull: false },
+    caminho_ficheiro: { type: DataTypes.STRING(500), allowNull: false },
+    estado: { type: DataTypes.STRING(20), allowNull: false },
+    total_linhas: { type: DataTypes.INTEGER, allowNull: false },
+    linhas_importadas: { type: DataTypes.INTEGER, allowNull: false },
+    linhas_rejeitadas: { type: DataTypes.INTEGER, allowNull: false },
+    importado_por: DataTypes.BIGINT,
+    importado_em: { type: DataTypes.DATE, allowNull: false },
+  }, 'importacoes_excel');
+
+  const ImportRow = define('ImportRow', {
+    id,
+    importacao_id: { type: DataTypes.BIGINT, allowNull: false },
+    numero_linha: { type: DataTypes.INTEGER, allowNull: false },
+    estado: { type: DataTypes.STRING(20), allowNull: false },
+    erro: DataTypes.TEXT,
+    dados: { type: DataTypes.JSONB, allowNull: false },
+    criado_em: { type: DataTypes.DATE, allowNull: false },
+  }, 'linhas_importacao');
+
   const ActivityLog = define('ActivityLog', {
     id,
     utilizador_id: DataTypes.BIGINT,
@@ -381,6 +405,18 @@ export function getModels() {
   Client.hasMany(Request, { foreignKey: 'cliente_id', as: 'pedidos' });
   Request.belongsTo(Client, { foreignKey: 'cliente_id', as: 'cliente' });
   Request.belongsTo(RequestStatus, { foreignKey: 'estado_id', as: 'estado' });
+  Request.belongsTo(User, { foreignKey: 'criado_por', as: 'criadoPor' });
+  Request.belongsTo(User, { foreignKey: 'atribuido_a', as: 'atribuidoA' });
+  Client.hasMany(ExcelImport, { foreignKey: 'cliente_id', as: 'importacoesExcel' });
+  ExcelImport.belongsTo(Client, { foreignKey: 'cliente_id', as: 'cliente' });
+  User.hasMany(ExcelImport, { foreignKey: 'importado_por', as: 'importacoesExcel' });
+  ExcelImport.belongsTo(User, { foreignKey: 'importado_por', as: 'importadoPor' });
+  ExcelImport.hasMany(ImportRow, { foreignKey: 'importacao_id', as: 'linhas' });
+  ImportRow.belongsTo(ExcelImport, { foreignKey: 'importacao_id', as: 'importacao' });
+  ExcelImport.hasMany(Asset, { foreignKey: 'importacao_id', as: 'ativos' });
+  Asset.belongsTo(ExcelImport, { foreignKey: 'importacao_id', as: 'importacao' });
+  ExcelImport.hasMany(Incident, { foreignKey: 'importacao_id', as: 'incidentes' });
+  Incident.belongsTo(ExcelImport, { foreignKey: 'importacao_id', as: 'importacao' });
   SiteContent.belongsTo(User, { foreignKey: 'atualizado_por', as: 'atualizadoPor' });
   News.belongsTo(User, { foreignKey: 'autor_id', as: 'autor' });
   ContactMessage.belongsTo(User, { foreignKey: 'respondida_por', as: 'respondidaPor' });
@@ -388,7 +424,7 @@ export function getModels() {
   models = {
     sequelize, Profile, User, Client, UserClient, ClientContact, ConformityStatus,
     RiskAssessment, Asset, Incident, Notification, Conversation, Message, ConversationRead,
-    Document, DocumentReview, RequestStatus, Request, ActivityLog, SystemConfiguration,
+    Document, DocumentReview, RequestStatus, Request, ExcelImport, ImportRow, ActivityLog, SystemConfiguration,
     SiteContent, News, ContactMessage,
   };
   return models;

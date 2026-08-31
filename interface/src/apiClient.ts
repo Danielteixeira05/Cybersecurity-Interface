@@ -336,14 +336,60 @@ export interface ApiPedido {
   id: number;
   cliente_id: number;
   cliente_nome?: string;
+  criado_por?: number;
+  criado_por_nome?: string | null;
+  atribuido_a?: number | null;
+  atribuido_a_nome?: string | null;
   assunto: string;
   descricao?: string | null;
   estado_id?: number;
   estado_codigo?: string;
   estado_nome?: string;
   criado_em?: string;
+  atualizado_em?: string;
   resolvido_em?: string | null;
+  fechado_em?: string | null;
   prioridade?: string | null;
+}
+
+export interface CriarPedidoPayload {
+  cliente_id?: number;
+  assunto: string;
+  descricao: string;
+  prioridade: 'BAIXA' | 'NORMAL' | 'ALTA' | 'URGENTE';
+}
+
+export interface AtualizarPedidoPayload {
+  assunto?: string;
+  descricao?: string;
+  prioridade?: CriarPedidoPayload['prioridade'];
+  estado?: 'ABERTO' | 'EM_ANALISE' | 'AGUARDA_CLIENTE' | 'RESOLVIDO' | 'FECHADO';
+  atribuido_a?: number | null;
+}
+
+export interface ApiImportacaoExcel {
+  id: number;
+  cliente_id: number;
+  cliente_nome?: string | null;
+  tipo: 'ATIVOS' | 'INCIDENTES';
+  nome_ficheiro_original: string;
+  estado: 'PROCESSADO' | 'PARCIAL' | 'FALHADO';
+  total_linhas: number;
+  linhas_importadas: number;
+  linhas_rejeitadas: number;
+  importado_por?: number | null;
+  importado_por_nome?: string | null;
+  importado_em?: string;
+}
+
+export interface ApiPrevisualizacaoExcel {
+  tipo: ApiImportacaoExcel['tipo'];
+  cliente_id: number;
+  nome_ficheiro_original: string;
+  total_linhas: number;
+  linhas_validas: number;
+  linhas_rejeitadas: number;
+  linhas: Array<{ numero_linha: number; estado: 'IMPORTADA' | 'REJEITADA'; erro: string | null; dados: Record<string, unknown> }>;
 }
 
 export interface ApiAvaliacao {
@@ -1159,6 +1205,44 @@ export async function descarregarDocumentoApi(documentId: number): Promise<{ blo
 export async function pedidosApi(clienteId?: number): Promise<ApiPedido[]> {
   const qs = clienteId ? `?cliente_id=${clienteId}` : '';
   return apiFetch<ApiPedido[]>(`/api/pedidos/${qs}`);
+}
+
+export async function criarPedidoApi(payload: CriarPedidoPayload): Promise<ApiPedido> {
+  await ensureCsrfToken();
+  return apiFetch<ApiPedido>('/api/requests/', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function atualizarPedidoApi(pedidoId: number, payload: AtualizarPedidoPayload): Promise<ApiPedido> {
+  await ensureCsrfToken();
+  return apiFetch<ApiPedido>(`/api/requests/${pedidoId}`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+
+function excelImportFormData(tipo: ApiImportacaoExcel['tipo'], clienteId: number, file: File): FormData {
+  const form = new FormData();
+  form.set('tipo', tipo);
+  form.set('cliente_id', String(clienteId));
+  form.set('file', file);
+  return form;
+}
+
+export async function importacoesExcelApi(clienteId?: number): Promise<ApiImportacaoExcel[]> {
+  const qs = clienteId ? `?cliente_id=${clienteId}` : '';
+  const result = await apiFetch<{ items?: ApiImportacaoExcel[] } | ApiImportacaoExcel[]>(`/api/excel-imports/${qs}`);
+  return Array.isArray(result) ? result : (result.items ?? []);
+}
+
+export async function previsualizarImportacaoExcelApi(tipo: ApiImportacaoExcel['tipo'], clienteId: number, file: File): Promise<ApiPrevisualizacaoExcel> {
+  await ensureCsrfToken();
+  return apiFetch<ApiPrevisualizacaoExcel>('/api/excel-imports/preview', {
+    method: 'POST', body: excelImportFormData(tipo, clienteId, file),
+  });
+}
+
+export async function confirmarImportacaoExcelApi(tipo: ApiImportacaoExcel['tipo'], clienteId: number, file: File): Promise<ApiImportacaoExcel> {
+  await ensureCsrfToken();
+  return apiFetch<ApiImportacaoExcel>('/api/excel-imports/', {
+    method: 'POST', body: excelImportFormData(tipo, clienteId, file),
+  });
 }
 export async function avaliacoesApi(clienteId?: number): Promise<ApiAvaliacao[]> {
   const qs = clienteId ? `?cliente_id=${clienteId}` : '';

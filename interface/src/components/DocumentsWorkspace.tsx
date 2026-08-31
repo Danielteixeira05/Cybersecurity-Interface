@@ -27,6 +27,10 @@ type DocumentsWorkspaceProps = {
   subtitle?: string;
   clientId?: number;
   compact?: boolean;
+  /** Limita a vista a categorias reais de documentos sem alargar as permissões da API. */
+  categoryScope?: string[];
+  emptyTitle?: string;
+  emptyDescription?: string;
 };
 
 const FALLBACK_CONFIG: ApiConfiguracaoDocumentos = {
@@ -71,13 +75,13 @@ function saveDownload(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-function EmptyState({ role }: { role: DocumentRole }) {
+function EmptyState({ role, title, description }: { role: DocumentRole; title?: string; description?: string }) {
   return (
     <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center shadow-sm">
       <FileText className="mx-auto h-10 w-10 text-slate-400" aria-hidden="true" />
-      <h2 className="mt-4 text-lg font-semibold text-slate-900">Ainda não existem documentos</h2>
+      <h2 className="mt-4 text-lg font-semibold text-slate-900">{title || 'Ainda não existem documentos'}</h2>
       <p className="mx-auto mt-2 max-w-lg text-sm text-slate-500">
-        {role === 'client' ? 'Quando submeter documentos para a sua organização, estes aparecerão aqui.' : 'Os documentos das organizações autorizadas aparecerão aqui assim que forem submetidos.'}
+        {description || (role === 'client' ? 'Quando submeter documentos para a sua organização, estes aparecerão aqui.' : 'Os documentos das organizações autorizadas aparecerão aqui assim que forem submetidos.')}
       </p>
     </div>
   );
@@ -97,7 +101,7 @@ function Modal({ title, children, onClose }: { title: string; children: React.Re
   );
 }
 
-export function DocumentsWorkspace({ role, title, subtitle, clientId, compact = false }: DocumentsWorkspaceProps) {
+export function DocumentsWorkspace({ role, title, subtitle, clientId, compact = false, categoryScope, emptyTitle, emptyDescription }: DocumentsWorkspaceProps) {
   const [documents, setDocuments] = useState<ApiDocumento[]>([]);
   const [clients, setClients] = useState<ApiCliente[]>([]);
   const [config, setConfig] = useState<ApiConfiguracaoDocumentos>(FALLBACK_CONFIG);
@@ -113,6 +117,13 @@ export function DocumentsWorkspace({ role, title, subtitle, clientId, compact = 
   const [uploadLimitDraft, setUploadLimitDraft] = useState('');
   const [savingUploadLimit, setSavingUploadLimit] = useState(false);
 
+  const scopedCategories = useMemo(() => Array.from(new Set(
+    (categoryScope ?? []).map((category) => category.trim().toUpperCase()).filter(Boolean),
+  )), [categoryScope]);
+  const requestFilters = useMemo(() => (
+    scopedCategories.length === 1 ? { ...filters, categoria: scopedCategories[0] } : filters
+  ), [filters, scopedCategories]);
+
   const pageTitle = title || (role === 'admin' ? 'Documentos da Plataforma' : role === 'manager' ? 'Documentos dos Clientes' : 'Os Meus Documentos');
   const pageSubtitle = subtitle || (role === 'client' ? 'Documentos privados associados à sua organização.' : 'Documentos das organizações a que tem acesso.');
 
@@ -120,7 +131,7 @@ export function DocumentsWorkspace({ role, title, subtitle, clientId, compact = 
     setLoading(true);
     setError(null);
     try {
-      const tasks: [Promise<ApiDocumento[]>, Promise<ApiConfiguracaoDocumentos>, Promise<ApiCliente[]>?] = [documentosApi(filters), configuracaoDocumentosApi()];
+      const tasks: [Promise<ApiDocumento[]>, Promise<ApiConfiguracaoDocumentos>, Promise<ApiCliente[]>?] = [documentosApi(requestFilters), configuracaoDocumentosApi()];
       if (role !== 'client' && !clientId) tasks[2] = clientesApi();
       const [rows, nextConfig, availableClients] = await Promise.all(tasks);
       setDocuments(rows);
@@ -131,7 +142,7 @@ export function DocumentsWorkspace({ role, title, subtitle, clientId, compact = 
     } finally {
       setLoading(false);
     }
-  }, [clientId, filters, role]);
+  }, [clientId, requestFilters, role]);
 
   useEffect(() => { void reload(); }, [reload]);
   useEffect(() => {
@@ -144,7 +155,12 @@ export function DocumentsWorkspace({ role, title, subtitle, clientId, compact = 
   }, [reload]);
 
   const visibleClients = useMemo(() => clients.filter((client) => client.ativo !== false), [clients]);
-  const categories = config.categorias.length ? config.categorias : Array.from(new Set(documents.map((document) => document.categoria).filter((value): value is string => Boolean(value))));
+  const categories = scopedCategories.length ? scopedCategories : (config.categorias.length ? config.categorias : Array.from(new Set(documents.map((document) => document.categoria).filter((value): value is string => Boolean(value)))));
+  const visibleDocuments = useMemo(() => (
+    scopedCategories.length
+      ? documents.filter((document) => document.categoria ? scopedCategories.includes(document.categoria.toUpperCase()) : false)
+      : documents
+  ), [documents, scopedCategories]);
   const canSubmit = true;
   const canReview = role === 'manager' || role === 'admin';
 
@@ -238,14 +254,14 @@ export function DocumentsWorkspace({ role, title, subtitle, clientId, compact = 
       {!compact && <form onSubmit={applyFilters} className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-2 xl:grid-cols-5">
         <label className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 md:col-span-2"><Search size={17} className="text-slate-400" /><span className="sr-only">Pesquisar documentos</span><input value={draftFilters.q || ''} onChange={(event) => setDraftFilters((current) => ({ ...current, q: event.target.value }))} placeholder="Pesquisar título ou ficheiro" className="min-w-0 flex-1 bg-transparent text-sm outline-none" /></label>
         {role !== 'client' && !clientId && <label><span className="sr-only">Organização</span><select value={draftFilters.cliente_id || ''} onChange={(event) => setDraftFilters((current) => ({ ...current, cliente_id: event.target.value ? Number(event.target.value) : undefined }))} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"><option value="">Todas as organizações</option>{visibleClients.map((client) => <option key={client.id} value={client.id}>{client.nome}{client.nif ? ` — NIF ${client.nif}` : ''}</option>)}</select></label>}
-        <label><span className="sr-only">Categoria</span><select value={draftFilters.categoria || ''} onChange={(event) => setDraftFilters((current) => ({ ...current, categoria: event.target.value || undefined }))} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"><option value="">Todas as categorias</option>{categories.map((category) => <option key={category} value={category}>{labelFor(category)}</option>)}</select></label>
+        {scopedCategories.length === 0 && <label><span className="sr-only">Categoria</span><select value={draftFilters.categoria || ''} onChange={(event) => setDraftFilters((current) => ({ ...current, categoria: event.target.value || undefined }))} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"><option value="">Todas as categorias</option>{categories.map((category) => <option key={category} value={category}>{labelFor(category)}</option>)}</select></label>}
         <label><span className="sr-only">Estado</span><select value={draftFilters.estado || ''} onChange={(event) => setDraftFilters((current) => ({ ...current, estado: event.target.value || undefined }))} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"><option value="">Todos os estados</option>{config.estados.map((state) => <option key={state} value={state}>{labelFor(state)}</option>)}</select></label>
         <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">Aplicar filtros</button>
       </form>}
 
-      {loading ? <div className="flex items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white py-16 text-sm text-slate-500"><LoaderCircle className="animate-spin" size={20} />A carregar documentos…</div> : error ? <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-rose-800"><strong>Não foi possível carregar os documentos.</strong><p className="mt-1 text-sm">{error}</p><button type="button" onClick={() => void reload()} className="mt-3 rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm font-semibold">Tentar novamente</button></div> : documents.length === 0 ? <EmptyState role={role} /> : <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" aria-label="Lista de documentos">
+      {loading ? <div className="flex items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white py-16 text-sm text-slate-500"><LoaderCircle className="animate-spin" size={20} />A carregar documentos…</div> : error ? <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-rose-800"><strong>Não foi possível carregar os documentos.</strong><p className="mt-1 text-sm">{error}</p><button type="button" onClick={() => void reload()} className="mt-3 rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm font-semibold">Tentar novamente</button></div> : visibleDocuments.length === 0 ? <EmptyState role={role} title={emptyTitle} description={emptyDescription} /> : <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" aria-label="Lista de documentos">
         <div className="hidden grid-cols-[minmax(0,2fr)_minmax(10rem,1fr)_9rem_7rem_12rem] gap-4 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 md:grid"><span>Documento</span><span>Organização</span><span>Estado</span><span>Versão</span><span className="text-right">Ações</span></div>
-        <div className="divide-y divide-slate-100">{documents.map((document) => <article key={document.id} className="grid gap-3 px-5 py-4 md:grid-cols-[minmax(0,2fr)_minmax(10rem,1fr)_9rem_7rem_12rem] md:items-center md:gap-4">
+        <div className="divide-y divide-slate-100">{visibleDocuments.map((document) => <article key={document.id} className="grid gap-3 px-5 py-4 md:grid-cols-[minmax(0,2fr)_minmax(10rem,1fr)_9rem_7rem_12rem] md:items-center md:gap-4">
           <div className="min-w-0"><div className="flex items-start gap-3"><span className="mt-0.5 rounded-lg bg-blue-50 p-2 text-blue-600"><FileText size={19} /></span><span className="min-w-0"><strong className="block truncate text-sm text-slate-900">{document.titulo}</strong><small className="mt-0.5 block truncate text-slate-500">{document.nome_ficheiro_original || 'Ficheiro privado'} · {formatBytes(document.tamanho_bytes)} · {formatDate(document.submetido_em)}</small></span></div></div>
           <div className="text-sm text-slate-600"><span className="md:hidden text-xs font-semibold uppercase text-slate-400">Organização: </span>{document.cliente_nome || '—'}</div>
           <div><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${stateClass(document.estado)}`}>{labelFor(document.estado)}</span></div>
@@ -255,7 +271,7 @@ export function DocumentsWorkspace({ role, title, subtitle, clientId, compact = 
       </section>}
 
       {selected && <DocumentDetailModal document={selected} role={role} busy={busy} onClose={() => setSelected(null)} onDownload={() => void download(selected)} onReview={() => setReviewTarget(selected)} onNewVersion={() => setUploadTarget(selected)} onDeactivate={() => void deactivate(selected)} />}
-      {uploadTarget && <UploadModal role={role} clients={visibleClients} config={config} versionOf={uploadTarget === 'new' ? null : uploadTarget} onClose={() => setUploadTarget(null)} onSuccess={onUploaded} setActionError={setActionError} />}
+      {uploadTarget && <UploadModal role={role} clients={visibleClients} config={{ ...config, categorias: categories }} versionOf={uploadTarget === 'new' ? null : uploadTarget} onClose={() => setUploadTarget(null)} onSuccess={onUploaded} setActionError={setActionError} />}
       {reviewTarget && <ReviewModal document={reviewTarget} states={config.estados} onClose={() => setReviewTarget(null)} onSuccess={onReviewed} setActionError={setActionError} />}
     </div>
   );

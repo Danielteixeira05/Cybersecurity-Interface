@@ -1,5 +1,6 @@
 import { getModels } from '../models/index.js';
 import { assertClientAccess, clientIdsForUser } from './clients.service.js';
+export { listRequests } from './requests.service.js';
 
 async function accessibleWhere(auth, clientId, { hasActiveFlag = false } = {}) {
   const active = hasActiveFlag ? { ativo: true } : {};
@@ -80,25 +81,6 @@ export async function listRiskAssessments(auth, clientId) {
       score,
       cliente: undefined,
       estadoConformidade: undefined,
-    };
-  });
-}
-export async function listRequests(auth, clientId) {
-  const { Request, RequestStatus, Client } = getModels();
-  return (await Request.findAll({
-    where: await accessibleWhere(auth, clientId),
-    include: [
-      { model: RequestStatus, as: 'estado', attributes: ['codigo', 'nome'] },
-      { model: Client, as: 'cliente', attributes: ['nome'] },
-    ],
-    order: [['criado_em', 'DESC'], ['id', 'DESC']],
-  })).map((request) => {
-    const item = withClientName(request);
-    return {
-      ...item,
-      estado_codigo: item.estado?.codigo ?? undefined,
-      estado_nome: item.estado?.nome ?? undefined,
-      estado: undefined,
     };
   });
 }

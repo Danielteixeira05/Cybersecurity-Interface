@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { FormEvent, ReactNode } from 'react';
 import { ArrowRight, BellRing, ClipboardCheck, FileText, MessageSquare, ShieldCheck, TriangleAlert, UsersRound } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import type { Page } from '../types';
 import {
-  clienteDetalheApi, documentosApi, notificacoesApi, pedidosApi, avaliacoesApi, session,
+  clienteDetalheApi, criarPedidoApi, documentosApi, notificacoesApi, pedidosApi, avaliacoesApi, session,
   type ApiAtivo, type ApiIncidente, type ApiDocumento,
   type ApiPedido, type ApiAvaliacao, type ApiClienteDetalhe, type ApiNotificacao,
 } from '../apiClient';
@@ -295,9 +295,9 @@ export function ClientDashboard({ setPage }: PageProps) {
           <DashboardMetric label="Documentos" value={dashboard.documents.length} detail={dashboard.documents.length ? 'Registos autorizados' : 'Sem documentos disponíveis'} icon={<FileText size={20} />} onClick={() => setPage('cli-documents')} />
           <DashboardMetric label="Findings totais" value="—" detail="Sem fonte de findings" icon={<ClipboardCheck size={20} />} tone="violet" />
           <DashboardMetric label="Findings críticos" value="—" detail="Sem fonte de findings" icon={<TriangleAlert size={20} />} tone="rose" />
-          <DashboardMetric label="Pentests" value={dashboard.pentestDocuments.length} detail="Documentos classificados como Pentest" icon={<ShieldCheck size={20} />} tone="blue" onClick={() => setPage('cli-workspace')} />
+          <DashboardMetric label="Pentests" value={dashboard.pentestDocuments.length} detail="Documentos classificados como Pentest" icon={<ShieldCheck size={20} />} tone="blue" onClick={() => setPage('cli-pentests')} />
           <DashboardMetric label="Incidentes" value={dashboard.incidents.length} detail={`${dashboard.openIncidents} abertos`} icon={<TriangleAlert size={20} />} tone="amber" onClick={() => setPage('cli-incidents')} />
-          <DashboardMetric label="Score NIS2" value="—" detail={nIS2State} icon={<ShieldCheck size={20} />} tone="green" onClick={() => setPage('cli-reports')} />
+          <DashboardMetric label="Score NIS2" value={securityScore ?? '—'} detail={nIS2State} icon={<ShieldCheck size={20} />} tone="green" onClick={() => setPage('cli-nis2')} />
         </div>
       </section>
 
@@ -367,9 +367,9 @@ export function ClientWorkspace({ setPage }: PageProps) {
           { p: 'cli-requests', t: 'Pedidos / Suporte', d: 'Abrir e acompanhar pedidos de suporte', i: '📨', c: 'from-amber-500 to-orange-500' },
           { p: 'cli-nis2', t: 'Conformidade NIS2', d: 'Ver o estado de conformidade com a diretiva', i: '🛡️', c: 'from-emerald-500 to-teal-500' },
           { p: 'cli-risk', t: 'Análise de Riscos', d: 'Avaliações e níveis de risco atualizados', i: '⚠️', c: 'from-amber-500 to-rose-500' },
-          { p: 'cli-reports', t: 'Relatórios', d: 'Relatórios automáticos de segurança', i: '📈', c: 'from-indigo-500 to-blue-500' },
+          { p: 'cli-reports', t: 'Relatórios', d: 'Consulte os relatórios submetidos para a sua organização', i: '📈', c: 'from-indigo-500 to-blue-500' },
           { p: 'cli-communication', t: 'Comunicação', d: 'Contactos com a equipa CiberBoxSecur', i: '💬', c: 'from-sky-500 to-indigo-500' },
-          { p: 'cli-pentests', t: 'Pentests', d: 'Agendar e ver resultados de testes de penetração', i: '🔍', c: 'from-fuchsia-500 to-violet-500' },
+          { p: 'cli-pentests', t: 'Pentests', d: 'Consulte documentos e resultados de testes de penetração', i: '🔍', c: 'from-fuchsia-500 to-violet-500' },
         ].map(r => (
           <button
             key={r.p}
@@ -405,6 +405,9 @@ export function ClientRequests({ setPage }: PageProps) {
   const [data, setData] = useState<ApiPedido[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     pedidosApi()
@@ -412,6 +415,26 @@ export function ClientRequests({ setPage }: PageProps) {
       .catch((e) => setErr(e?.message || 'Erro'))
       .finally(() => setLoading(false));
   }, []);
+
+  async function submitRequest(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormError(null);
+    setSaving(true);
+    const form = new FormData(event.currentTarget);
+    try {
+      const created = await criarPedidoApi({
+        assunto: String(form.get('assunto') ?? ''),
+        descricao: String(form.get('descricao') ?? ''),
+        prioridade: String(form.get('prioridade') ?? 'NORMAL') as 'BAIXA' | 'NORMAL' | 'ALTA' | 'URGENTE',
+      });
+      setData((current) => [created, ...current]);
+      setFormOpen(false);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Não foi possível submeter o pedido.');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div>
@@ -423,10 +446,19 @@ export function ClientRequests({ setPage }: PageProps) {
             <button onClick={() => setPage('cli-communication')} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
               Comunicação
             </button>
-            <button className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">+ Novo Pedido</button>
+            <button type="button" onClick={() => { setFormError(null); setFormOpen(true); }} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">+ Novo Pedido</button>
           </>
         }
       />
+      {formOpen && (
+        <form onSubmit={submitRequest} className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between gap-4"><div><h2 className="font-display text-lg font-semibold text-slate-900">Novo pedido</h2><p className="mt-1 text-sm text-slate-500">O pedido será associado à sua organização.</p></div><button type="button" onClick={() => setFormOpen(false)} className="text-sm font-medium text-slate-500 hover:text-slate-800">Cancelar</button></div>
+          <div className="grid gap-4 md:grid-cols-2"><label className="block text-sm font-medium text-slate-700">Assunto<input required name="assunto" maxLength={180} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-slate-900" /></label><label className="block text-sm font-medium text-slate-700">Prioridade<select name="prioridade" defaultValue="NORMAL" className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-slate-900"><option value="BAIXA">Baixa</option><option value="NORMAL">Normal</option><option value="ALTA">Alta</option><option value="URGENTE">Urgente</option></select></label></div>
+          <label className="mt-4 block text-sm font-medium text-slate-700">Descrição<textarea required name="descricao" rows={4} maxLength={10000} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-slate-900" /></label>
+          {formError && <p role="alert" className="mt-3 text-sm text-rose-700">{formError}</p>}
+          <div className="mt-5 flex justify-end"><button disabled={saving} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">{saving ? 'A submeter…' : 'Submeter pedido'}</button></div>
+        </form>
+      )}
       {loading ? <Loader /> : err ? <ErrorCard msg={err} /> : (
         <DataTable
           data={data}
@@ -449,37 +481,15 @@ export function ClientRequests({ setPage }: PageProps) {
   );
 }
 
-export function ClientReports({ setPage }: PageProps) {
-  return (
-    <div>
-      <PageHeader title="Relatórios" subtitle="Relatórios disponíveis para a sua conta" />
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {[
-          { t: 'Relatório de Conformidade NIS2', d: 'Estado atual, checklist e recomendações', i: '🛡️', c: 'from-blue-500 to-cyan-500', p: 'cli-nis2' },
-          { t: 'Relatório Trimestral', d: 'Atividade, incidentes e evolução de ativos', i: '📊', c: 'from-rose-500 to-pink-500', p: 'cli-dashboard' },
-          { t: 'Análise de Riscos', d: 'Avaliação de riscos e medidas a adotar', i: '⚠️', c: 'from-amber-500 to-orange-500', p: 'cli-risk' },
-          { t: 'Inventário de Ativos', d: 'Lista completa dos seus ativos de TI', i: '💻', c: 'from-emerald-500 to-teal-500', p: 'cli-assets' },
-          { t: 'Histórico de Incidentes', d: 'Registo completo e análise de incidentes', i: '🚨', c: 'from-rose-500 to-orange-500', p: 'cli-incidents' },
-          { t: 'Resultados de Pentests', d: 'Se tiver pentests contratados', i: '🔍', c: 'from-violet-500 to-purple-500', p: 'cli-pentests' },
-        ].map(r => (
-          <div key={r.t} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm hover:shadow-md transition">
-            <div className={`h-12 w-12 rounded-xl bg-gradient-to-br ${r.c} flex items-center justify-center text-2xl mb-4`}>{r.i}</div>
-            <h3 className="font-display font-semibold text-slate-900">{r.t}</h3>
-            <p className="mt-1 text-xs text-slate-500">{r.d}</p>
-            <div className="mt-4 flex gap-2">
-              <button className="flex-1 rounded-lg bg-slate-900 text-white py-2 text-xs font-semibold hover:bg-slate-800">Descarregar PDF</button>
-              <button
-                onClick={() => setPage(r.p as Page)}
-                className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium hover:bg-slate-50"
-              >
-                Ver
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+export function ClientReports(_props: PageProps) {
+  return <DocumentsWorkspace
+    role="client"
+    title="Relatórios"
+    subtitle="Relatórios privados disponíveis para a sua organização."
+    categoryScope={['RELATORIO', 'RELATORIO_CNCS']}
+    emptyTitle="Ainda não existem relatórios"
+    emptyDescription="Os relatórios submetidos para a sua organização ficarão disponíveis aqui."
+  />;
 }
 
 export function ClientProfile() {
@@ -565,7 +575,7 @@ export function ClientRisk() {
       <PageHeader title="Análise de Riscos" subtitle="Avaliações e níveis de risco da sua conta" />
       <div className="grid gap-4 sm:grid-cols-3 mb-6">
         <StatCard label="Avaliações" value={data.length} icon="📊" color="bg-blue-50" />
-        <StatCard label="Risco Atual" value={data.length ? (data[0].nivel_risco || 'Médio') : 'Médio'} icon="⚠️" color="bg-amber-50" />
+        <StatCard label="Risco Atual" value={data[0]?.nivel_risco || '—'} icon="⚠️" color="bg-amber-50" />
         <StatCard label="Score (última)" value={data.length ? (data[0].score ?? '—') : '—'} icon="⭐" color="bg-emerald-50" />
       </div>
       <div className="grid gap-6 lg:grid-cols-2 mb-6">
@@ -589,9 +599,9 @@ export function ClientRisk() {
           <h3 className="mb-4 font-display text-lg font-semibold text-slate-900">Evolução do Score</h3>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data.slice(0, 10).map((a, i) => ({
-                aval: `#${i + 1}`,
-                score: a.score ?? 70 - i * 2,
+              <LineChart data={data.filter((assessment) => typeof assessment.score === 'number').slice(0, 10).reverse().map((assessment) => ({
+                aval: assessment.data_avaliacao ? new Date(assessment.data_avaliacao).toLocaleDateString('pt-PT') : `#${assessment.id}`,
+                score: assessment.score,
               }))}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="aval" stroke="#64748b" />
@@ -638,148 +648,58 @@ export function ClientNIS2() {
       .finally(() => setLoading(false));
   }, []);
 
-  const ultima = avals[0];
-  const estado = ultima?.estado_conformidade_nome || 'Em avaliação';
-
-  const items = [
-    { t: 'Políticas e procedimentos', ok: 92 },
-    { t: 'Gestão de riscos', ok: 84 },
-    { t: 'Resposta a incidentes', ok: 76 },
-    { t: 'Monitorização 24/7', ok: 68 },
-    { t: 'Formação colaboradores', ok: 58 },
-    { t: 'Backup e recuperação', ok: 88 },
-    { t: 'Gestão de fornecedores', ok: 72 },
-    { t: 'Criptografia', ok: 90 },
-  ];
+  const latest = avals[0];
+  const scoreHistory = avals
+    .filter((assessment) => typeof assessment.score === 'number')
+    .slice(0, 12)
+    .reverse()
+    .map((assessment) => ({
+      data: assessment.data_avaliacao ? new Date(assessment.data_avaliacao).toLocaleDateString('pt-PT') : `#${assessment.id}`,
+      score: assessment.score as number,
+    }));
 
   return (
     <div>
-      <PageHeader title="Conformidade NIS2" subtitle={`Estado atual: ${estado}`} />
-      <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-900 to-slate-800 p-8 mb-6 text-white">
-        <div className="flex flex-wrap items-center gap-6">
-          <div className="relative flex-shrink-0">
-            <svg width="140" height="140" viewBox="0 0 140 140">
-              <circle cx="70" cy="70" r="60" stroke="rgba(255,255,255,0.1)" strokeWidth="12" fill="none" />
-              <circle cx="70" cy="70" r="60" stroke="url(#g)" strokeWidth="12" fill="none"
-                strokeLinecap="round"
-                strokeDasharray={`${2 * Math.PI * 60 * 0.78} ${2 * Math.PI * 60}`}
-                transform="rotate(-90 70 70)" />
-              <defs>
-                <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0" stopColor="#60a5fa" />
-                  <stop offset="1" stopColor="#a78bfa" />
-                </linearGradient>
-              </defs>
-            </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <div className="text-3xl font-bold font-display">78%</div>
-              <div className="text-xs text-slate-300">Conformidade</div>
-            </div>
-          </div>
-          <div className="flex-1 min-w-[280px]">
-            <h2 className="font-display text-2xl font-bold">Diretiva NIS 2</h2>
-            <p className="mt-1 text-sm text-slate-300 max-w-lg">
-              Monitorização contínua do cumprimento dos requisitos da Diretiva (UE) 2022/2555 (NIS2). 
-              A equipa CiberBoxSecur acompanha a sua implementação.
-            </p>
-            <div className="mt-4 grid grid-cols-3 gap-3 max-w-lg">
-              <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-                <div className="text-xs text-slate-400">Incidentes report.</div>
-                <div className="font-semibold mt-0.5">24h</div>
-              </div>
-              <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-                <div className="text-xs text-slate-400">Próxima audit.</div>
-                <div className="font-semibold mt-0.5">15/10/2026</div>
-              </div>
-              <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-                <div className="text-xs text-slate-400">Itens a tratar</div>
-                <div className="font-semibold mt-0.5 text-amber-300">3</div>
-              </div>
-            </div>
-          </div>
-        </div>
+      <PageHeader title="Conformidade NIS2" subtitle="Avaliações registadas para a sua organização" />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
+        <StatCard label="Estado atual" value={latest?.estado_conformidade_nome || '—'} icon="🛡️" color="bg-blue-50" />
+        <StatCard label="Risco atual" value={latest?.nivel_risco || '—'} icon="⚠️" color="bg-amber-50" />
+        <StatCard label="Pontuação" value={latest?.score ?? '—'} icon="⭐" color="bg-emerald-50" />
+        <StatCard label="Última avaliação" value={latest?.data_avaliacao ? new Date(latest.data_avaliacao).toLocaleDateString('pt-PT') : '—'} icon="📅" color="bg-violet-50" />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 bg-white p-6">
-          <h3 className="mb-4 font-display text-lg font-semibold text-slate-900">Checklist de Implementação</h3>
-          <div className="space-y-3">
-            {items.map((it, i) => (
-              <div key={i} className="rounded-xl border border-slate-100 p-3">
-                <div className="flex justify-between mb-1.5 text-sm">
-                  <span className="font-medium text-slate-800">{it.t}</span>
-                  <span className="font-semibold text-slate-600">{it.ok}%</span>
-                </div>
-                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full ${it.ok >= 85 ? 'bg-emerald-500' : it.ok >= 70 ? 'bg-blue-500' : it.ok >= 50 ? 'bg-amber-500' : 'bg-rose-500'}`}
-                    style={{ width: `${it.ok}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
+          <h3 className="mb-4 font-display text-lg font-semibold text-slate-900">Evolução da pontuação</h3>
+          {loading ? <Loader /> : err ? <ErrorCard msg={err} /> : scoreHistory.length ? <div className="h-72"><ResponsiveContainer width="100%" height="100%"><LineChart data={scoreHistory}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis dataKey="data" stroke="#64748b" /><YAxis stroke="#64748b" /><Tooltip /><Line type="monotone" dataKey="score" stroke="#2563eb" strokeWidth={3} dot={{ r: 4, fill: '#2563eb' }} /></LineChart></ResponsiveContainer></div> : <p className="py-20 text-center text-sm text-slate-500">Sem pontuações NIS2 registadas.</p>}
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-6">
-          <h3 className="mb-4 font-display text-lg font-semibold text-slate-900">Histórico de Avaliações</h3>
-          {loading ? <Loader /> : err ? <ErrorCard msg={err} /> : (
-            <DataTable
-              data={avals}
-              emptyText="Sem avaliações NIS2 registadas"
-              columns={[
-                { key: 'id', label: 'ID', width: '50px', render: (r) => <span className="font-mono text-xs">#{r.id}</span> },
-                { key: 'data_avaliacao', label: 'Data', render: (r) => r.data_avaliacao ? new Date(r.data_avaliacao).toLocaleDateString('pt-PT') : '—' },
-                { key: 'estado_conformidade_nome', label: 'Estado', render: (r) => (
-                  <span className={`badge ${conformidadeColor(r.estado_conformidade_nome)}`}>{r.estado_conformidade_nome || '—'}</span>
-                )},
-                { key: 'score', label: 'Score', render: (r) => r.score ?? '—' },
-              ]}
-            />
-          )}
+          <h3 className="mb-4 font-display text-lg font-semibold text-slate-900">Última avaliação</h3>
+          {loading ? <Loader /> : err ? <ErrorCard msg={err} /> : latest ? <dl className="space-y-4 text-sm"><div><dt className="text-slate-500">Estado de conformidade</dt><dd className="mt-1"><span className={`badge ${conformidadeColor(latest.estado_conformidade_nome)}`}>{latest.estado_conformidade_nome || '—'}</span></dd></div><div><dt className="text-slate-500">Nível de risco</dt><dd className="mt-1 font-semibold text-slate-900">{latest.nivel_risco || '—'}</dd></div>{latest.recomendacoes && <div><dt className="text-slate-500">Recomendações</dt><dd className="mt-1 whitespace-pre-wrap text-slate-700">{latest.recomendacoes}</dd></div>}</dl> : <p className="py-20 text-center text-sm text-slate-500">Sem avaliação NIS2 disponível.</p>}
         </div>
+      </div>
+
+      <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
+        <h3 className="mb-4 font-display text-lg font-semibold text-slate-900">Histórico de avaliações</h3>
+        {loading ? <Loader /> : err ? <ErrorCard msg={err} /> : <DataTable data={avals} emptyText="Sem avaliações NIS2 registadas" columns={[
+          { key: 'id', label: 'ID', width: '50px', render: (r) => <span className="font-mono text-xs">#{r.id}</span> },
+          { key: 'data_avaliacao', label: 'Data', render: (r) => r.data_avaliacao ? new Date(r.data_avaliacao).toLocaleDateString('pt-PT') : '—' },
+          { key: 'estado_conformidade_nome', label: 'Estado', render: (r) => <span className={`badge ${conformidadeColor(r.estado_conformidade_nome)}`}>{r.estado_conformidade_nome || '—'}</span> },
+          { key: 'nivel_risco', label: 'Risco', render: (r) => r.nivel_risco || '—' },
+          { key: 'score', label: 'Pontuação', render: (r) => r.score ?? '—' },
+        ]} />}
       </div>
     </div>
   );
 }
 
-export function ClientPentests() {
-  const items = [
-    { id: 1, titulo: 'Pentest Website e App', data: '2026-06-30', estado: 'Concluído', severidade: 'Média', vulns: 4, score: 88, progresso: 100 },
-    { id: 2, titulo: 'Pentest Infraestrutura Externa', data: '2026-09-15', estado: 'Agendado', severidade: '—', vulns: 0, score: null, progresso: 0 },
-  ];
-  return (
-    <div>
-      <PageHeader
-        title="Testes de Penetração"
-        subtitle="Resultados e agendamentos de pentests contratados"
-        actions={<button className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700">+ Solicitar Pentest</button>}
-      />
-      <div className="grid gap-4 sm:grid-cols-3 mb-6">
-        <StatCard label="Agendados" value={items.filter(i => i.estado === 'Agendado').length} icon="📅" color="bg-blue-50" />
-        <StatCard label="Concluídos" value={items.filter(i => i.estado === 'Concluído').length} icon="✅" color="bg-emerald-50" />
-        <StatCard label="Média Score" value={items.filter(i => i.score).length ? (items.filter(i => i.score).reduce((a, b) => a + (b.score || 0), 0) / items.filter(i => i.score).length).toFixed(0) : '—'} icon="⭐" color="bg-amber-50" />
-      </div>
-      <div className="rounded-2xl border border-slate-200 bg-white p-6">
-        <DataTable
-          data={items as any}
-          columns={[
-            { key: 'id', label: 'ID', width: '70px', render: (r: any) => <span className="font-mono text-xs">#PT-{String(r.id).padStart(4,'0')}</span> },
-            { key: 'titulo', label: 'Teste', render: (r: any) => <div className="font-semibold text-slate-900">{r.titulo}</div> },
-            { key: 'data', label: 'Data', render: (r: any) => new Date(r.data).toLocaleDateString('pt-PT') },
-            { key: 'estado', label: 'Estado', render: (r: any) => (
-              <span className={`badge ${r.estado === 'Concluído' ? 'bg-emerald-100 text-emerald-700' : r.estado === 'Em curso' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>{r.estado}</span>
-            )},
-            { key: 'severidade', label: 'Risco Máx.', render: (r: any) => <span className={`badge ${severityColor(r.severidade)}`}>{r.severidade}</span> },
-            { key: 'vulns', label: 'Vulns.', render: (r: any) => r.vulns || '—' },
-            { key: 'score', label: 'Score', render: (r: any) => r.score ?? '—' },
-            { key: 'progresso', label: '', width: '80px', render: () => (
-              <button className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium hover:bg-slate-50">
-                Detalhes
-              </button>
-            )},
-          ]}
-        />
-      </div>
-    </div>
-  );
+export function ClientPentests(_props: Partial<PageProps>) {
+  return <DocumentsWorkspace
+    role="client"
+    title="Testes de Penetração"
+    subtitle="Documentos Pentest privados associados à sua organização."
+    categoryScope={['PENTEST']}
+    emptyTitle="Ainda não existem documentos Pentest"
+    emptyDescription="A API atual não possui agendamentos de Pentest autónomos. Os resultados submetidos na categoria Pentest ficarão disponíveis aqui."
+  />;
 }

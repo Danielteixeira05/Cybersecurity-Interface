@@ -53,7 +53,7 @@ function macAddress(value, current = null) {
   return result;
 }
 
-function payload(input, current = {}) {
+export function normaliseAssetPayload(input, current = {}) {
   return {
     cliente_id: idOf(input.cliente_id ?? input.clienteId ?? current.cliente_id, 'Cliente', { required: true }),
     numero_inventario: optionalText(input.numero_inventario ?? input.numeroInventario, 80, current.numero_inventario),
@@ -154,7 +154,7 @@ async function assertInventoryAvailable(clientId, inventory, currentId, transact
 }
 
 export async function createAsset(auth, input) {
-  const data = payload(input);
+  const data = normaliseAssetPayload(input);
   await assertClientAccess(auth, data.cliente_id);
   const { sequelize, Asset } = getModels();
   const id = await sequelize.transaction(async (transaction) => {
@@ -172,7 +172,7 @@ export async function updateAsset(auth, assetId, input) {
   const asset = await Asset.findOne({ where: { id: idOf(assetId, 'Ativo', { required: true }) } });
   if (!asset) throw httpError(404, 'Ativo não encontrado.');
   await assertClientAccess(auth, asset.cliente_id);
-  const data = payload(input, asset.get({ plain: true }));
+  const data = normaliseAssetPayload(input, asset.get({ plain: true }));
   await assertClientAccess(auth, data.cliente_id);
   await sequelize.transaction(async (transaction) => {
     await assertActiveClient(data.cliente_id, transaction);
@@ -181,4 +181,25 @@ export async function updateAsset(auth, assetId, input) {
     await recordAudit({ userId: Number(auth.sub), action: data.ativo ? 'ATUALIZAR' : 'DESATIVAR', entity: 'ativos_tecnologicos', entityId: Number(asset.id), details: { cliente_id: data.cliente_id, criticidade: data.criticidade } }, transaction);
   });
   return getAsset({ ...auth, role: 'admin' }, asset.id).catch(() => serialise(asset));
+}
+
+/**
+ * Cria um ativo no contexto da transação de uma importação Excel. A validação
+ * de campos, associação e unicidade é a mesma usada pelo formulário normal;
+ * o registo de auditoria agregado fica a cargo do serviço de importação.
+ */
+export async function createAssetFromImport(auth, input, { transaction, importId }) {
+  const data = normaliseAssetPayload(input);
+  await assertClientAccess(auth, data.cliente_id);
+  await assertActiveClient(data.cliente_id, transaction);
+  await assertInventoryAvailable(data.cliente_id, data.numero_inventario, null, transaction);
+
+  const { Asset } = getModels();
+  return Asset.create({
+    ...data,
+    importacao_id: Number(importId),
+    criado_por: Number(auth.sub),
+    criado_em: new Date(),
+    atualizado_em: new Date(),
+  }, { transaction });
 }

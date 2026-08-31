@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, Legend,
@@ -11,9 +11,11 @@ import {
 import type { Page } from '../types';
 import {
   dashboardApi, clientesApi, ativosApi, incidentesApi, documentosApi,
-  pedidosApi, avaliacoesApi, clienteDetalheApi, session,
+  atualizarPedidoApi, confirmarImportacaoExcelApi, importacoesExcelApi, pedidosApi,
+  previsualizarImportacaoExcelApi, criarPedidoApi, avaliacoesApi, clienteDetalheApi, session,
   type ApiDashboardAdmin, type ApiCliente, type ApiAtivo, type ApiIncidente,
-  type ApiDocumento, type ApiPedido, type ApiAvaliacao,
+  type ApiDocumento, type ApiPedido, type ApiAvaliacao, type ApiImportacaoExcel,
+  type ApiPrevisualizacaoExcel,
 } from '../apiClient';
 import { AssetsWorkspace, IncidentsWorkspace } from '../components/OperationalResources';
 import { DocumentsWorkspace } from '../components/DocumentsWorkspace';
@@ -258,7 +260,7 @@ export function MgrDashboard({ setPage }: PageProps) {
   const metrics = [
     { label: 'Clientes Ativos', value: available.clientes ? clientes.filter((cliente) => cliente.ativo !== false).length : '—', page: 'mgr-clients' as Page },
     { label: 'Incidentes Abertos', value: available.incidentes ? incidentes.filter((incidente) => incidente.estado === 'ABERTO').length : '—', page: 'mgr-incidents' as Page },
-    { label: 'Pentests Ativos', value: '—', page: 'mgr-pentests' as Page },
+    { label: 'Documentos Pentest', value: available.documentos ? documentos.filter((documento) => documento.categoria === 'PENTEST').length : '—', page: 'mgr-pentests' as Page },
     { label: 'Documentos', value: available.documentos ? documentos.length : '—', page: 'mgr-documents' as Page },
   ];
 
@@ -659,7 +661,7 @@ export function MgrClientDetail({ setPage, backPage = 'mgr-clients', backLabel =
       {detailTab === 'documents' && <section className="mgr-client-detail-v98__panel"><h2>Documentos</h2>{renderDocuments(documents, 'Sem documentos disponíveis para este cliente.')}</section>}
       {detailTab === 'reports' && <section className="mgr-client-detail-v98__panel"><h2>Relatórios</h2>{renderDocuments(documents.filter((document) => `${document.tipo || ''} ${document.categoria || ''}`.toLowerCase().includes('relat')), 'Sem relatórios disponíveis para este cliente.')}</section>}
       {detailTab === 'pentests' && <section className="mgr-client-detail-v98__panel"><h2>Testes de penetração</h2>{renderDocuments(documents.filter((document) => `${document.tipo || ''} ${document.categoria || ''}`.toLowerCase().includes('pentest')), 'Sem documentos de PenTest disponíveis para este cliente.')}</section>}
-      {detailTab === 'evidence' && tabEmpty('Evidências', 'A API atual não disponibiliza evidências associadas a este cliente.')}
+      {detailTab === 'evidence' && <section className="mgr-client-detail-v98__panel"><h2>Evidências</h2>{renderDocuments(documents.filter((document) => `${document.tipo || ''} ${document.categoria || ''}`.toLowerCase().includes('evid')), 'Sem evidências disponíveis para este cliente.')}</section>}
       {detailTab === 'requests' && <section className="mgr-client-detail-v98__panel"><h2>Pedidos</h2><DataTable data={requests} emptyText="Sem pedidos submetidos por este cliente." columns={[{ key: 'assunto', label: 'Assunto', render: (item) => item.assunto }, { key: 'estado_nome', label: 'Estado', render: (item) => item.estado_nome || item.estado_codigo || '—' }, { key: 'prioridade', label: 'Prioridade', render: (item) => item.prioridade || '—' }, { key: 'criado_em', label: 'Data', render: (item) => formatDate(item.criado_em) }]} /></section>}
       {detailTab === 'communication' && tabEmpty('Comunicação', 'A comunicação segura para este cliente ainda não está disponível na API atual.')}
     </div>
@@ -676,23 +678,93 @@ export function MgrDocuments() {
 
 export function MgrRequests() {
   const [data, setData] = useState<ApiPedido[]>([]);
+  const [clients, setClients] = useState<ApiCliente[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<ApiPedido | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    pedidosApi()
-      .then(setData)
-      .catch((e) => setErr(e?.message || 'Erro'))
-      .finally(() => setLoading(false));
+    let active = true;
+    Promise.all([pedidosApi(), clientesApi()])
+      .then(([requests, associatedClients]) => {
+        if (!active) return;
+        setData(requests);
+        setClients(associatedClients);
+      })
+      .catch((e) => active && setErr(e?.message || 'Erro'))
+      .finally(() => active && setLoading(false));
+    return () => { active = false; };
   }, []);
+
+  function openCreate() {
+    setEditing(null);
+    setFormError(null);
+    setFormOpen(true);
+  }
+
+  function openEdit(request: ApiPedido) {
+    setEditing(request);
+    setFormError(null);
+    setFormOpen(true);
+  }
+
+  async function submitRequest(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormError(null);
+    setSaving(true);
+    const form = new FormData(event.currentTarget);
+    const priority = String(form.get('prioridade') ?? 'NORMAL') as 'BAIXA' | 'NORMAL' | 'ALTA' | 'URGENTE';
+    try {
+      if (editing) {
+        const updated = await atualizarPedidoApi(editing.id, {
+          assunto: String(form.get('assunto') ?? ''),
+          descricao: String(form.get('descricao') ?? ''),
+          prioridade: priority,
+          estado: String(form.get('estado') ?? editing.estado_codigo ?? 'ABERTO') as 'ABERTO' | 'EM_ANALISE' | 'AGUARDA_CLIENTE' | 'RESOLVIDO' | 'FECHADO',
+        });
+        setData((current) => current.map((item) => item.id === updated.id ? updated : item));
+      } else {
+        const clientId = Number(form.get('cliente_id'));
+        if (!Number.isSafeInteger(clientId) || clientId < 1) throw new Error('Selecione uma organização associada.');
+        const created = await criarPedidoApi({
+          cliente_id: clientId,
+          assunto: String(form.get('assunto') ?? ''),
+          descricao: String(form.get('descricao') ?? ''),
+          prioridade: priority,
+        });
+        setData((current) => [created, ...current]);
+      }
+      setFormOpen(false);
+      setEditing(null);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Não foi possível guardar o pedido.');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div>
       <PageHeader
         title="Pedidos de Suporte"
         subtitle={`${data.filter(p => !p.resolvido_em).length} por resolver / ${data.length} total`}
-        actions={<button className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">+ Novo Pedido</button>}
+        actions={<button type="button" onClick={openCreate} disabled={loading || clients.length === 0} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">+ Novo Pedido</button>}
       />
+      {formOpen && (
+        <form key={editing?.id ?? 'new'} onSubmit={submitRequest} className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between gap-4"><div><h2 className="font-display text-lg font-semibold text-slate-900">{editing ? 'Atualizar pedido' : 'Novo pedido'}</h2><p className="mt-1 text-sm text-slate-500">{editing ? 'Atualize o estado e a informação necessária.' : 'Selecione uma das organizações que lhe estão associadas.'}</p></div><button type="button" onClick={() => { setFormOpen(false); setEditing(null); }} className="text-sm font-medium text-slate-500 hover:text-slate-800">Cancelar</button></div>
+          {!editing && <label className="mb-4 block text-sm font-medium text-slate-700">Organização<select required name="cliente_id" defaultValue="" className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-slate-900"><option value="" disabled>Selecionar organização</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.nome}{client.nif ? ` — NIF ${client.nif}` : ''}</option>)}</select></label>}
+          <div className="grid gap-4 md:grid-cols-2"><label className="block text-sm font-medium text-slate-700">Assunto<input required name="assunto" maxLength={180} defaultValue={editing?.assunto ?? ''} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-slate-900" /></label><label className="block text-sm font-medium text-slate-700">Prioridade<select name="prioridade" defaultValue={editing?.prioridade ?? 'NORMAL'} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-slate-900"><option value="BAIXA">Baixa</option><option value="NORMAL">Normal</option><option value="ALTA">Alta</option><option value="URGENTE">Urgente</option></select></label></div>
+          {editing && <label className="mt-4 block text-sm font-medium text-slate-700">Estado<select name="estado" defaultValue={editing.estado_codigo ?? 'ABERTO'} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-slate-900"><option value="ABERTO">Aberto</option><option value="EM_ANALISE">Em análise</option><option value="AGUARDA_CLIENTE">Aguarda cliente</option><option value="RESOLVIDO">Resolvido</option><option value="FECHADO">Fechado</option></select></label>}
+          <label className="mt-4 block text-sm font-medium text-slate-700">Descrição<textarea required name="descricao" rows={4} maxLength={10000} defaultValue={editing?.descricao ?? ''} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-slate-900" /></label>
+          {formError && <p role="alert" className="mt-3 text-sm text-rose-700">{formError}</p>}
+          <div className="mt-5 flex justify-end"><button disabled={saving} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">{saving ? 'A guardar…' : editing ? 'Guardar alterações' : 'Submeter pedido'}</button></div>
+        </form>
+      )}
+      {!loading && clients.length === 0 && !err && <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Não existem organizações associadas a este Gestor para criar pedidos.</div>}
       {loading ? <Loader /> : err ? <ErrorCard msg={err} /> : (
         <DataTable
           data={data}
@@ -709,6 +781,7 @@ export function MgrRequests() {
               <span className={`badge ${severityColor(r.prioridade)}`}>{r.prioridade || 'Normal'}</span>
             )},
             { key: 'criado_em', label: 'Criado', render: (r) => r.criado_em ? new Date(r.criado_em).toLocaleDateString('pt-PT') : '—' },
+            { key: '_acoes' as keyof ApiPedido, label: '', width: '100px', render: (r) => <button type="button" onClick={(event) => { event.stopPropagation(); openEdit(r); }} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium hover:bg-slate-50">Editar</button> },
           ]}
         />
       )}
@@ -769,8 +842,8 @@ export function MgrRisk({ setPage }: PageProps) {
           <div className="space-y-2">
             {[
               { p: 'mgr-nis2', l: 'Avaliações NIS2', i: '🛡️', c: 'from-blue-500 to-cyan-500' },
-              { p: 'mgr-pentests', l: 'Pentests Agendados', i: '🔍', c: 'from-rose-500 to-pink-500' },
-              { p: 'mgr-reports', l: 'Gerar Relatórios', i: '📈', c: 'from-violet-500 to-purple-500' },
+              { p: 'mgr-pentests', l: 'Documentos Pentest', i: '🔍', c: 'from-rose-500 to-pink-500' },
+              { p: 'mgr-reports', l: 'Relatórios submetidos', i: '📈', c: 'from-violet-500 to-purple-500' },
               { p: 'mgr-evidence', l: 'Evidências', i: '🧾', c: 'from-emerald-500 to-teal-500' },
             ].map(x => (
               <button
@@ -811,23 +884,27 @@ export function MgrRisk({ setPage }: PageProps) {
   );
 }
 
-export function MgrNIS2({ setPage }: PageProps) {
-  const [data, setData] = useState<ApiCliente[]>([]);
+export function MgrNIS2(_props: PageProps) {
+  const [clients, setClients] = useState<ApiCliente[]>([]);
+  const [assessments, setAssessments] = useState<ApiAvaliacao[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    clientesApi()
-      .then(setData)
+    Promise.all([clientesApi(), avaliacoesApi()])
+      .then(([nextClients, nextAssessments]) => {
+        setClients(nextClients);
+        setAssessments(nextAssessments);
+      })
       .catch((e) => setErr(e?.message || 'Erro'))
       .finally(() => setLoading(false));
   }, []);
 
   const dist = [
-    { estado: 'Conforme', n: data.filter(c => (c.conformidade || '').toLowerCase().includes('conforme') && !(c.conformidade || '').toLowerCase().includes('nao')).length, c: '#10b981' },
-    { estado: 'Em Revisão', n: data.filter(c => (c.conformidade || '').toLowerCase().includes('revis') || (c.conformidade || '').toLowerCase().includes('avalia')).length, c: '#f59e0b' },
-    { estado: 'Não Conforme', n: data.filter(c => (c.conformidade || '').toLowerCase().includes('nao') || (c.conformidade || '').toLowerCase().includes('não')).length, c: '#ef4444' },
-    { estado: 'Por Avaliar', n: data.filter(c => !c.conformidade).length, c: '#94a3b8' },
+    { estado: 'Conforme', n: clients.filter(c => (c.conformidade || '').toLowerCase().includes('conforme') && !(c.conformidade || '').toLowerCase().includes('nao')).length, c: '#10b981' },
+    { estado: 'Em Revisão', n: clients.filter(c => (c.conformidade || '').toLowerCase().includes('revis') || (c.conformidade || '').toLowerCase().includes('avalia')).length, c: '#f59e0b' },
+    { estado: 'Não Conforme', n: clients.filter(c => (c.conformidade || '').toLowerCase().includes('nao') || (c.conformidade || '').toLowerCase().includes('não')).length, c: '#ef4444' },
+    { estado: 'Por Avaliar', n: clients.filter(c => !c.conformidade).length, c: '#94a3b8' },
   ];
 
   return (
@@ -862,33 +939,19 @@ export function MgrNIS2({ setPage }: PageProps) {
           </div>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-6">
-          <h3 className="mb-4 font-display text-lg font-semibold text-slate-900">Checklist NIS2</h3>
-          <ul className="space-y-3">
-            {[
-              { t: 'Políticas de segurança documentadas', ok: 88 },
-              { t: 'Gestão de riscos implementada', ok: 76 },
-              { t: 'Planos de resposta a incidentes', ok: 82 },
-              { t: 'Formação de colaboradores', ok: 64 },
-              { t: 'Monitorização contínua (24/7)', ok: 58 },
-              { t: 'Notificação de incidentes (24h)', ok: 90 },
-            ].map((it, i) => (
-              <li key={i} className="rounded-xl border border-slate-200 p-3">
-                <div className="flex justify-between mb-1.5 text-sm">
-                  <span className="font-medium text-slate-800">{it.t}</span>
-                  <span className="font-semibold text-slate-600">{it.ok}%</span>
-                </div>
-                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-blue-500 to-violet-500 rounded-full" style={{ width: `${it.ok}%` }} />
-                </div>
-              </li>
-            ))}
-          </ul>
-          <button
-            onClick={() => setPage('mgr-reports')}
-            className="mt-5 w-full rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 py-2.5 text-sm font-semibold text-white hover:from-blue-700 hover:to-violet-700"
-          >
-            Gerar Relatório NIS2
-          </button>
+          <h3 className="mb-4 font-display text-lg font-semibold text-slate-900">Avaliações NIS2 registadas</h3>
+          {loading ? <Loader /> : err ? <ErrorCard msg={err} /> : (
+            <DataTable
+              data={assessments.slice(0, 8)}
+              emptyText="Sem avaliações NIS2 disponíveis."
+              columns={[
+                { key: 'cliente_nome', label: 'Cliente', render: (r) => r.cliente_nome || '—' },
+                { key: 'data_avaliacao', label: 'Data', render: (r) => r.data_avaliacao ? new Date(r.data_avaliacao).toLocaleDateString('pt-PT') : '—' },
+                { key: 'estado_conformidade_nome', label: 'Estado', render: (r) => <span className={`badge ${conformidadeColor(r.estado_conformidade_nome)}`}>{r.estado_conformidade_nome || '—'}</span> },
+                { key: 'score', label: 'Pontuação', render: (r) => r.score ?? '—' },
+              ]}
+            />
+          )}
         </div>
       </div>
       <div className="mt-6">
@@ -896,7 +959,7 @@ export function MgrNIS2({ setPage }: PageProps) {
           <h3 className="mb-4 font-display text-lg font-semibold text-slate-900">Clientes - Estado NIS2</h3>
           {loading ? <Loader /> : err ? <ErrorCard msg={err} /> : (
             <DataTable
-              data={data}
+              data={clients}
               columns={[
                 { key: 'id', label: 'ID', width: '50px', render: (r) => <span className="font-mono text-xs">#{r.id}</span> },
                 { key: 'nome', label: 'Cliente', render: (r) => r.nome },
@@ -914,195 +977,158 @@ export function MgrNIS2({ setPage }: PageProps) {
   );
 }
 
-export function MgrReports({ setPage }: PageProps) {
-  return (
-    <div>
-      <PageHeader title="Relatórios" subtitle="Gerar e exportar relatórios de segurança e conformidade" />
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {[
-          { t: 'Relatório de Conformidade NIS2', d: 'PDF completo com checklist e evidências', i: '🛡️', p: 'mgr-nis2', c: 'from-blue-500 to-cyan-500' },
-          { t: 'Relatório de Incidentes (Trimestral)', d: 'Estatísticas, MTTD, MTTR e análise de tendências', i: '📊', p: 'mgr-analytics', c: 'from-rose-500 to-pink-500' },
-          { t: 'Relatório de Riscos', d: 'Matriz de riscos, avaliações e recomendações', i: '⚠️', p: 'mgr-risk', c: 'from-amber-500 to-orange-500' },
-          { t: 'Inventário de Ativos', d: 'Lista completa de ativos por cliente e criticidade', i: '💻', p: 'mgr-assets', c: 'from-emerald-500 to-teal-500' },
-          { t: 'Relatório de Pentests', d: 'Resultados e recomendações de testes de penetração', i: '🔍', p: 'mgr-pentests', c: 'from-violet-500 to-purple-500' },
-          { t: 'Evidências de Conformidade', d: 'Pacote de documentos para auditoria', i: '🧾', p: 'mgr-evidence', c: 'from-indigo-500 to-blue-500' },
-        ].map(r => (
-          <div key={r.t} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm hover:shadow-md transition">
-            <div className={`h-12 w-12 rounded-xl bg-gradient-to-br ${r.c} flex items-center justify-center text-2xl mb-4`}>{r.i}</div>
-            <h3 className="font-display font-semibold text-slate-900">{r.t}</h3>
-            <p className="mt-1 text-xs text-slate-500">{r.d}</p>
-            <div className="mt-4 flex gap-2">
-              <button className="flex-1 rounded-lg bg-slate-900 text-white py-2 text-xs font-semibold hover:bg-slate-800">Exportar PDF</button>
-              <button
-                onClick={() => setPage(r.p as Page)}
-                className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium hover:bg-slate-50"
-              >
-                Detalhes
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+export function MgrReports(_props: PageProps) {
+  return <DocumentsWorkspace
+    role="manager"
+    title="Relatórios"
+    subtitle="Relatórios efetivamente submetidos pelas organizações que gere."
+    categoryScope={['RELATORIO', 'RELATORIO_CNCS']}
+    emptyTitle="Ainda não existem relatórios"
+    emptyDescription="Quando for submetido um documento das categorias Relatório ou Relatório CNCS, ficará disponível aqui."
+  />;
 }
 
-export function MgrPentests({ setPage }: PageProps) {
-  const items = [
-    { id: 1, cliente: 'Empresa A', data: '2026-08-15', estado: 'Em curso', severidade: 'Alta', vulnerabilidades: 8, progresso: 65 },
-    { id: 2, cliente: 'Empresa B', data: '2026-07-30', estado: 'Concluído', severidade: 'Média', vulnerabilidades: 3, progresso: 100 },
-    { id: 3, cliente: 'Empresa C', data: '2026-09-10', estado: 'Agendado', severidade: '—', vulnerabilidades: 0, progresso: 0 },
-  ];
-  return (
-    <div>
-      <PageHeader
-        title="Testes de Penetração (Pentests)"
-        subtitle="Gestão de pentests e resultados"
-        actions={
-          <>
-            <button onClick={() => setPage('mgr-evidence')} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-              Ver Evidências
-            </button>
-            <button className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700">+ Agendar Pentest</button>
-          </>
-        }
-      />
-      <div className="grid gap-4 sm:grid-cols-3 mb-6">
-        <StatCard label="Agendados" value={items.filter(i => i.estado === 'Agendado').length} icon="📅" color="bg-blue-50" />
-        <StatCard label="Em Curso" value={items.filter(i => i.estado === 'Em curso').length} icon="🔍" color="bg-amber-50" />
-        <StatCard label="Concluídos (Trimestre)" value={items.filter(i => i.estado === 'Concluído').length} icon="✅" color="bg-emerald-50" />
-      </div>
-      <div className="rounded-2xl border border-slate-200 bg-white p-6">
-        <DataTable
-          data={items as any}
-          columns={[
-            { key: 'id', label: 'ID', width: '50px', render: (r: any) => <span className="font-mono text-xs">#PT-{String(r.id).padStart(4,'0')}</span> },
-            { key: 'cliente', label: 'Cliente', render: (r: any) => r.cliente },
-            { key: 'data', label: 'Data', render: (r: any) => new Date(r.data).toLocaleDateString('pt-PT') },
-            { key: 'estado', label: 'Estado', render: (r: any) => (
-              <span className={`badge ${r.estado === 'Concluído' ? 'bg-emerald-100 text-emerald-700' : r.estado === 'Em curso' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>{r.estado}</span>
-            )},
-            { key: 'severidade', label: 'Risco Máx.', render: (r: any) => <span className={`badge ${severityColor(r.severidade)}`}>{r.severidade}</span> },
-            { key: 'vulnerabilidades', label: 'Vulns.', render: (r: any) => r.vulnerabilidades || '—' },
-            { key: 'progresso', label: 'Progresso', render: (r: any) => (
-              <div className="w-32">
-                <div className="flex justify-between text-xs mb-1"><span className="text-slate-500">Progresso</span><span className="font-semibold">{r.progresso}%</span></div>
-                <div className="h-2 bg-slate-100 rounded-full"><div className="h-full bg-gradient-to-r from-blue-500 to-violet-500 rounded-full" style={{ width: `${r.progresso}%` }} /></div>
-              </div>
-            )},
-          ]}
-        />
-      </div>
-    </div>
-  );
+export function MgrPentests(_props: PageProps) {
+  return <DocumentsWorkspace
+    role="manager"
+    title="Testes de Penetração"
+    subtitle="Documentos Pentest submetidos pelas organizações que gere."
+    categoryScope={['PENTEST']}
+    emptyTitle="Ainda não existem documentos Pentest"
+    emptyDescription="A API atual não possui agendamentos de Pentest autónomos. Os resultados submetidos na categoria Pentest surgirão aqui."
+  />;
 }
 
-export function MgrEvidence({ setPage }: PageProps) {
-  return (
-    <div>
-      <PageHeader
-        title="Evidências de Conformidade"
-        subtitle="Armazenamento e catalogação de evidências para auditoria"
-        actions={
-          <>
-            <button onClick={() => setPage('mgr-reports')} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-              Gerar Pacote
-            </button>
-            <button className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">+ Adicionar Evidência</button>
-          </>
-        }
-      />
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
-        <StatCard label="Evidências NIS2" value={24} icon="🛡️" color="bg-blue-50" />
-        <StatCard label="Políticas Aprovadas" value={12} icon="📜" color="bg-violet-50" />
-        <StatCard label="Logs Armazenados" value="2.1k" icon="📋" color="bg-emerald-50" />
-        <StatCard label="Testes Realizados" value={18} icon="✅" color="bg-amber-50" />
-      </div>
-      <div className="rounded-2xl border border-slate-200 bg-white p-6">
-        <DataTable
-          data={[
-            { id: 1, cat: 'Política', titulo: 'Política de Segurança da Informação v3.2', data: '2026-07-15', tipo: 'PDF', tam: '1.2 MB', status: 'Aprovada' },
-            { id: 2, cat: 'Log', titulo: 'Logs de Firewall - Julho 2026', data: '2026-08-01', tipo: 'CSV', tam: '48 MB', status: 'Arquivado' },
-            { id: 3, cat: 'Teste', titulo: 'Relatório Pentest Q3 - Infraestrutura', data: '2026-07-30', tipo: 'PDF', tam: '3.4 MB', status: 'Aprovada' },
-            { id: 4, cat: 'Formação', titulo: 'Registo de Formação NIS2 (12 colaboradores)', data: '2026-06-20', tipo: 'XLSX', tam: '85 KB', status: 'Aprovada' },
-            { id: 5, cat: 'Backup', titulo: 'Política e Procedimentos de Backup v2', data: '2026-05-10', tipo: 'PDF', tam: '680 KB', status: 'Aprovada' },
-            { id: 6, cat: 'Plano', titulo: 'Plano de Resposta a Incidentes (IRP)', data: '2026-08-05', tipo: 'DOCX', tam: '420 KB', status: 'Revisão' },
-          ] as any}
-          columns={[
-            { key: 'id', label: 'ID', width: '50px', render: (r: any) => <span className="font-mono text-xs">#{r.id}</span> },
-            { key: 'cat', label: 'Categoria', render: (r: any) => <span className="badge bg-blue-50 text-blue-700">{r.cat}</span> },
-            { key: 'titulo', label: 'Título', render: (r: any) => <div className="font-medium text-slate-900">{r.titulo}</div> },
-            { key: 'tipo', label: 'Fmt.', render: (r: any) => <span className="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded">{r.tipo}</span> },
-            { key: 'tam', label: 'Tam.', render: (r: any) => r.tam },
-            { key: 'data', label: 'Data', render: (r: any) => new Date(r.data).toLocaleDateString('pt-PT') },
-            { key: 'status', label: 'Estado', render: (r: any) => (
-              <span className={`badge ${r.status === 'Aprovada' ? 'bg-emerald-100 text-emerald-700' : r.status === 'Revisão' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>{r.status}</span>
-            )},
-            { key: 'id', label: '', width: '70px', render: () => <button className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium hover:bg-slate-50">Ver</button> },
-          ]}
-        />
-      </div>
-    </div>
-  );
+export function MgrEvidence(_props: PageProps) {
+  return <DocumentsWorkspace
+    role="manager"
+    title="Evidências de Conformidade"
+    subtitle="Evidências documentais das organizações que gere."
+    categoryScope={['EVIDENCIA']}
+    emptyTitle="Ainda não existem evidências"
+    emptyDescription="Quando for submetido um documento na categoria Evidência, ficará disponível aqui para consulta e revisão."
+  />;
 }
 
 export function MgrExcelImport() {
+  const [clients, setClients] = useState<ApiCliente[]>([]);
+  const [history, setHistory] = useState<ApiImportacaoExcel[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
+  const [files, setFiles] = useState<Partial<Record<ApiImportacaoExcel['tipo'], File>>>({});
+  const [preview, setPreview] = useState<ApiPrevisualizacaoExcel | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [workingType, setWorkingType] = useState<ApiImportacaoExcel['tipo'] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([clientesApi(), importacoesExcelApi()])
+      .then(([associatedClients, previousImports]) => {
+        if (!active) return;
+        setClients(associatedClients);
+        setHistory(previousImports);
+        setSelectedClientId(associatedClients[0]?.id ?? null);
+      })
+      .catch((error) => active && setErr(error instanceof Error ? error.message : 'Não foi possível carregar as importações.'))
+      .finally(() => active && setLoading(false));
+    return () => { active = false; };
+  }, []);
+
+  async function previewImport(tipo: ApiImportacaoExcel['tipo']) {
+    const file = files[tipo];
+    if (!selectedClientId) { setErr('Selecione uma organização associada.'); return; }
+    if (!file) { setErr('Selecione um ficheiro XLSX antes de continuar.'); return; }
+    setErr(null);
+    setWorkingType(tipo);
+    try {
+      setPreview(await previsualizarImportacaoExcelApi(tipo, selectedClientId, file));
+    } catch (error) {
+      setPreview(null);
+      setErr(error instanceof Error ? error.message : 'Não foi possível validar o ficheiro XLSX.');
+    } finally {
+      setWorkingType(null);
+    }
+  }
+
+  async function confirmImport() {
+    if (!preview || !selectedClientId) return;
+    const file = files[preview.tipo];
+    if (!file) { setErr('O ficheiro selecionado já não está disponível. Faça novamente a pré-visualização.'); return; }
+    setErr(null);
+    setWorkingType(preview.tipo);
+    try {
+      const created = await confirmarImportacaoExcelApi(preview.tipo, selectedClientId, file);
+      setHistory((current) => [created, ...current]);
+      setPreview(null);
+      setFiles((current) => ({ ...current, [created.tipo]: undefined }));
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : 'Não foi possível concluir a importação.');
+    } finally {
+      setWorkingType(null);
+    }
+  }
+
+  const importCards: Array<{ titulo: string; descricao: string; icon: string; color: string; tipo: ApiImportacaoExcel['tipo'] | null; modelo: string }> = [
+    { titulo: 'Importar Ativos', descricao: 'Modelo XLSX com dados de inventário e criticidade', icon: '💻', color: 'from-blue-500 to-cyan-500', tipo: 'ATIVOS', modelo: 'modelo_importacao_ativos.xlsx' },
+    { titulo: 'Importar Incidentes', descricao: 'Histórico XLSX de incidentes ou dados externos', icon: '🚨', color: 'from-rose-500 to-pink-500', tipo: 'INCIDENTES', modelo: 'modelo_importacao_incidentes.xlsx' },
+    { titulo: 'Importar Clientes', descricao: 'A criação de organizações continua no fluxo próprio de Clientes.', icon: '🏢', color: 'from-emerald-500 to-teal-500', tipo: null, modelo: '' },
+  ];
+
   return (
     <div>
       <PageHeader
         title="Importação via Excel"
-        subtitle="Importar em massa ativos, incidentes ou dados de clientes"
+        subtitle="Importar em massa ativos e incidentes para organizações associadas"
       />
+      <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <label className="block max-w-xl text-sm font-medium text-slate-700">Organização para a importação<select value={selectedClientId ?? ''} onChange={(event) => { setSelectedClientId(Number(event.target.value) || null); setPreview(null); }} disabled={loading || clients.length === 0} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-slate-900 disabled:cursor-not-allowed disabled:bg-slate-100"><option value="" disabled>{clients.length ? 'Selecionar organização' : 'Sem organizações associadas'}</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.nome}{client.nif ? ` — NIF ${client.nif}` : ''}</option>)}</select></label>
+        {!loading && clients.length === 0 && <p className="mt-3 text-sm text-amber-800">Não existem organizações associadas a este Gestor para importar dados.</p>}
+      </div>
+      {err && <div role="alert" className="mb-6"><ErrorCard msg={err} /></div>}
       <div className="grid gap-6 lg:grid-cols-3">
-        {[
-          { t: 'Importar Ativos', d: 'Modelo Excel com dados de inventário e criticidade', i: '💻', c: 'from-blue-500 to-cyan-500', modelo: 'modelo_importacao_ativos.xlsx' },
-          { t: 'Importar Incidentes', d: 'Histórico de incidentes ou dados externos', i: '🚨', c: 'from-rose-500 to-pink-500', modelo: 'modelo_importacao_incidentes.xlsx' },
-          { t: 'Importar Clientes', d: 'Dados cadastrais de novos clientes', i: '🏢', c: 'from-emerald-500 to-teal-500', modelo: '' },
-        ].map(r => (
-          <div key={r.t} className="rounded-2xl border border-slate-200 bg-white p-6">
-            <div className={`h-14 w-14 rounded-2xl bg-gradient-to-br ${r.c} flex items-center justify-center text-3xl mb-4`}>{r.i}</div>
-            <h3 className="font-display text-lg font-semibold text-slate-900">{r.t}</h3>
-            <p className="mt-1 text-sm text-slate-500">{r.d}</p>
+        {importCards.map((card) => (
+          <div key={card.titulo} className="rounded-2xl border border-slate-200 bg-white p-6">
+            <div className={`h-14 w-14 rounded-2xl bg-gradient-to-br ${card.color} flex items-center justify-center text-3xl mb-4`}>{card.icon}</div>
+            <h3 className="font-display text-lg font-semibold text-slate-900">{card.titulo}</h3>
+            <p className="mt-1 text-sm text-slate-500">{card.descricao}</p>
             <div className="mt-5 space-y-2">
-              {r.modelo && (
-                <button className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium hover:bg-slate-50 flex items-center justify-center gap-2">
+              {card.modelo && (
+                <button type="button" disabled title="O modelo será disponibilizado numa fase posterior." className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-400 disabled:cursor-not-allowed">
                   <span>📥</span> Descarregar modelo
                 </button>
               )}
-              <label className="block">
-                <input type="file" accept=".xlsx,.xls" className="hidden" />
-                <div className="w-full rounded-lg border-2 border-dashed border-slate-300 hover:border-blue-400 bg-slate-50 hover:bg-blue-50 text-slate-600 hover:text-blue-700 px-3 py-6 text-center cursor-pointer transition text-sm">
+              {card.tipo ? <><label className="block">
+                <input type="file" accept=".xlsx" onChange={(event) => { const file = event.target.files?.[0]; if (file) { setFiles((current) => ({ ...current, [card.tipo!]: file })); setPreview(null); setErr(null); } }} className="hidden" disabled={loading || !selectedClientId} />
+                <div className="w-full rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 px-3 py-6 text-center text-sm text-slate-600 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700">
                   <div className="text-2xl mb-1">📤</div>
-                  Selecionar ficheiro Excel
+                  {files[card.tipo]?.name ?? 'Selecionar ficheiro XLSX'}
                 </div>
               </label>
-              <button className="w-full rounded-lg bg-gradient-to-r from-blue-600 to-violet-600 text-white py-2.5 text-sm font-semibold hover:from-blue-700 hover:to-violet-700">
-                Validar & Pré-visualizar
-              </button>
+              <button type="button" onClick={() => void previewImport(card.tipo!)} disabled={loading || workingType !== null || !selectedClientId || !files[card.tipo]} className="w-full rounded-lg bg-gradient-to-r from-blue-600 to-violet-600 py-2.5 text-sm font-semibold text-white hover:from-blue-700 hover:to-violet-700 disabled:cursor-not-allowed disabled:opacity-60">{workingType === card.tipo ? 'A validar…' : 'Validar & Pré-visualizar'}</button></> : <p className="rounded-lg bg-slate-50 px-3 py-4 text-sm text-slate-500">Use a gestão de Clientes para criar organizações e respetivas associações.</p>}
             </div>
           </div>
         ))}
       </div>
 
+      {preview && <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-4"><div><h3 className="font-display text-lg font-semibold text-slate-900">Pré-visualização: {preview.nome_ficheiro_original}</h3><p className="mt-1 text-sm text-slate-500">{preview.total_linhas} linhas · <span className="font-medium text-emerald-700">{preview.linhas_validas} válidas</span> · <span className="font-medium text-rose-700">{preview.linhas_rejeitadas} rejeitadas</span></p></div><button type="button" onClick={() => void confirmImport()} disabled={workingType !== null} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">{workingType === preview.tipo ? 'A importar…' : 'Confirmar importação'}</button></div>{preview.linhas_rejeitadas > 0 && <ul className="mt-4 divide-y divide-slate-100 rounded-xl border border-slate-200">{preview.linhas.filter((row) => row.estado === 'REJEITADA').slice(0, 10).map((row) => <li key={row.numero_linha} className="px-4 py-3 text-sm text-rose-700">Linha {row.numero_linha}: {row.erro || 'Dados inválidos.'}</li>)}</ul>}</section>}
+
       <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
         <h3 className="mb-4 font-display text-lg font-semibold text-slate-900">Últimas Importações</h3>
-        <DataTable
-          data={[
-            { id: 1, tipo: 'Ativos', data: '2026-08-10 14:32', utilizador: 'Colaborador', total: 42, ok: 40, erros: 2, status: 'Concluído' },
-            { id: 2, tipo: 'Incidentes', data: '2026-08-02 11:05', utilizador: 'Colaborador', total: 18, ok: 18, erros: 0, status: 'Concluído' },
-            { id: 3, tipo: 'Ativos', data: '2026-07-21 09:15', utilizador: 'Admin', total: 87, ok: 85, erros: 2, status: 'Concluído' },
-          ] as any}
+        {loading ? <Loader text="A carregar importações..." /> : <DataTable
+          data={history}
+          emptyText="Ainda não existem importações para as organizações associadas."
           columns={[
-            { key: 'id', label: 'ID', width: '50px', render: (r: any) => <span className="font-mono text-xs">#{r.id}</span> },
-            { key: 'tipo', label: 'Tipo', render: (r: any) => <span className="badge bg-blue-50 text-blue-700">{r.tipo}</span> },
-            { key: 'data', label: 'Data & Hora', render: (r: any) => r.data },
-            { key: 'utilizador', label: 'Utilizador', render: (r: any) => r.utilizador },
-            { key: 'total', label: 'Linhas', render: (r: any) => r.total },
-            { key: 'ok', label: 'Sucesso', render: (r: any) => <span className="text-emerald-600 font-semibold">{r.ok}</span> },
-            { key: 'erros', label: 'Erros', render: (r: any) => <span className={r.erros ? 'text-rose-600 font-semibold' : ''}>{r.erros}</span> },
-            { key: 'status', label: 'Estado', render: (r: any) => <span className="badge bg-emerald-100 text-emerald-700">{r.status}</span> },
+            { key: 'id', label: 'ID', width: '50px', render: (row) => <span className="font-mono text-xs">#{row.id}</span> },
+            { key: 'tipo', label: 'Tipo', render: (row) => <span className="badge bg-blue-50 text-blue-700">{row.tipo}</span> },
+            { key: 'cliente_nome', label: 'Organização', render: (row) => row.cliente_nome || '—' },
+            { key: 'importado_em', label: 'Data & Hora', render: (row) => row.importado_em ? new Date(row.importado_em).toLocaleString('pt-PT') : '—' },
+            { key: 'importado_por_nome', label: 'Utilizador', render: (row) => row.importado_por_nome || '—' },
+            { key: 'total_linhas', label: 'Linhas', render: (row) => row.total_linhas },
+            { key: 'linhas_importadas', label: 'Sucesso', render: (row) => <span className="font-semibold text-emerald-600">{row.linhas_importadas}</span> },
+            { key: 'linhas_rejeitadas', label: 'Erros', render: (row) => <span className={row.linhas_rejeitadas ? 'font-semibold text-rose-600' : ''}>{row.linhas_rejeitadas}</span> },
+            { key: 'estado', label: 'Estado', render: (row) => <span className={`badge ${row.estado === 'PROCESSADO' ? 'bg-emerald-100 text-emerald-700' : row.estado === 'PARCIAL' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>{row.estado}</span> },
           ]}
-        />
+        />}
       </div>
     </div>
   );
