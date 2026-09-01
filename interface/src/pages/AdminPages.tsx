@@ -5,14 +5,14 @@ import {
 } from 'recharts';
 import type { Page } from '../types';
 import {
-  dashboardApi, clientesApi, utilizadoresApi, documentosApi,
+  atividadeGestorApi, dashboardApi, clientesApi, utilizadorDetalheApi, utilizadoresApi, documentosApi,
   incidentesApi, logsApi, clienteDetalheApi,
   atualizarConteudoAdminApi, conteudosAdminApi, criarConteudoAdminApi,
   associarGestoresClienteApi, atualizarClienteApi, atualizarContactoClienteApi,
   atualizarUtilizadorApi, criarClienteApi, criarContactoClienteApi, criarUtilizadorApi,
   atualizarMensagemContactoAdminApi, atualizarNoticiaAdminApi, criarNoticiaAdminApi,
   mensagensContactoAdminApi, noticiasAdminApi,
-  type ApiDashboardAdmin, type ApiCliente, type ApiUtilizador,
+  type ApiAtividadeGestor, type ApiDashboardAdmin, type ApiCliente, type ApiUtilizador,
   type ApiContactoCliente, type ApiConteudoSite, type ApiIncidente, type ApiDocumento, type ApiMensagemContacto,
   type ApiNoticia, type PerfilCodigo, session,
 } from '../apiClient';
@@ -27,6 +27,7 @@ import {
 // ========== UI HELPERS ==========
 interface PageProps {
   setPage: (p: Page) => void;
+  openManagerDetail?: (userId: number) => void;
 }
 
 function Loader({ text = 'A carregar...' }: { text?: string }) {
@@ -389,7 +390,7 @@ export function AdminAnalytics() {
 }
 
 // ========== ADMIN USERS ==========
-export function AdminUsers({ setPage }: PageProps) {
+export function AdminUsers({ setPage, openManagerDetail }: PageProps) {
   const [users, setUsers] = useState<ApiUtilizador[]>([]);
   const [clientOptions, setClientOptions] = useState<ApiCliente[]>([]);
   const [loading, setLoading] = useState(true);
@@ -613,13 +614,25 @@ export function AdminUsers({ setPage }: PageProps) {
             { key: 'ultimo_acesso_em', label: 'Último Acesso', render: (r) => r.ultimo_acesso_em ? (
               <span className="text-xs text-slate-600">{new Date(r.ultimo_acesso_em).toLocaleString('pt-PT')}</span>
             ) : <span className="text-xs text-slate-400">— Nunca —</span> },
-            { key: 'clientes', label: 'Ações', width: '80px', render: (r) => (
-              <button
-                onClick={(e) => { e.stopPropagation(); openEdit(r); }}
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Editar
-              </button>
+            { key: 'clientes', label: 'Ações', width: '190px', render: (r) => (
+              <div className="flex flex-wrap gap-2">
+                {r.perfil_codigo === 'COLABORADOR' && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); openManagerDetail?.(r.id); }}
+                    className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                  >
+                    Ver detalhe
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); openEdit(r); }}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Editar
+                </button>
+              </div>
             )},
           ]}
         />
@@ -1113,56 +1126,170 @@ export function AdminPermissions() {
   );
 }
 
-export function AdminManagerDetail({ setPage }: PageProps) {
+function formatDateTime(value?: string | null) {
+  if (!value) return '—';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('pt-PT');
+}
+
+function activityContext(activity: ApiAtividadeGestor) {
+  const entries = Object.entries(activity.detalhes ?? {});
+  if (!entries.length) return 'Sem informação contextual adicional.';
+  return entries.map(([key, value]) => {
+    const content = typeof value === 'string' ? value : JSON.stringify(value);
+    return `${key.replace(/_/g, ' ')}: ${content}`;
+  }).join(' · ');
+}
+
+interface AdminManagerDetailProps extends PageProps {
+  managerId?: number;
+}
+
+export function AdminManagerDetail({ setPage, managerId }: AdminManagerDetailProps) {
+  const [managerRecord, setManagerRecord] = useState<{ managerId: number; value: ApiUtilizador } | null>(null);
+  const [activityRecord, setActivityRecord] = useState<{ managerId: number; value: ApiAtividadeGestor[] } | null>(null);
+  const [loadingManagerId, setLoadingManagerId] = useState<number | null>(() => (
+    typeof managerId === 'number' && Number.isSafeInteger(managerId) && managerId > 0 ? managerId : null
+  ));
+  const [errorRecord, setErrorRecord] = useState<{ managerId: number; message: string } | null>(null);
+  const [activityErrorRecord, setActivityErrorRecord] = useState<{ managerId: number; message: string } | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    if (!Number.isSafeInteger(managerId) || !managerId || managerId < 1) {
+      setLoadingManagerId(null);
+      return () => controller.abort();
+    }
+
+    setLoadingManagerId(managerId);
+    setErrorRecord(null);
+    setActivityErrorRecord(null);
+    void utilizadorDetalheApi(managerId, controller.signal)
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        if (result.id !== managerId) {
+          setErrorRecord({ managerId, message: 'A resposta recebida não corresponde ao Gestor selecionado.' });
+          return;
+        }
+        setManagerRecord({ managerId, value: result });
+      })
+      .catch((cause) => {
+        if (!controller.signal.aborted) {
+          setErrorRecord({ managerId, message: cause instanceof Error ? cause.message : 'Não foi possível carregar o Gestor.' });
+        }
+      })
+      .finally(() => { if (!controller.signal.aborted) setLoadingManagerId((current) => current === managerId ? null : current); });
+
+    void atividadeGestorApi(managerId, 20, controller.signal)
+      .then((items) => {
+        if (!controller.signal.aborted) setActivityRecord({ managerId, value: items });
+      })
+      .catch((cause) => {
+        if (!controller.signal.aborted) {
+          setActivityErrorRecord({ managerId, message: cause instanceof Error ? cause.message : 'Não foi possível carregar a atividade.' });
+        }
+      });
+
+    return () => controller.abort();
+  }, [managerId]);
+
+  const pageHeader = (
+    <PageHeader
+      title="Detalhe do Colaborador"
+      subtitle="Perfil, atividade e organizações atribuídas"
+      actions={
+        <button
+          type="button"
+          onClick={() => setPage('admin-users')}
+          className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          ← Voltar a Utilizadores
+        </button>
+      }
+    />
+  );
+
+  if (!Number.isSafeInteger(managerId) || !managerId || managerId < 1) {
+    return <div>{pageHeader}<ErrorCard msg="Identificador de Gestor inválido." /></div>;
+  }
+  const manager = managerRecord?.managerId === managerId ? managerRecord.value : null;
+  const activity = activityRecord?.managerId === managerId ? activityRecord.value : [];
+  const error = errorRecord?.managerId === managerId ? errorRecord.message : null;
+  const activityError = activityErrorRecord?.managerId === managerId ? activityErrorRecord.message : null;
+  const loading = loadingManagerId === managerId;
+
+  if (loading || (!manager && !error)) return <div>{pageHeader}<Loader text="A carregar dados do Gestor..." /></div>;
+  if (error) return <div>{pageHeader}<ErrorCard msg={error} /></div>;
+  if (!manager) return <div>{pageHeader}<ErrorCard msg="Gestor não encontrado." /></div>;
+  if (manager.perfil_codigo !== 'COLABORADOR') {
+    return <div>{pageHeader}<ErrorCard msg="O utilizador selecionado não tem perfil de Gestor/Colaborador." /></div>;
+  }
+
+  const clients = Array.isArray(manager.clientes) ? manager.clientes : [];
+  const initial = manager.nome.trim().charAt(0).toUpperCase() || '?';
   return (
     <div>
-      <PageHeader
-        title="Detalhe do Colaborador"
-        subtitle="Perfil, atividade e clientes atribuídos"
-        actions={
-          <button
-            onClick={() => setPage('admin-users')}
-            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            ← Voltar a Utilizadores
-          </button>
-        }
-      />
+      {pageHeader}
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6">
+        <section className="rounded-2xl border border-slate-200 bg-white p-6" aria-label="Dados do Gestor">
           <div className="flex flex-col items-center text-center">
             <div className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-orange-500 text-3xl font-bold text-white">
-              C
+              {initial}
             </div>
-            <h3 className="mt-4 font-display text-2xl font-bold text-slate-900">Colaborador Demo</h3>
-            <span className="badge mt-2 bg-amber-100 text-amber-700">COLABORADOR</span>
-            <div className="mt-4 w-full space-y-2 text-left text-sm">
-              <div className="flex justify-between"><span className="text-slate-500">Email</span><span>colab@ciberbox.pt</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">Telefone</span><span>+351 910 000 000</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">Desde</span><span>03/2024</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">Clientes</span><span className="font-semibold">18</span></div>
+            <h3 className="mt-4 font-display text-2xl font-bold text-slate-900">{manager.nome}</h3>
+            <div className="mt-2 flex flex-wrap justify-center gap-2">
+              <span className="badge bg-amber-100 text-amber-700">{manager.perfil_nome || 'COLABORADOR'}</span>
+              <span className={`badge ${manager.ativo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700'}`}>
+                {manager.ativo ? 'Ativo' : 'Inativo'}
+              </span>
             </div>
+            <dl className="mt-5 w-full space-y-3 text-left text-sm">
+              <div className="flex justify-between gap-4"><dt className="text-slate-500">Email</dt><dd className="break-all text-right text-slate-900">{manager.email || '—'}</dd></div>
+              <div className="flex justify-between gap-4"><dt className="text-slate-500">Telefone</dt><dd className="text-right text-slate-900">{manager.telefone || '—'}</dd></div>
+              <div className="flex justify-between gap-4"><dt className="text-slate-500">NIF</dt><dd className="text-right text-slate-900">{manager.nif || '—'}</dd></div>
+              <div className="flex justify-between gap-4"><dt className="text-slate-500">Último acesso</dt><dd className="text-right text-slate-900">{formatDateTime(manager.ultimo_acesso_em)}</dd></div>
+              <div className="flex justify-between gap-4"><dt className="text-slate-500">Criado em</dt><dd className="text-right text-slate-900">{formatDateTime(manager.criado_em)}</dd></div>
+            </dl>
           </div>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 lg:col-span-2">
-          <h3 className="font-display font-semibold text-slate-900 mb-4">Atividade recente</h3>
-          <ul className="space-y-4">
-            {[
-              { a: 'Incidente INC-0042 resolvido', t: 'Hoje, 14:32', c: 'bg-emerald-100 text-emerald-700' },
-              { a: 'Documento submetido (Política de Segurança v2.1)', t: 'Hoje, 11:05', c: 'bg-blue-100 text-blue-700' },
-              { a: 'Avaliação NIS2 concluída', t: 'Ontem, 18:20', c: 'bg-violet-100 text-violet-700' },
-              { a: '3 ativos importados via Excel', t: 'Ontem, 10:41', c: 'bg-amber-100 text-amber-700' },
-            ].map((e, i) => (
-              <li key={i} className="flex items-start gap-3 rounded-xl border border-slate-100 p-3">
-                <span className={`badge ${e.c}`}>{e.t.split(',')[0]}</span>
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-slate-900">{e.a}</div>
-                  <div className="text-xs text-slate-500">{e.t}</div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
+        </section>
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 lg:col-span-2" aria-label="Atividade recente do Gestor">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <h3 className="font-display font-semibold text-slate-900">Atividade recente</h3>
+            <span className="text-xs text-slate-500">Últimos {activity.length} registos</span>
+          </div>
+          {activityError ? <ErrorCard msg={activityError} /> : activity.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">Sem atividade registada.</p>
+          ) : (
+            <ul className="space-y-3">
+              {activity.map((entry) => (
+                <li key={entry.id} className="rounded-xl border border-slate-100 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="badge bg-blue-100 text-blue-700">{entry.acao}</span>
+                    <time className="text-xs text-slate-500">{formatDateTime(entry.criado_em)}</time>
+                  </div>
+                  <p className="mt-2 text-sm font-medium text-slate-900">{entry.entidade}{entry.entidade_id ? ` #${entry.entidade_id}` : ''}</p>
+                  <p className="mt-1 break-words text-xs text-slate-500">{activityContext(entry)}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 lg:col-span-3" aria-label="Organizações atribuídas ao Gestor">
+          <h3 className="font-display font-semibold text-slate-900">Organizações atribuídas</h3>
+          {clients.length === 0 ? (
+            <p className="mt-3 rounded-xl border border-dashed border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Este Gestor não tem organizações ativas associadas.</p>
+          ) : (
+            <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {clients.map((client) => (
+                <li key={client.id} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p className="font-medium text-slate-900">{client.nome}</p>
+                  {client.principal && <p className="mt-1 text-xs text-slate-500">Organização principal</p>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       </div>
     </div>
   );

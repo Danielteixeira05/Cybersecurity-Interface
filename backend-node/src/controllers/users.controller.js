@@ -1,7 +1,10 @@
 import { httpError } from '../middleware/errors.js';
-import { createUser, getUser, listUsers, updateUser } from '../services/users.service.js';
+import { createUser, getManagerActivity, getUser, listUsers, updateUser } from '../services/users.service.js';
 
-function userId(value) {
+export function userId(value) {
+  if (typeof value !== 'string' || !/^[1-9]\d*$/.test(value)) {
+    throw httpError(400, 'Identificador de utilizador inválido.');
+  }
   const id = Number(value);
   if (!Number.isSafeInteger(id) || id < 1) throw httpError(400, 'Identificador de utilizador inválido.');
   return id;
@@ -14,6 +17,17 @@ export async function list(request, response, next) {
 export async function detail(request, response, next) {
   try { return response.json(await getUser(userId(request.params.userId))); } catch (error) { return next(error); }
 }
+
+export function createActivityController(activityReader = getManagerActivity) {
+  return async function activity(request, response, next) {
+    try {
+      const items = await activityReader(userId(request.params.userId), request.query.limit);
+      return response.json({ items });
+    } catch (error) { return next(error); }
+  };
+}
+
+export const activity = createActivityController();
 
 export async function create(request, response, next) {
   try {

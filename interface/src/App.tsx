@@ -84,9 +84,10 @@ const LEGACY_CLIENT_PAGE_PATHS: Record<string, Page> = {
   '/cliente/riscos': 'cli-risk',
 };
 
-function pageFromPathname(pathname: string): Page {
+export function pageFromPathname(pathname: string): Page {
   const path = pathname.replace(/\/+$/, '') || '/';
   if (/^\/gestor\/clientes\/\d+$/.test(path)) return 'mgr-client-detail';
+  if (/^\/administrador\/utilizadores\/gestor(?:\/.*)?$/.test(path)) return 'admin-user-manager';
   if (/^\/noticias\/[^/]+$/.test(path)) return 'news-detail';
   const entry = Object.entries(PAGE_PATHS).find(([, value]) => value === path);
   return (entry?.[0] as Page | undefined) ?? LEGACY_CLIENT_PAGE_PATHS[path] ?? 'home';
@@ -95,6 +96,13 @@ function pageFromPathname(pathname: string): Page {
 function clientIdFromPathname(pathname: string): number | undefined {
   const match = /^\/gestor\/clientes\/(\d+)\/?$/.exec(pathname);
   return match ? Number(match[1]) : undefined;
+}
+
+export function managerIdFromPathname(pathname: string): number | undefined {
+  const match = /^\/administrador\/utilizadores\/gestor\/([1-9]\d*)\/?$/.exec(pathname);
+  if (!match) return undefined;
+  const id = Number(match[1]);
+  return Number.isSafeInteger(id) && id > 0 ? id : undefined;
 }
 
 function newsIdFromPathname(pathname: string): string | undefined {
@@ -223,6 +231,12 @@ export default function App() {
     navigate(`/noticias/${articleId}`);
   }
 
+  const openManagerDetail = useCallback((userId: number) => {
+    if (!Number.isSafeInteger(userId) || userId < 1) return;
+    setPageState('admin-user-manager');
+    navigate(`/administrador/utilizadores/gestor/${userId}`);
+  }, [navigate]);
+
   if (!authReady) {
     return <div className="min-h-screen bg-slate-50" aria-busy="true" aria-label="A validar sessão" />;
   }
@@ -265,7 +279,7 @@ export default function App() {
       {/* ADMIN PAGES */}
       {page === 'admin-dashboard' && <AdminDashboard setPage={setPage} />}
       {page === 'admin-analytics' && <AdminAnalytics />}
-      {page === 'admin-users' && <AdminUsers setPage={setPage} />}
+      {page === 'admin-users' && <AdminUsers setPage={setPage} openManagerDetail={openManagerDetail} />}
       {page === 'admin-clients' && <AdminClients setPage={setPage} />}
       {page === 'admin-assets' && <AdminAssets />}
       {page === 'admin-documents' && <AdminDocuments />}
@@ -276,7 +290,7 @@ export default function App() {
       {page === 'admin-communication' && <CommunicationPage role="admin" />}
       {page === 'admin-client-detail' && <MgrClientDetail setPage={setPage} backPage="admin-clients" backLabel="Administrador" />}
       {page === 'admin-user-client' && <MgrClientDetail setPage={setPage} backPage="admin-users" backLabel="Utilizadores" />}
-      {page === 'admin-user-manager' && <AdminManagerDetail setPage={setPage} />}
+      {page === 'admin-user-manager' && <AdminManagerDetail setPage={setPage} managerId={managerIdFromPathname(location.pathname)} />}
 
       {/* MANAGER PAGES */}
       {page === 'mgr-dashboard' && <MgrDashboard setPage={setPage} />}

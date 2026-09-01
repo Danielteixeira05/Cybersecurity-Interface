@@ -26,6 +26,15 @@ export interface ApiUtilizador {
   cliente_id?: number | null;
 }
 
+export interface ApiAtividadeGestor {
+  id: number;
+  acao: string;
+  entidade: string;
+  entidade_id: number | null;
+  detalhes: Record<string, unknown>;
+  criado_em: string | null;
+}
+
 export interface ApiCliente {
   id: number;
   nome: string;
@@ -654,6 +663,7 @@ export async function apiFetch<T = any>(
     method: init.method || 'GET',
     headers: Object.fromEntries(headers.entries()),
     data: init.body,
+    signal: init.signal ?? undefined,
   };
 
   try {
@@ -970,6 +980,39 @@ export async function utilizadoresApi(perfil?: string): Promise<ApiUtilizador[]>
   const result = await apiFetch<unknown>(`/api/users/${qs}`);
   const rows = Array.isArray(result) ? result : (asRecord(result).items as unknown);
   return Array.isArray(rows) ? rows as ApiUtilizador[] : [];
+}
+
+function validUserId(userId: number): number {
+  if (!Number.isSafeInteger(userId) || userId < 1) {
+    throw new Error('Identificador de utilizador inválido.');
+  }
+  return userId;
+}
+
+export async function utilizadorDetalheApi(userId: number, signal?: AbortSignal): Promise<ApiUtilizador> {
+  return apiFetch<ApiUtilizador>(`/api/users/${validUserId(userId)}`, { signal });
+}
+
+function normaliseAtividadeGestor(value: unknown): ApiAtividadeGestor {
+  const row = asRecord(value);
+  const detalhes = row.detalhes && typeof row.detalhes === 'object' && !Array.isArray(row.detalhes)
+    ? row.detalhes as Record<string, unknown>
+    : {};
+  return {
+    id: requiredNumber(row.id, 'atividade.id'),
+    acao: requiredString(row.acao, 'atividade.acao'),
+    entidade: requiredString(row.entidade, 'atividade.entidade'),
+    entidade_id: typeof row.entidade_id === 'number' && Number.isSafeInteger(row.entidade_id) ? row.entidade_id : null,
+    detalhes,
+    criado_em: typeof row.criado_em === 'string' ? row.criado_em : null,
+  };
+}
+
+export async function atividadeGestorApi(userId: number, limit = 20, signal?: AbortSignal): Promise<ApiAtividadeGestor[]> {
+  const validLimit = Number.isSafeInteger(limit) && limit > 0 ? Math.min(limit, 50) : 20;
+  const result = await apiFetch<unknown>(`/api/users/${validUserId(userId)}/activity?limit=${validLimit}`, { signal });
+  const rows = Array.isArray(result) ? result : (asRecord(result).items as unknown);
+  return Array.isArray(rows) ? rows.map(normaliseAtividadeGestor) : [];
 }
 
 export async function criarUtilizadorApi(payload: CriarUtilizadorPayload): Promise<CriarUtilizadorResposta> {

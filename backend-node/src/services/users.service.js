@@ -65,6 +65,114 @@ function serialiseUser(record) {
   };
 }
 
+const MAX_MANAGER_ACTIVITY_LIMIT = 50;
+const DEFAULT_MANAGER_ACTIVITY_LIMIT = 20;
+// Os detalhes de auditoria são registados por vários serviços. O detalhe de
+// Gestor não é um visualizador genérico de JSON: expõe apenas o subconjunto
+// operacional necessário para explicar a ação ao Administrador.
+const ACTIVITY_DETAIL_SCALAR_FIELDS = new Set([
+  'ativo', 'atribuido_a', 'categoria', 'chave', 'cliente_id', 'codigo',
+  'conversa_id', 'criticidade', 'documento_anterior_id', 'documento_id',
+  'estado', 'estado_anterior', 'estado_novo', 'gravidade', 'incidente_id',
+  'linhas_importadas', 'linhas_rejeitadas', 'max_upload_mb', 'notificado_nis2',
+  'perfil', 'prioridade', 'publicada', 'tamanho_bytes', 'tem_observacao',
+  'tipo', 'total_linhas',
+]);
+const ACTIVITY_DETAIL_ARRAY_FIELDS = new Set(['campos', 'clientes_ids', 'destinatarios', 'gestores_ids']);
+const ACTIVITY_DETAIL_FIELD_NAMES = new Set(['ativo', 'clientes_ids', 'email', 'nif', 'nome', 'telefone']);
+
+function safeActivityScalar(value) {
+  if (value === null || typeof value === 'boolean') return value;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  if (typeof value === 'string') return value.length <= 160 ? value : undefined;
+  return undefined;
+}
+
+function safeActivityIdList(value) {
+  if (!Array.isArray(value) || !value.every((item) => Number.isSafeInteger(item) && item > 0)) return undefined;
+  return [...value];
+}
+
+function safeActivityFieldList(value) {
+  if (!Array.isArray(value) || !value.every((item) => typeof item === 'string' && ACTIVITY_DETAIL_FIELD_NAMES.has(item))) {
+    return undefined;
+  }
+  return [...value];
+}
+
+function plainRecord(record) {
+  return record?.get ? record.get({ plain: true }) : record;
+}
+
+function safeActivityDetails(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+
+  return Object.fromEntries(Object.entries(value).flatMap(([key, detail]) => {
+    if (ACTIVITY_DETAIL_SCALAR_FIELDS.has(key)) {
+      const safeValue = safeActivityScalar(detail);
+      return safeValue === undefined ? [] : [[key, safeValue]];
+    }
+    if (ACTIVITY_DETAIL_ARRAY_FIELDS.has(key)) {
+      const safeValue = key === 'campos' ? safeActivityFieldList(detail) : safeActivityIdList(detail);
+      return safeValue === undefined ? [] : [[key, safeValue]];
+    }
+    return [];
+  }));
+}
+
+function serialiseActivity(record) {
+  const row = plainRecord(record) ?? {};
+  return {
+    id: Number(row.id),
+    acao: row.acao,
+    entidade: row.entidade,
+    entidade_id: row.entidade_id == null ? null : Number(row.entidade_id),
+    detalhes: safeActivityDetails(row.detalhes ?? {}),
+    criado_em: row.criado_em ?? null,
+  };
+}
+
+export function normaliseManagerActivityLimit(value) {
+  if (value === undefined || value === null || value === '') return DEFAULT_MANAGER_ACTIVITY_LIMIT;
+  if (typeof value !== 'string' && typeof value !== 'number') {
+    throw httpError(400, 'Limite de atividade inválido.');
+  }
+
+  if (typeof value === 'string' && !/^[1-9]\d*$/.test(value)) {
+    throw httpError(400, 'Limite de atividade inválido.');
+  }
+
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1) {
+    throw httpError(400, 'Limite de atividade inválido.');
+  }
+  return Math.min(parsed, MAX_MANAGER_ACTIVITY_LIMIT);
+}
+
+export function createManagerActivityReader(modelsProvider = getModels) {
+  return async function getManagerActivity(id, limitValue) {
+    const { User, Profile, ActivityLog } = modelsProvider();
+    const user = await User.findByPk(id, {
+      include: [{ model: Profile, as: 'perfil', attributes: ['codigo'] }],
+    });
+    if (!user) throw httpError(404, 'Utilizador não encontrado.');
+    if (user.perfil?.codigo !== 'COLABORADOR') {
+      throw httpError(422, 'O utilizador indicado não é um Gestor.');
+    }
+
+    const limit = normaliseManagerActivityLimit(limitValue);
+    const entries = await ActivityLog.findAll({
+      where: { utilizador_id: id },
+      attributes: ['id', 'acao', 'entidade', 'entidade_id', 'detalhes', 'criado_em'],
+      order: [['criado_em', 'DESC'], ['id', 'DESC']],
+      limit,
+    });
+    return entries.map(serialiseActivity);
+  };
+}
+
+export const getManagerActivity = createManagerActivityReader();
+
 async function getProfile(code) {
   const { Profile } = getModels();
   const profile = await Profile.findOne({ where: { codigo: code } });
