@@ -439,7 +439,24 @@ export interface ApiAvaliacao {
   nivel_risco?: string | null;
   score?: number | null;
   pontuacao?: number | null;
+  resumo?: string | null;
   observacoes?: string | null;
+  recomendacoes?: string | null;
+}
+
+export interface ApiEstadoConformidade {
+  id: number;
+  codigo: string;
+  nome: string;
+}
+
+export interface CriarAvaliacaoPayload {
+  cliente_id: number;
+  estado_conformidade_id: number;
+  data_avaliacao: string;
+  nivel_risco: 'BAIXO' | 'MEDIO' | 'ALTO' | 'CRITICO';
+  pontuacao: number;
+  resumo: string;
   recomendacoes?: string | null;
 }
 
@@ -896,13 +913,26 @@ export function normaliseDocumento(value: unknown): ApiDocumento {
 
 export function normaliseAvaliacao(value: unknown): ApiAvaliacao {
   const raw = asRecord(value);
-  const score = numericValue(raw.score ?? raw.pontuacao);
+  const integer = (source: unknown, field: string): number => {
+    if (typeof source !== 'number' || !Number.isSafeInteger(source) || source < 1) {
+      throw new Error(`Resposta de avaliação inválida: ${field}.`);
+    }
+    return source;
+  };
+  const rawScore = raw.score ?? raw.pontuacao;
+  if (rawScore !== null && rawScore !== undefined && (typeof rawScore !== 'number' || !Number.isFinite(rawScore))) {
+    throw new Error('Resposta de avaliação inválida: pontuacao.');
+  }
+  const score = rawScore === null || rawScore === undefined ? null : rawScore;
   return {
     ...(raw as unknown as ApiAvaliacao),
-    id: requiredNumber(raw.id, 'avaliacao.id'),
-    cliente_id: requiredNumber(raw.cliente_id, 'avaliacao.cliente_id'),
-    pontuacao: score ?? null,
-    score: score ?? null,
+    id: integer(raw.id, 'id'),
+    cliente_id: integer(raw.cliente_id, 'cliente_id'),
+    estado_conformidade_id: raw.estado_conformidade_id === undefined || raw.estado_conformidade_id === null
+      ? undefined : integer(raw.estado_conformidade_id, 'estado_conformidade_id'),
+    pontuacao: score,
+    score,
+    resumo: typeof raw.resumo === 'string' ? raw.resumo : null,
     recomendacoes: typeof raw.recomendacoes === 'string' ? raw.recomendacoes : null,
   };
 }
@@ -1358,8 +1388,31 @@ export async function confirmarImportacaoExcelApi(tipo: ApiImportacaoExcel['tipo
 }
 export async function avaliacoesApi(clienteId?: number): Promise<ApiAvaliacao[]> {
   const qs = clienteId ? `?cliente_id=${clienteId}` : '';
-  const result = await apiFetch<unknown>(`/api/avaliacoes/${qs}`);
-  return Array.isArray(result) ? result.map(normaliseAvaliacao) : [];
+  const result = await apiFetch<unknown>(`/api/avaliacoes${qs}`);
+  if (!Array.isArray(result)) throw new Error('Resposta de avaliações inválida.');
+  return result.map(normaliseAvaliacao);
+}
+
+export async function estadosConformidadeApi(): Promise<ApiEstadoConformidade[]> {
+  const result = await apiFetch<unknown>('/api/avaliacoes/estados');
+  if (!Array.isArray(result)) throw new Error('Resposta de estados de conformidade inválida.');
+  return result.map((value) => {
+    const raw = asRecord(value);
+    if (typeof raw.id !== 'number' || !Number.isSafeInteger(raw.id) || raw.id < 1
+      || typeof raw.codigo !== 'string' || !raw.codigo.trim()
+      || typeof raw.nome !== 'string' || !raw.nome.trim()) {
+      throw new Error('Resposta de estados de conformidade inválida.');
+    }
+    return { id: raw.id, codigo: raw.codigo, nome: raw.nome };
+  });
+}
+
+export async function criarAvaliacaoApi(payload: CriarAvaliacaoPayload): Promise<ApiAvaliacao> {
+  await ensureCsrfToken();
+  const result = await apiFetch<unknown>('/api/avaliacoes', {
+    method: 'POST', body: JSON.stringify(payload),
+  });
+  return normaliseAvaliacao(result);
 }
 function normaliseActivityLog(value: unknown): ApiActivityLog {
   const row = objectRecord(value);

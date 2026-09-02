@@ -6,9 +6,9 @@ import { getModels } from '../models/index.js';
 const ACTIVITY_DETAIL_SCALAR_FIELDS = new Set([
   'ativo', 'atribuido_a', 'categoria', 'chave', 'cliente_id', 'codigo',
   'conversa_id', 'criticidade', 'documento_anterior_id', 'documento_id',
-  'estado', 'estado_anterior', 'estado_novo', 'gravidade', 'incidente_id',
+  'estado', 'estado_anterior', 'estado_novo', 'estado_conformidade_id', 'gravidade', 'incidente_id',
   'linhas_importadas', 'linhas_rejeitadas', 'max_upload_mb', 'notificado_nis2',
-  'perfil', 'prioridade', 'publicada', 'tamanho_bytes', 'tem_observacao',
+  'nivel_risco', 'perfil', 'pontuacao', 'prioridade', 'publicada', 'tamanho_bytes', 'tem_observacao',
   'tipo', 'total_linhas',
 ]);
 const ACTIVITY_DETAIL_ARRAY_FIELDS = new Set(['campos', 'clientes_ids', 'destinatarios', 'gestores_ids']);
@@ -20,7 +20,7 @@ const MAX_AUDIT_DETAIL_ARRAY_ITEMS = 50;
 
 function safeActivityScalar(value) {
   if (value === null || typeof value === 'boolean') return value;
-  if (typeof value === 'number') return Number.isSafeInteger(value) ? value : undefined;
+  if (typeof value === 'number') return Number.isFinite(value) && Math.abs(value) <= Number.MAX_SAFE_INTEGER ? value : undefined;
   if (typeof value === 'string') return value.length <= 160 ? value : undefined;
   return undefined;
 }

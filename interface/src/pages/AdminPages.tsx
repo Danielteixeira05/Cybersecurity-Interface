@@ -16,6 +16,7 @@ import {
   type ApiContactoCliente, type ApiConteudoSite, type ApiIncidente, type ApiDocumento, type ApiMensagemContacto,
   type ApiNoticia, type PerfilCodigo, session,
 } from '../apiClient';
+import { Nis2AssessmentForm } from '../components/Nis2AssessmentForm';
 import { AssetsWorkspace, IncidentsWorkspace } from '../components/OperationalResources';
 import { DocumentsWorkspace } from '../components/DocumentsWorkspace';
 import { INCIDENT_CHANGED_EVENT } from '../realtime';
@@ -653,6 +654,7 @@ export function AdminClients({ setPage }: PageProps) {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [assessmentFormOpen, setAssessmentFormOpen] = useState(false);
   type ContactDraft = Partial<ApiContactoCliente> & Pick<ApiContactoCliente, 'tipo' | 'nome' | 'email'>;
   type ClientDraft = Omit<Partial<ApiCliente>, 'id'> & { nome: string; nif: string; email: string; contactos: ContactDraft[]; gestores_ids: number[] };
   const emptyContact = (tipo: ApiContactoCliente['tipo']): ContactDraft => ({ tipo, nome: '', email: '', cargo: '', telefone: '', comunicado_cncs: false, ativo: true });
@@ -751,10 +753,14 @@ export function AdminClients({ setPage }: PageProps) {
             <button type="button" onClick={openNew} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
               + Novo Cliente
             </button>
+            <button type="button" onClick={() => { setNotice(null); setAssessmentFormOpen(true); }} disabled={loading || clients.length === 0} className="rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60">
+              + Nova avaliação NIS2
+            </button>
           </>
         }
       />
       {notice && <p className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">{notice}</p>}
+      {assessmentFormOpen && <Nis2AssessmentForm role="admin" clients={clients} onCancel={() => setAssessmentFormOpen(false)} onCreated={async () => { setAssessmentFormOpen(false); setNotice('Avaliação NIS2 registada com sucesso.'); load(); }} />}
       {formOpen && (
         <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm" aria-label={editing ? 'Editar cliente' : 'Novo cliente'}>
           <div className="grid gap-4 md:grid-cols-2">

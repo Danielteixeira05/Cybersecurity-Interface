@@ -1,5 +1,6 @@
 import { getModels } from '../models/index.js';
 import { assertClientAccess, clientIdsForUser } from './clients.service.js';
+export { listRiskAssessments } from './assessments.service.js';
 export { listRequests } from './requests.service.js';
 
 async function accessibleWhere(auth, clientId, { hasActiveFlag = false } = {}) {
@@ -49,38 +50,5 @@ export async function listDocuments(auth, clientId) {
     delete item.hash_sha256;
     delete item.nome_ficheiro_guardado;
     return item;
-  });
-}
-
-export async function listRiskAssessments(auth, clientId) {
-  const { RiskAssessment, ConformityStatus, Client } = getModels();
-  const rows = await RiskAssessment.findAll({
-    where: await accessibleWhere(auth, clientId),
-    include: [
-      { model: ConformityStatus, as: 'estadoConformidade', attributes: ['codigo', 'nome'] },
-      { model: Client, as: 'cliente', attributes: ['nome'] },
-    ],
-    order: [['data_avaliacao', 'DESC'], ['id', 'DESC']],
-  });
-
-  return rows.map((row) => {
-    const item = row.get({ plain: true });
-    const score = item.pontuacao === null || item.pontuacao === undefined
-      ? null
-      : Number(item.pontuacao);
-
-    return {
-      ...item,
-      id: Number(item.id),
-      cliente_id: Number(item.cliente_id),
-      estado_conformidade_id: Number(item.estado_conformidade_id),
-      cliente_nome: item.cliente?.nome ?? null,
-      estado_conformidade_codigo: item.estadoConformidade?.codigo ?? null,
-      estado_conformidade_nome: item.estadoConformidade?.nome ?? null,
-      pontuacao: score,
-      score,
-      cliente: undefined,
-      estadoConformidade: undefined,
-    };
   });
 }

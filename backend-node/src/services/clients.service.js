@@ -2,6 +2,7 @@ import { Op } from 'sequelize';
 import { getModels } from '../models/index.js';
 import { httpError } from '../middleware/errors.js';
 import { recordAudit } from './audit-log.service.js';
+import { serialiseRiskAssessment } from './risk-assessment.serializer.js';
 
 const CONTACT_TYPES = new Set(['RESPONSAVEL_SEGURANCA', 'CONTACTO_PERMANENTE', 'OUTRO']);
 
@@ -230,7 +231,7 @@ export async function getClient(auth, clientId) {
     incidentes: incidents.map((incident) => incident.get({ plain: true })),
     documentos: documents.map((document) => document.get({ plain: true })),
     pedidos: requests.map((request) => request.get({ plain: true })),
-    avaliacoes: assessments.map((assessment) => assessment.get({ plain: true })),
+    avaliacoes: assessments.map(serialiseRiskAssessment),
   };
 }
 

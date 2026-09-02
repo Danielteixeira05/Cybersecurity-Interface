@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, Legend,
@@ -17,6 +17,7 @@ import {
   type ApiDocumento, type ApiPedido, type ApiAvaliacao, type ApiImportacaoExcel,
   type ApiPrevisualizacaoExcel,
 } from '../apiClient';
+import { Nis2AssessmentForm } from '../components/Nis2AssessmentForm';
 import { AssetsWorkspace, IncidentsWorkspace } from '../components/OperationalResources';
 import { DocumentsWorkspace } from '../components/DocumentsWorkspace';
 import { INCIDENT_CHANGED_EVENT } from '../realtime';
@@ -572,6 +573,8 @@ export function MgrClientDetail({ setPage, backPage = 'mgr-clients', backLabel =
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [assessmentFormOpen, setAssessmentFormOpen] = useState(false);
+  const [assessmentNotice, setAssessmentNotice] = useState<string | null>(null);
   const tabs = [
     ['overview', 'Visão Geral'], ['nis2', 'NIS2'], ['assets', 'Ativos'], ['incidents', 'Incidentes'],
     ['documents', 'Documentos'], ['reports', 'Relatórios'], ['pentests', 'PenTests'], ['evidence', 'Evidências'],
@@ -607,7 +610,10 @@ export function MgrClientDetail({ setPage, backPage = 'mgr-clients', backLabel =
   const documents: ApiDocumento[] = Array.isArray(data.documentos) ? data.documentos : [];
   const evaluations: ApiAvaliacao[] = Array.isArray(data.avaliacoes) ? data.avaliacoes : [];
   const requests: ApiPedido[] = Array.isArray(data.pedidos) ? data.pedidos : [];
-  const latestEvaluation = [...evaluations].sort((a, b) => new Date(b.data_avaliacao || 0).getTime() - new Date(a.data_avaliacao || 0).getTime())[0];
+  const latestEvaluation = [...evaluations].sort((a, b) => {
+    const byDate = new Date(b.data_avaliacao || 0).getTime() - new Date(a.data_avaliacao || 0).getTime();
+    return byDate || b.id - a.id;
+  })[0];
   const conformity = c.conformidade || c.estado_conformidade || latestEvaluation?.estado_conformidade_nome || 'Sem avaliação';
   const risk = latestEvaluation?.nivel_risco || res.nivel_risco || 'Sem dados';
   const openIncidents = incidents.filter((incident) => !incident.resolvido_em && !incident.encerrado_em).length;
@@ -655,7 +661,12 @@ export function MgrClientDetail({ setPage, backPage = 'mgr-clients', backLabel =
           <article className="mgr-client-detail-v98__panel"><div className="mgr-client-detail-v98__panel-heading"><h2>Incidentes recentes</h2><button type="button" onClick={() => selectTab('incidents')}>Ver todos</button></div>{incidents.length ? <div className="mgr-client-detail-v98__incident-list">{incidents.slice(0, 4).map((incident) => <button type="button" key={incident.id} onClick={() => selectTab('incidents')}><TriangleAlert aria-hidden="true" /><span><strong>{incident.titulo}</strong><small>{formatDate(incident.detetado_em || incident.criado_em)}</small></span><span className={`badge ${severityColor(incident.severidade || incident.gravidade)}`}>{incident.severidade || incident.gravidade || '—'}</span></button>)}</div> : <p className="mgr-client-detail-v98__muted">Sem incidentes registados.</p>}</article>
         </section>
       </div>}
-      {detailTab === 'nis2' && <section className="mgr-client-detail-v98__panel"><div className="mgr-client-detail-v98__panel-heading"><h2>Avaliações NIS2</h2><span className={`badge ${conformidadeColor(conformity)}`}>{conformity}</span></div><DataTable data={evaluations} emptyText="Sem avaliações NIS2 disponíveis." columns={[{ key: 'data_avaliacao', label: 'Data', render: (item) => formatDate(item.data_avaliacao) }, { key: 'estado_conformidade_nome', label: 'Estado', render: (item) => <span className={`badge ${conformidadeColor(item.estado_conformidade_nome)}`}>{item.estado_conformidade_nome || '—'}</span> }, { key: 'score', label: 'Pontuação', render: (item) => item.score ?? item.pontuacao ?? '—' }, { key: 'nivel_risco', label: 'Risco', render: (item) => item.nivel_risco || '—' }]} /></section>}
+      {detailTab === 'nis2' && <section className="mgr-client-detail-v98__panel">
+        <div className="mgr-client-detail-v98__panel-heading"><h2>Avaliações NIS2</h2><div className="flex items-center gap-2"><span className={`badge ${conformidadeColor(conformity)}`}>{conformity}</span>{(sess.role === 'admin' || sess.role === 'manager') && <button type="button" onClick={() => { setAssessmentNotice(null); setAssessmentFormOpen(true); }}>Nova avaliação NIS2</button>}</div></div>
+        {assessmentNotice && <p role="status" className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{assessmentNotice}</p>}
+        {assessmentFormOpen && (sess.role === 'admin' || sess.role === 'manager') && <Nis2AssessmentForm role={sess.role} clients={[c as ApiCliente]} fixedClient={c as ApiCliente} onCancel={() => setAssessmentFormOpen(false)} onCreated={async () => { setAssessmentFormOpen(false); setAssessmentNotice('Avaliação NIS2 registada com sucesso.'); await refreshDetail(); }} />}
+        <DataTable data={evaluations} emptyText="Sem avaliações NIS2 disponíveis." columns={[{ key: 'data_avaliacao', label: 'Data', render: (item) => formatDate(item.data_avaliacao) }, { key: 'estado_conformidade_nome', label: 'Estado', render: (item) => <span className={`badge ${conformidadeColor(item.estado_conformidade_nome)}`}>{item.estado_conformidade_nome || '—'}</span> }, { key: 'score', label: 'Pontuação', render: (item) => item.score ?? item.pontuacao ?? '—' }, { key: 'nivel_risco', label: 'Risco', render: (item) => item.nivel_risco || '—' }]} />
+      </section>}
       {detailTab === 'assets' && <AssetsWorkspace role="manager" clientId={Number(cid)} compact title="Ativos Tecnológicos" subtitle="Inventário associado a este cliente" onChanged={() => void refreshDetail()} />}
       {detailTab === 'incidents' && <IncidentsWorkspace role="manager" clientId={Number(cid)} compact title="Incidentes de Segurança" subtitle="Incidentes associados a este cliente" onChanged={() => void refreshDetail()} />}
       {detailTab === 'documents' && <section className="mgr-client-detail-v98__panel"><h2>Documentos</h2>{renderDocuments(documents, 'Sem documentos disponíveis para este cliente.')}</section>}
@@ -889,16 +900,30 @@ export function MgrNIS2(_props: PageProps) {
   const [assessments, setAssessments] = useState<ApiAvaliacao[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const latestNis2Request = useRef(0);
 
   useEffect(() => {
-    Promise.all([clientesApi(), avaliacoesApi()])
-      .then(([nextClients, nextAssessments]) => {
-        setClients(nextClients);
-        setAssessments(nextAssessments);
-      })
-      .catch((e) => setErr(e?.message || 'Erro'))
-      .finally(() => setLoading(false));
+    void refreshNis2();
   }, []);
+
+  async function refreshNis2() {
+    const requestId = ++latestNis2Request.current;
+    setLoading(true);
+    setErr(null);
+    try {
+      const [nextClients, nextAssessments] = await Promise.all([clientesApi(), avaliacoesApi()]);
+      if (requestId !== latestNis2Request.current) return;
+      setClients(nextClients);
+      setAssessments(nextAssessments);
+    } catch (cause) {
+      if (requestId !== latestNis2Request.current) return;
+      setErr(cause instanceof Error ? cause.message : 'Não foi possível atualizar as avaliações NIS2.');
+    } finally {
+      if (requestId === latestNis2Request.current) setLoading(false);
+    }
+  }
 
   const dist = [
     { estado: 'Conforme', n: clients.filter(c => (c.conformidade || '').toLowerCase().includes('conforme') && !(c.conformidade || '').toLowerCase().includes('nao')).length, c: '#10b981' },
@@ -909,7 +934,10 @@ export function MgrNIS2(_props: PageProps) {
 
   return (
     <div>
-      <PageHeader title="Conformidade NIS2" subtitle="Diretiva NIS2 - Estado de conformidade dos clientes" />
+      <PageHeader title="Conformidade NIS2" subtitle="Estado de conformidade das organizações associadas" actions={<button type="button" onClick={() => { setNotice(null); setFormOpen(true); }} disabled={loading || clients.length === 0} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">+ Nova avaliação NIS2</button>} />
+      {!loading && clients.length === 0 && !err && <p className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Não existem organizações associadas a este Gestor para avaliar.</p>}
+      {notice && <p role="status" className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">{notice}</p>}
+      {formOpen && <Nis2AssessmentForm role="manager" clients={clients} onCancel={() => setFormOpen(false)} onCreated={async () => { setFormOpen(false); setNotice('Avaliação NIS2 registada com sucesso.'); await refreshNis2(); }} />}
       <div className="grid gap-4 sm:grid-cols-4 mb-6">
         {dist.map(d => (
           <StatCard key={d.estado} label={d.estado} value={d.n} icon={d.estado === 'Conforme' ? '✅' : d.estado === 'Em Revisão' ? '⏳' : d.estado === 'Não Conforme' ? '⚠️' : '📋'} color="bg-blue-50" />
