@@ -2,7 +2,7 @@ import net from 'node:net';
 import { Op } from 'sequelize';
 import { getModels } from '../models/index.js';
 import { httpError } from '../middleware/errors.js';
-import { assertClientAccess, clientIdsForUser } from './clients.service.js';
+import { assertClientAccess, clientIdsForUser, singlePrincipalClientId } from './clients.service.js';
 import { recordAudit } from './audit-log.service.js';
 import { createNis2Notifications } from './notifications.service.js';
 import { emitIncidentChanged, emitNotification } from '../socket/events.js';
@@ -131,6 +131,16 @@ export function normaliseClientIncidentSubmission(input) {
   return { ...input, estado: 'ABERTO', ativo: true, notificado_nis2: false };
 }
 
+async function clientIncidentSubmissionForCreate(auth, input) {
+  if (auth.role !== 'client') return input;
+
+  const ids = await clientIdsForUser(auth.sub, { principalOnly: true });
+  const requestedId = idOf(input.cliente_id ?? input.clienteId, 'Cliente');
+  const clientId = singlePrincipalClientId(ids, requestedId, 'reportar um incidente');
+
+  return normaliseClientIncidentSubmission({ ...input, cliente_id: clientId, clienteId: undefined });
+}
+
 async function assertActiveClient(clientId, transaction) {
   const { Client } = getModels();
   const client = await Client.findOne({ where: { id: clientId, ativo: true }, transaction });
@@ -205,7 +215,7 @@ function closure(data, input, current, actor) {
 }
 
 export async function createIncident(auth, input) {
-  const submission = auth.role === 'client' ? normaliseClientIncidentSubmission(input) : input;
+  const submission = await clientIncidentSubmissionForCreate(auth, input);
   const data = normaliseIncidentPayload(submission, {});
   await assertClientAccess(auth, data.cliente_id);
   const { sequelize, Incident } = getModels();

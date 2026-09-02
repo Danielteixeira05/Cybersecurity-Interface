@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, Legend,
@@ -29,6 +29,8 @@ interface PageProps {
 interface DetailProps extends PageProps {
   backPage?: Page;
   backLabel?: string;
+  areaLabel?: string;
+  role?: 'admin' | 'manager';
   clientId?: number;
 }
 
@@ -567,12 +569,13 @@ export function MgrClients({ setPage }: PageProps) {
   );
 }
 
-export function MgrClientDetail({ setPage, backPage = 'mgr-clients', backLabel = 'Clientes', clientId }: DetailProps) {
+export function MgrClientDetail({ setPage, backPage = 'mgr-clients', backLabel = 'Clientes', areaLabel = 'Gestor', role = 'manager', clientId }: DetailProps) {
   const sess = session.get();
-  const cid = clientId ?? (sess.cliente as any)?.id;
+  const cid = clientId ?? (role === 'manager' ? (sess.cliente as any)?.id : undefined);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const requestVersion = useRef(0);
   const [assessmentFormOpen, setAssessmentFormOpen] = useState(false);
   const [assessmentNotice, setAssessmentNotice] = useState<string | null>(null);
   const tabs = [
@@ -587,17 +590,35 @@ export function MgrClientDetail({ setPage, backPage = 'mgr-clients', backLabel =
   };
   const [detailTab, setDetailTab] = useState<DetailTab>(tabFromHash);
 
-  const refreshDetail = async () => {
-    if (!cid) { setLoading(false); return; }
-    setLoading(true); setErr(null);
-    try { setData(await clienteDetalheApi(cid)); }
-    catch (cause: any) { setErr(cause?.message || 'Erro'); }
-    finally { setLoading(false); }
-  };
+  const refreshDetail = useCallback(async (signal?: AbortSignal) => {
+    const currentId = cid;
+    const version = ++requestVersion.current;
+    if (!Number.isSafeInteger(currentId) || currentId < 1) {
+      setData(null);
+      setErr('Identificador de cliente inválido.');
+      setLoading(false);
+      return;
+    }
+
+    setData(null);
+    setErr(null);
+    setLoading(true);
+    try {
+      const next = await clienteDetalheApi(currentId, signal);
+      if (requestVersion.current === version && !signal?.aborted) setData(next);
+    } catch (cause: any) {
+      const cancelled = signal?.aborted || cause?.code === 'ERR_CANCELED' || cause?.name === 'CanceledError';
+      if (requestVersion.current === version && !cancelled) setErr(cause?.message || 'Erro ao carregar o cliente.');
+    } finally {
+      if (requestVersion.current === version && !signal?.aborted) setLoading(false);
+    }
+  }, [cid]);
 
   useEffect(() => {
-    void refreshDetail();
-  }, [cid]);
+    const controller = new AbortController();
+    void refreshDetail(controller.signal);
+    return () => controller.abort();
+  }, [refreshDetail]);
 
   if (loading) return <Loader />;
   if (err) return <ErrorCard msg={err} />;
@@ -616,6 +637,7 @@ export function MgrClientDetail({ setPage, backPage = 'mgr-clients', backLabel =
   })[0];
   const conformity = c.conformidade || c.estado_conformidade || latestEvaluation?.estado_conformidade_nome || 'Sem avaliação';
   const risk = latestEvaluation?.nivel_risco || res.nivel_risco || 'Sem dados';
+  const canManageNis2 = role === 'admin' || role === 'manager';
   const openIncidents = incidents.filter((incident) => !incident.resolvido_em && !incident.encerrado_em).length;
   const formatDate = (value?: string | null) => value ? new Intl.DateTimeFormat('pt-PT', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value)) : '—';
   const selectTab = (tab: DetailTab) => {
@@ -637,7 +659,7 @@ export function MgrClientDetail({ setPage, backPage = 'mgr-clients', backLabel =
 
   return (
     <div className="mgr-visual-page mgr-client-detail-v98">
-      <div className="mgr-client-detail-v98__breadcrumb"><button type="button" onClick={() => setPage(backPage)}>Gestor</button><span>/</span><button type="button" onClick={() => setPage(backPage)}>{backLabel}</button><span>/</span><strong>{c.nome}</strong></div>
+      <div className="mgr-client-detail-v98__breadcrumb"><button type="button" onClick={() => setPage(backPage)}>{areaLabel}</button><span>/</span><button type="button" onClick={() => setPage(backPage)}>{backLabel}</button><span>/</span><strong>{c.nome}</strong></div>
       <header className="mgr-client-detail-v98__header">
         <span className="mgr-client-detail-v98__avatar" aria-hidden="true">{c.nome?.charAt(0)?.toUpperCase() || 'C'}</span>
         <div className="mgr-client-detail-v98__title"><h1>{c.nome}</h1><div><span>{c.setor_atividade || 'Setor não indicado'}</span><span className={`badge ${conformidadeColor(conformity)}`}>{conformity}</span><span className="badge bg-blue-100 text-blue-700">Risco: {risk}</span></div></div>
@@ -662,13 +684,13 @@ export function MgrClientDetail({ setPage, backPage = 'mgr-clients', backLabel =
         </section>
       </div>}
       {detailTab === 'nis2' && <section className="mgr-client-detail-v98__panel">
-        <div className="mgr-client-detail-v98__panel-heading"><h2>Avaliações NIS2</h2><div className="flex items-center gap-2"><span className={`badge ${conformidadeColor(conformity)}`}>{conformity}</span>{(sess.role === 'admin' || sess.role === 'manager') && <button type="button" onClick={() => { setAssessmentNotice(null); setAssessmentFormOpen(true); }}>Nova avaliação NIS2</button>}</div></div>
+        <div className="mgr-client-detail-v98__panel-heading"><h2>Avaliações NIS2</h2><div className="flex items-center gap-2"><span className={`badge ${conformidadeColor(conformity)}`}>{conformity}</span>{canManageNis2 && <button type="button" onClick={() => { setAssessmentNotice(null); setAssessmentFormOpen(true); }}>Nova avaliação NIS2</button>}</div></div>
         {assessmentNotice && <p role="status" className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{assessmentNotice}</p>}
-        {assessmentFormOpen && (sess.role === 'admin' || sess.role === 'manager') && <Nis2AssessmentForm role={sess.role} clients={[c as ApiCliente]} fixedClient={c as ApiCliente} onCancel={() => setAssessmentFormOpen(false)} onCreated={async () => { setAssessmentFormOpen(false); setAssessmentNotice('Avaliação NIS2 registada com sucesso.'); await refreshDetail(); }} />}
+        {assessmentFormOpen && canManageNis2 && <Nis2AssessmentForm role={role} clients={[c as ApiCliente]} fixedClient={c as ApiCliente} onCancel={() => setAssessmentFormOpen(false)} onCreated={async () => { setAssessmentFormOpen(false); setAssessmentNotice('Avaliação NIS2 registada com sucesso.'); await refreshDetail(); }} />}
         <DataTable data={evaluations} emptyText="Sem avaliações NIS2 disponíveis." columns={[{ key: 'data_avaliacao', label: 'Data', render: (item) => formatDate(item.data_avaliacao) }, { key: 'estado_conformidade_nome', label: 'Estado', render: (item) => <span className={`badge ${conformidadeColor(item.estado_conformidade_nome)}`}>{item.estado_conformidade_nome || '—'}</span> }, { key: 'score', label: 'Pontuação', render: (item) => item.score ?? item.pontuacao ?? '—' }, { key: 'nivel_risco', label: 'Risco', render: (item) => item.nivel_risco || '—' }]} />
       </section>}
-      {detailTab === 'assets' && <AssetsWorkspace role="manager" clientId={Number(cid)} compact title="Ativos Tecnológicos" subtitle="Inventário associado a este cliente" onChanged={() => void refreshDetail()} />}
-      {detailTab === 'incidents' && <IncidentsWorkspace role="manager" clientId={Number(cid)} compact title="Incidentes de Segurança" subtitle="Incidentes associados a este cliente" onChanged={() => void refreshDetail()} />}
+      {detailTab === 'assets' && <AssetsWorkspace role={role} clientId={cid} compact title="Ativos Tecnológicos" subtitle="Inventário associado a este cliente" onChanged={() => void refreshDetail()} />}
+      {detailTab === 'incidents' && <IncidentsWorkspace role={role} clientId={cid} compact title="Incidentes de Segurança" subtitle="Incidentes associados a este cliente" onChanged={() => void refreshDetail()} />}
       {detailTab === 'documents' && <section className="mgr-client-detail-v98__panel"><h2>Documentos</h2>{renderDocuments(documents, 'Sem documentos disponíveis para este cliente.')}</section>}
       {detailTab === 'reports' && <section className="mgr-client-detail-v98__panel"><h2>Relatórios</h2>{renderDocuments(documents.filter((document) => `${document.tipo || ''} ${document.categoria || ''}`.toLowerCase().includes('relat')), 'Sem relatórios disponíveis para este cliente.')}</section>}
       {detailTab === 'pentests' && <section className="mgr-client-detail-v98__panel"><h2>Testes de penetração</h2>{renderDocuments(documents.filter((document) => `${document.tipo || ''} ${document.categoria || ''}`.toLowerCase().includes('pentest')), 'Sem documentos de PenTest disponíveis para este cliente.')}</section>}
@@ -1038,7 +1060,8 @@ export function MgrEvidence(_props: PageProps) {
   />;
 }
 
-export function MgrExcelImport() {
+export function ExcelImportWorkspace({ role = 'manager', onBack }: { role?: 'manager' | 'client'; onBack?: () => void }) {
+  const clientOnly = role === 'client';
   const [clients, setClients] = useState<ApiCliente[]>([]);
   const [history, setHistory] = useState<ApiImportacaoExcel[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
@@ -1096,21 +1119,23 @@ export function MgrExcelImport() {
     }
   }
 
-  const importCards: Array<{ titulo: string; descricao: string; icon: string; color: string; tipo: ApiImportacaoExcel['tipo'] | null; modelo: string }> = [
+  const allImportCards: Array<{ titulo: string; descricao: string; icon: string; color: string; tipo: ApiImportacaoExcel['tipo'] | null; modelo: string }> = [
     { titulo: 'Importar Ativos', descricao: 'Modelo XLSX com dados de inventário e criticidade', icon: '💻', color: 'from-blue-500 to-cyan-500', tipo: 'ATIVOS', modelo: 'modelo_importacao_ativos.xlsx' },
     { titulo: 'Importar Incidentes', descricao: 'Histórico XLSX de incidentes ou dados externos', icon: '🚨', color: 'from-rose-500 to-pink-500', tipo: 'INCIDENTES', modelo: 'modelo_importacao_incidentes.xlsx' },
     { titulo: 'Importar Clientes', descricao: 'A criação de organizações continua no fluxo próprio de Clientes.', icon: '🏢', color: 'from-emerald-500 to-teal-500', tipo: null, modelo: '' },
   ];
+  const importCards = allImportCards.filter((card) => !clientOnly || card.tipo === 'ATIVOS');
 
   return (
     <div>
       <PageHeader
-        title="Importação via Excel"
-        subtitle="Importar em massa ativos e incidentes para organizações associadas"
+        title={clientOnly ? 'Importar Ativos via Excel' : 'Importação via Excel'}
+        subtitle={clientOnly ? 'Registe ativos tecnológicos para a sua organização através do modelo XLSX.' : 'Importar em massa ativos e incidentes para organizações associadas'}
+        actions={onBack ? <button type="button" onClick={onBack} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Voltar a Ativos</button> : undefined}
       />
       <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <label className="block max-w-xl text-sm font-medium text-slate-700">Organização para a importação<select value={selectedClientId ?? ''} onChange={(event) => { setSelectedClientId(Number(event.target.value) || null); setPreview(null); }} disabled={loading || clients.length === 0} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-slate-900 disabled:cursor-not-allowed disabled:bg-slate-100"><option value="" disabled>{clients.length ? 'Selecionar organização' : 'Sem organizações associadas'}</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.nome}{client.nif ? ` — NIF ${client.nif}` : ''}</option>)}</select></label>
-        {!loading && clients.length === 0 && <p className="mt-3 text-sm text-amber-800">Não existem organizações associadas a este Gestor para importar dados.</p>}
+        {clientOnly ? <div className="max-w-xl text-sm"><p className="font-medium text-slate-700">Organização da importação</p><p className="mt-1 rounded-xl bg-slate-50 px-3 py-2 text-slate-700">{clients[0] ? `${clients[0].nome}${clients[0].nif ? ` — NIF ${clients[0].nif}` : ''}` : 'Sem organização ativa associada'}</p></div> : <label className="block max-w-xl text-sm font-medium text-slate-700">Organização para a importação<select value={selectedClientId ?? ''} onChange={(event) => { setSelectedClientId(Number(event.target.value) || null); setPreview(null); }} disabled={loading || clients.length === 0} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-slate-900 disabled:cursor-not-allowed disabled:bg-slate-100"><option value="" disabled>{clients.length ? 'Selecionar organização' : 'Sem organizações associadas'}</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.nome}{client.nif ? ` — NIF ${client.nif}` : ''}</option>)}</select></label>}
+        {!loading && clients.length === 0 && <p className="mt-3 text-sm text-amber-800">{clientOnly ? 'Não existe uma organização ativa associada a esta conta para importar ativos.' : 'Não existem organizações associadas a este Gestor para importar dados.'}</p>}
       </div>
       {err && <div role="alert" className="mb-6"><ErrorCard msg={err} /></div>}
       <div className="grid gap-6 lg:grid-cols-3">
@@ -1160,4 +1185,8 @@ export function MgrExcelImport() {
       </div>
     </div>
   );
+}
+
+export function MgrExcelImport() {
+  return <ExcelImportWorkspace role="manager" />;
 }

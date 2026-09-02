@@ -12,6 +12,7 @@ import {
   type ApiPedido, type ApiAvaliacao, type ApiClienteDetalhe, type ApiNotificacao,
 } from '../apiClient';
 import { AssetsWorkspace, IncidentsWorkspace } from '../components/OperationalResources';
+import { ExcelImportWorkspace } from './ManagerPages';
 import { DocumentsWorkspace } from '../components/DocumentsWorkspace';
 import { INCIDENT_CHANGED_EVENT } from '../realtime';
 
@@ -390,7 +391,9 @@ export function ClientWorkspace({ setPage }: PageProps) {
 }
 
 export function ClientAssets() {
-  return <AssetsWorkspace role="client" title="Meus Ativos" subtitle="Inventário associado à sua organização" />;
+  const [importing, setImporting] = useState(false);
+  if (importing) return <ExcelImportWorkspace role="client" onBack={() => setImporting(false)} />;
+  return <AssetsWorkspace role="client" title="Meus Ativos" subtitle="Inventário associado à sua organização" onImportExcel={() => setImporting(true)} />;
 }
 
 export function ClientIncidents() {

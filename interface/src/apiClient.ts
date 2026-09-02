@@ -994,8 +994,8 @@ export async function clientesApi(q?: string): Promise<ApiCliente[]> {
   const rows = Array.isArray(result) ? result : (asRecord(result).items as unknown);
   return Array.isArray(rows) ? rows.map(normaliseCliente) : [];
 }
-export async function clienteDetalheApi(id: number): Promise<ApiClienteDetalhe> {
-  const result = asRecord(await apiFetch<unknown>(`/api/clients/${id}`));
+export async function clienteDetalheApi(id: number, signal?: AbortSignal): Promise<ApiClienteDetalhe> {
+  const result = asRecord(await apiFetch<unknown>(`/api/clients/${id}`, { signal }));
   const contact = (value: unknown): ApiContactoCliente | null => {
     if (!value) return null;
     const raw = asRecord(value);

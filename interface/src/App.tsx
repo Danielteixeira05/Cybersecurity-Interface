@@ -38,7 +38,10 @@ const PAGE_PATHS: Partial<Record<Page, string>> = {
   'admin-users': '/administrador/utilizadores',
   'admin-clients': '/administrador/clientes',
   'admin-assets': '/administrador/ativos',
-  'admin-client-detail': '/administrador/clientes/detalhe',
+  // O detalhe administrativo é sempre aberto através de `openAdminClientDetail`,
+  // que inclui o identificador canónico no URL. Esta entrada é apenas o fallback
+  // seguro para qualquer chamada interna antiga a `setPage`.
+  'admin-client-detail': '/administrador/clientes',
   'admin-user-client': '/administrador/utilizadores/cliente',
   'admin-user-manager': '/administrador/utilizadores/gestor',
   'admin-documents': '/administrador/documentos',
@@ -86,16 +89,29 @@ const LEGACY_CLIENT_PAGE_PATHS: Record<string, Page> = {
 
 export function pageFromPathname(pathname: string): Page {
   const path = pathname.replace(/\/+$/, '') || '/';
-  if (/^\/gestor\/clientes\/\d+$/.test(path)) return 'mgr-client-detail';
+  if (/^\/administrador\/clientes\/detalhe$/.test(path)) return 'admin-clients';
+  if (/^\/administrador\/clientes\/[^/]+$/.test(path)) return 'admin-client-detail';
+  if (/^\/gestor\/clientes\/[^/]+$/.test(path)) return 'mgr-client-detail';
   if (/^\/administrador\/utilizadores\/gestor(?:\/.*)?$/.test(path)) return 'admin-user-manager';
   if (/^\/noticias\/[^/]+$/.test(path)) return 'news-detail';
   const entry = Object.entries(PAGE_PATHS).find(([, value]) => value === path);
   return (entry?.[0] as Page | undefined) ?? LEGACY_CLIENT_PAGE_PATHS[path] ?? 'home';
 }
 
-function clientIdFromPathname(pathname: string): number | undefined {
-  const match = /^\/gestor\/clientes\/(\d+)\/?$/.exec(pathname);
-  return match ? Number(match[1]) : undefined;
+function canonicalClientIdFromPathname(pathname: string, prefix: string): number | undefined {
+  const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = new RegExp(`^${escapedPrefix}/([1-9]\\d*)/?$`).exec(pathname);
+  if (!match) return undefined;
+  const id = Number(match[1]);
+  return Number.isSafeInteger(id) && id > 0 ? id : undefined;
+}
+
+export function managerClientIdFromPathname(pathname: string): number | undefined {
+  return canonicalClientIdFromPathname(pathname, '/gestor/clientes');
+}
+
+export function adminClientIdFromPathname(pathname: string): number | undefined {
+  return canonicalClientIdFromPathname(pathname, '/administrador/clientes');
 }
 
 export function managerIdFromPathname(pathname: string): number | undefined {
@@ -128,7 +144,7 @@ export default function App() {
   const setPage = useCallback((nextPage: Page) => {
     setPageState(nextPage);
     if (nextPage === 'mgr-client-detail') {
-      const clientId = clientIdFromPathname(location.pathname) ?? session.get().cliente?.id;
+      const clientId = managerClientIdFromPathname(location.pathname) ?? session.get().cliente?.id;
       navigate(clientId ? `/gestor/clientes/${clientId}` : PAGE_PATHS['mgr-clients']!);
       return;
     }
@@ -237,6 +253,19 @@ export default function App() {
     navigate(`/administrador/utilizadores/gestor/${userId}`);
   }, [navigate]);
 
+  const openAdminClientDetail = useCallback((clientId: number) => {
+    if (!Number.isSafeInteger(clientId) || clientId < 1) return;
+    setPageState('admin-client-detail');
+    navigate(`/administrador/clientes/${clientId}`);
+  }, [navigate]);
+
+  useEffect(() => {
+    const path = location.pathname.replace(/\/+$/, '') || '/';
+    if (path === '/administrador/clientes/detalhe') {
+      navigate('/administrador/clientes', { replace: true });
+    }
+  }, [location.pathname, navigate]);
+
   if (!authReady) {
     return <div className="min-h-screen bg-slate-50" aria-busy="true" aria-label="A validar sessão" />;
   }
@@ -280,7 +309,7 @@ export default function App() {
       {page === 'admin-dashboard' && <AdminDashboard setPage={setPage} />}
       {page === 'admin-analytics' && <AdminAnalytics />}
       {page === 'admin-users' && <AdminUsers setPage={setPage} openManagerDetail={openManagerDetail} />}
-      {page === 'admin-clients' && <AdminClients setPage={setPage} />}
+      {page === 'admin-clients' && <AdminClients setPage={setPage} openClientDetail={openAdminClientDetail} />}
       {page === 'admin-assets' && <AdminAssets />}
       {page === 'admin-documents' && <AdminDocuments />}
       {page === 'admin-incidents' && <AdminIncidents />}
@@ -288,7 +317,7 @@ export default function App() {
       {page === 'admin-site-content' && <AdminSiteContent />}
       {page === 'admin-permissions' && <AdminPermissions />}
       {page === 'admin-communication' && <CommunicationPage role="admin" />}
-      {page === 'admin-client-detail' && <MgrClientDetail setPage={setPage} backPage="admin-clients" backLabel="Administrador" />}
+      {page === 'admin-client-detail' && <MgrClientDetail setPage={setPage} backPage="admin-clients" areaLabel="Administrador" backLabel="Clientes" role="admin" clientId={adminClientIdFromPathname(location.pathname)} />}
       {page === 'admin-user-client' && <MgrClientDetail setPage={setPage} backPage="admin-users" backLabel="Utilizadores" />}
       {page === 'admin-user-manager' && <AdminManagerDetail setPage={setPage} managerId={managerIdFromPathname(location.pathname)} />}
 
@@ -296,7 +325,7 @@ export default function App() {
       {page === 'mgr-dashboard' && <MgrDashboard setPage={setPage} />}
       {page === 'mgr-analytics' && <MgrAnalytics setPage={setPage} />}
       {page === 'mgr-clients' && <MgrClients setPage={setPage} />}
-      {page === 'mgr-client-detail' && <MgrClientDetail setPage={setPage} clientId={clientIdFromPathname(location.pathname)} />}
+      {page === 'mgr-client-detail' && <MgrClientDetail setPage={setPage} clientId={managerClientIdFromPathname(location.pathname)} />}
 
       {page === 'mgr-incidents' && <MgrIncidents setPage={setPage} />}
       {page === 'mgr-documents' && <MgrDocuments />}

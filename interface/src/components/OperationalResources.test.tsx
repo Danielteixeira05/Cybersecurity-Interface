@@ -1,9 +1,10 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { IncidentsWorkspace } from './OperationalResources';
+import { AssetsWorkspace, IncidentsWorkspace } from './OperationalResources';
 
-const { clientesApi, incidentesApi, criarIncidenteApi } = vi.hoisted(() => ({
+const { ativosApi, clientesApi, incidentesApi, criarIncidenteApi } = vi.hoisted(() => ({
+  ativosApi: vi.fn(),
   clientesApi: vi.fn(),
   incidentesApi: vi.fn(),
   criarIncidenteApi: vi.fn(),
@@ -13,6 +14,7 @@ vi.mock('../apiClient', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../apiClient')>();
   return {
     ...actual,
+    ativosApi,
     clientesApi,
     incidentesApi,
     criarIncidenteApi,
@@ -21,6 +23,7 @@ vi.mock('../apiClient', async (importOriginal) => {
 
 describe('IncidentsWorkspace para Cliente', () => {
   beforeEach(() => {
+    ativosApi.mockResolvedValue([]);
     clientesApi.mockResolvedValue([{ id: 21, nome: 'Organização de teste', nif: '509999999', ativo: true }]);
     incidentesApi.mockResolvedValue([]);
     criarIncidenteApi.mockReset();
@@ -39,6 +42,7 @@ describe('IncidentsWorkspace para Cliente', () => {
 
     render(<IncidentsWorkspace role="client" />);
     await screen.findByText('Sem incidentes disponíveis.');
+    expect(screen.queryByText('Todos os clientes')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Reportar Incidente' }));
 
     const dialog = screen.getByRole('dialog', { name: 'Reportar incidente' });
@@ -61,5 +65,19 @@ describe('IncidentsWorkspace para Cliente', () => {
       notificado_nis2: false,
       ativo: true,
     }));
+  }, 15_000);
+});
+
+describe('AssetsWorkspace para Cliente', () => {
+  it('mantém a consulta sem filtros globais e encaminha apenas para a importação Excel existente', async () => {
+    const user = userEvent.setup();
+    const onImportExcel = vi.fn();
+    render(<AssetsWorkspace role="client" onImportExcel={onImportExcel} />);
+
+    expect(await screen.findByText('Sem ativos tecnológicos disponíveis.')).toBeVisible();
+    expect(screen.queryByText('Todos os clientes')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Novo Ativo/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Importar ativos por Excel' }));
+    expect(onImportExcel).toHaveBeenCalledTimes(1);
   });
 });

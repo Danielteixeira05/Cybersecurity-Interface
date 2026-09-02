@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import ExcelJS from 'exceljs';
-import { parseExcelImportForTests } from '../src/services/excel-import.service.js';
+import { assertExcelImportPermission, parseExcelImportForTests } from '../src/services/excel-import.service.js';
 
 async function xlsxFile(rows) {
   const book = new ExcelJS.Workbook();
@@ -48,4 +48,13 @@ test('pré-visualização rejeita códigos de incidente repetidos no mesmo XLSX'
   assert.equal(rows[0].estado, 'IMPORTADA');
   assert.equal(rows[1].estado, 'REJEITADA');
   assert.match(rows[1].erro, /repetido/i);
+});
+
+test('Cliente só pode usar a importação Excel para ativos tecnológicos', () => {
+  assert.doesNotThrow(() => assertExcelImportPermission({ role: 'client' }, 'ATIVOS'));
+  assert.throws(
+    () => assertExcelImportPermission({ role: 'client' }, 'INCIDENTES'),
+    (error) => error?.status === 403,
+  );
+  assert.doesNotThrow(() => assertExcelImportPermission({ role: 'manager' }, 'INCIDENTES'));
 });

@@ -3,7 +3,7 @@ import ExcelJS from 'exceljs';
 import { env } from '../config/env.js';
 import { getModels } from '../models/index.js';
 import { httpError } from '../middleware/errors.js';
-import { assertClientAccess, clientIdsForUser } from './clients.service.js';
+import { assertClientAccess, clientIdsForUser, singlePrincipalClientId } from './clients.service.js';
 import { createVercelBlobStorage, validateDocumentFile } from './document-storage.service.js';
 import { createAssetFromImport, normaliseAssetPayload } from './assets.service.js';
 import { createIncidentFromImport, normaliseIncidentPayload } from './incidents.service.js';
@@ -70,6 +70,12 @@ function importType(value) {
   const type = text(value).toUpperCase();
   if (!IMPORT_TYPES.has(type)) throw httpError(400, 'Tipo de importação inválido.');
   return type;
+}
+
+export function assertExcelImportPermission(auth, type) {
+  if (auth.role === 'client' && type !== 'ATIVOS') {
+    throw httpError(403, 'O Cliente apenas pode importar ativos tecnológicos da sua organização.');
+  }
 }
 
 function assertWritable() {
@@ -175,8 +181,14 @@ export async function parseExcelImportForTests({ file, tipo, clienteId }) {
 }
 
 async function activeClientForImport(auth, input) {
-  const clientId = asId(input.cliente_id ?? input.clienteId, 'Cliente');
-  await assertClientAccess(auth, clientId);
+  const requestedId = asId(input.cliente_id ?? input.clienteId, 'Cliente');
+  let clientId = requestedId;
+  if (auth.role === 'client') {
+    const ids = await clientIdsForUser(auth.sub, { principalOnly: true });
+    clientId = singlePrincipalClientId(ids, requestedId, 'importar ativos');
+  } else {
+    await assertClientAccess(auth, clientId);
+  }
   const { Client } = getModels();
   const client = await Client.findOne({ where: { id: clientId, ativo: true } });
   if (!client) throw httpError(400, 'Cliente não encontrado ou inativo.');
@@ -210,6 +222,7 @@ async function whereFor(auth, clientId) {
 
 export async function previewExcelImport(auth, input, file) {
   const type = importType(input.tipo);
+  assertExcelImportPermission(auth, type);
   const clientId = await activeClientForImport(auth, input);
   const parsed = await validateWorkbook(file, type, clientId);
   const accepted = parsed.rows.filter((row) => row.estado === 'IMPORTADA').length;
@@ -227,6 +240,7 @@ export async function previewExcelImport(auth, input, file) {
 export async function commitExcelImport(auth, input, file) {
   assertWritable();
   const type = importType(input.tipo);
+  assertExcelImportPermission(auth, type);
   const clientId = await activeClientForImport(auth, input);
   const parsed = await validateWorkbook(file, type, clientId);
   const objectKey = `imports/${clientId}/${randomUUID()}/${parsed.validated.storageName}`;

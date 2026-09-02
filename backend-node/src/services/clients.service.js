@@ -150,6 +150,29 @@ export async function clientIdsForUser(userId, { principalOnly = false } = {}) {
   return [...new Set(links.map((link) => String(link.cliente_id)))];
 }
 
+/**
+ * Ações iniciadas pelo perfil Cliente são sempre executadas na sua única
+ * associação principal ativa. O identificador do browser é apenas conferido,
+ * nunca usado para escolher outra organização.
+ */
+export function singlePrincipalClientId(ids, requestedId, action = 'executar esta operação') {
+  if (!Array.isArray(ids) || ids.length === 0) {
+    throw httpError(403, 'Não existe uma organização ativa associada a este Cliente.');
+  }
+  if (ids.length !== 1) {
+    throw httpError(400, 'A conta Cliente não tem uma associação principal única.');
+  }
+
+  const clientId = Number(ids[0]);
+  if (!Number.isSafeInteger(clientId) || clientId < 1) {
+    throw httpError(403, 'A associação de organização do Cliente é inválida.');
+  }
+  if (requestedId !== undefined && requestedId !== clientId) {
+    throw httpError(403, `Sem permissão para ${action} nesta organização.`);
+  }
+  return clientId;
+}
+
 export async function assertClientAccess(auth, clientId) {
   if (auth.role === 'admin') return;
   const ids = await clientIdsForUser(auth.sub, { principalOnly: auth.role === 'client' });

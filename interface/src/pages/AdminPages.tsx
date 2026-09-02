@@ -14,7 +14,7 @@ import {
   mensagensContactoAdminApi, noticiasAdminApi,
   type ApiActivityLog, type ApiActivityLogsResponse, type ApiAtividadeGestor, type ApiDashboardAdmin, type ApiCliente, type ApiUtilizador,
   type ApiContactoCliente, type ApiConteudoSite, type ApiIncidente, type ApiDocumento, type ApiMensagemContacto,
-  type ApiNoticia, type PerfilCodigo, session,
+  type ApiNoticia, type PerfilCodigo,
 } from '../apiClient';
 import { Nis2AssessmentForm } from '../components/Nis2AssessmentForm';
 import { AssetsWorkspace, IncidentsWorkspace } from '../components/OperationalResources';
@@ -643,7 +643,7 @@ export function AdminUsers({ setPage, openManagerDetail }: PageProps) {
 }
 
 // ========== ADMIN CLIENTS ==========
-export function AdminClients({ setPage }: PageProps) {
+export function AdminClients({ setPage, openClientDetail }: PageProps & { openClientDetail: (clientId: number) => void }) {
   const [clients, setClients] = useState<ApiCliente[]>([]);
   const [managers, setManagers] = useState<ApiUtilizador[]>([]);
   const [loading, setLoading] = useState(true);
@@ -784,8 +784,7 @@ export function AdminClients({ setPage }: PageProps) {
           data={filtered}
           mobileCards
           onRowClick={(r) => {
-            (session as any).set({ ...session.get(), cliente: { id: r.id, nome: r.nome } });
-            setPage('admin-client-detail');
+            openClientDetail(r.id);
           }}
           columns={[
             { key: 'id', label: 'ID', width: '60px', render: (r) => <span className="font-mono text-xs text-slate-500">#{r.id}</span> },
