@@ -35,6 +35,33 @@ export interface ApiAtividadeGestor {
   criado_em: string | null;
 }
 
+export interface ApiActivityLogActor {
+  id: number;
+  nome: string;
+  email: string;
+}
+
+export interface ApiActivityLog {
+  id: number;
+  utilizador: ApiActivityLogActor | null;
+  acao: string;
+  entidade: string;
+  entidade_id: number | null;
+  detalhes: Record<string, unknown>;
+  criado_em: string;
+}
+
+export interface ApiActivityLogsResponse {
+  items: ApiActivityLog[];
+  pagination: {
+    limit: number;
+    offset: number;
+    total: number;
+    has_more: boolean;
+    next_offset: number | null;
+  };
+}
+
 export interface ApiCliente {
   id: number;
   nome: string;
@@ -982,6 +1009,48 @@ export async function utilizadoresApi(perfil?: string): Promise<ApiUtilizador[]>
   return Array.isArray(rows) ? rows as ApiUtilizador[] : [];
 }
 
+function requiredSafeInteger(value: unknown, field: string, minimum = 0): number {
+  const parsed = numericValue(value);
+  if (parsed === undefined || !Number.isSafeInteger(parsed) || parsed < minimum) {
+    throw new Error(`Resposta da API sem o inteiro obrigatório: ${field}.`);
+  }
+  return parsed;
+}
+
+function objectRecord(value: unknown): ApiRecord | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as ApiRecord : null;
+}
+
+function requiredLogInteger(value: unknown, field: string, minimum = 0): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum) {
+    throw new Error(`Resposta de logs inválida: ${field}.`);
+  }
+  return value;
+}
+
+const LOG_ISO_TIMESTAMP = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/;
+
+function requiredLogTimestamp(value: unknown): string {
+  if (typeof value !== 'string' || value.trim() === '') throw new Error('Resposta de logs inválida: criado_em.');
+  const match = LOG_ISO_TIMESTAMP.exec(value);
+  if (!match) throw new Error('Resposta de logs inválida: criado_em.');
+
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText, timezone] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const second = Number(secondText);
+  const offsetParts = timezone === 'Z' ? null : timezone.slice(1).split(':').map(Number);
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const invalidDate = year < 1 || month < 1 || month > 12 || day < 1 || day > daysInMonth
+    || hour > 23 || minute > 59 || second > 59
+    || (offsetParts !== null && (offsetParts[0] > 23 || offsetParts[1] > 59));
+  if (invalidDate || Number.isNaN(Date.parse(value))) throw new Error('Resposta de logs inválida: criado_em.');
+  return value;
+}
+
 function validUserId(userId: number): number {
   if (!Number.isSafeInteger(userId) || userId < 1) {
     throw new Error('Identificador de utilizador inválido.');
@@ -1292,8 +1361,53 @@ export async function avaliacoesApi(clienteId?: number): Promise<ApiAvaliacao[]>
   const result = await apiFetch<unknown>(`/api/avaliacoes/${qs}`);
   return Array.isArray(result) ? result.map(normaliseAvaliacao) : [];
 }
-export async function logsApi(limit = 200): Promise<any[]> {
-  return apiFetch<any[]>(`/api/logs/?limit=${limit}`);
+function normaliseActivityLog(value: unknown): ApiActivityLog {
+  const row = objectRecord(value);
+  if (!row) throw new Error('Resposta de logs inválida.');
+  const rawActor = row.utilizador;
+  const actorRecord = rawActor === null ? null : objectRecord(rawActor);
+  if (rawActor !== null && !actorRecord) throw new Error('Resposta de logs inválida.');
+  const detalhes = objectRecord(row.detalhes);
+  if (!detalhes) throw new Error('Resposta de logs inválida.');
+
+  return {
+    id: requiredLogInteger(row.id, 'log.id', 1),
+    utilizador: actorRecord ? {
+      id: requiredLogInteger(actorRecord.id, 'log.utilizador.id', 1),
+      nome: requiredString(actorRecord.nome, 'log.utilizador.nome'),
+      email: requiredString(actorRecord.email, 'log.utilizador.email'),
+    } : null,
+    acao: requiredString(row.acao, 'log.acao'),
+    entidade: requiredString(row.entidade, 'log.entidade'),
+    entidade_id: row.entidade_id === null ? null : requiredLogInteger(row.entidade_id, 'log.entidade_id', 1),
+    detalhes,
+    criado_em: requiredLogTimestamp(row.criado_em),
+  };
+}
+
+export function normaliseActivityLogsResponse(value: unknown): ApiActivityLogsResponse {
+  const response = objectRecord(value);
+  if (!response || !Array.isArray(response.items)) throw new Error('Resposta de logs inválida.');
+  const pagination = objectRecord(response.pagination);
+  if (!pagination || typeof pagination.has_more !== 'boolean') throw new Error('Resposta de logs inválida.');
+  const nextOffset = pagination.next_offset;
+  return {
+    items: response.items.map(normaliseActivityLog),
+    pagination: {
+      limit: requiredLogInteger(pagination.limit, 'logs.pagination.limit', 1),
+      offset: requiredLogInteger(pagination.offset, 'logs.pagination.offset'),
+      total: requiredLogInteger(pagination.total, 'logs.pagination.total'),
+      has_more: pagination.has_more,
+      next_offset: nextOffset === null ? null : requiredLogInteger(nextOffset, 'logs.pagination.next_offset'),
+    },
+  };
+}
+
+export async function logsApi(limit = 50, offset = 0, signal?: AbortSignal): Promise<ApiActivityLogsResponse> {
+  const safeLimit = Number.isSafeInteger(limit) && limit > 0 ? Math.min(limit, 100) : 50;
+  const safeOffset = Number.isSafeInteger(offset) && offset >= 0 ? offset : 0;
+  const result = await apiFetch<unknown>(`/api/logs?limit=${safeLimit}&offset=${safeOffset}`, { signal });
+  return normaliseActivityLogsResponse(result);
 }
 export async function opcoesApi(): Promise<any> {
   return apiFetch<any>('/api/opcoes/');

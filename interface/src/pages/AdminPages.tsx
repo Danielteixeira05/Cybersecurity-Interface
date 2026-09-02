@@ -12,7 +12,7 @@ import {
   atualizarUtilizadorApi, criarClienteApi, criarContactoClienteApi, criarUtilizadorApi,
   atualizarMensagemContactoAdminApi, atualizarNoticiaAdminApi, criarNoticiaAdminApi,
   mensagensContactoAdminApi, noticiasAdminApi,
-  type ApiAtividadeGestor, type ApiDashboardAdmin, type ApiCliente, type ApiUtilizador,
+  type ApiActivityLog, type ApiActivityLogsResponse, type ApiAtividadeGestor, type ApiDashboardAdmin, type ApiCliente, type ApiUtilizador,
   type ApiContactoCliente, type ApiConteudoSite, type ApiIncidente, type ApiDocumento, type ApiMensagemContacto,
   type ApiNoticia, type PerfilCodigo, session,
 } from '../apiClient';
@@ -834,50 +834,145 @@ export function AdminIncidents() {
 }
 
 // ========== ADMIN LOGS ==========
-export function AdminLogs() {
-  const [data, setData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
+const ACTIVITY_LOG_PAGE_SIZE = 50;
 
-  useEffect(() => {
-    logsApi(200)
-      .then(setData)
-      .catch((e) => setErr(e?.message || 'Erro'))
-      .finally(() => setLoading(false));
-  }, []);
+function activityLogColor(action: string) {
+  if (/(?:LOGIN|SUCESSO|CONCLUIR|RESOLVER)/i.test(action)) return 'text-emerald-400';
+  if (/(?:FALHA|ERRO|DESATIVAR|ELIMINAR)/i.test(action)) return 'text-rose-400';
+  if (/(?:CRIAR|EDITAR|ATUALIZAR|ASSOCIAR)/i.test(action)) return 'text-amber-400';
+  return 'text-sky-400';
+}
+
+function activityLogDetailLabel(key: string) {
+  return key.replace(/_/g, ' ');
+}
+
+function activityLogDetailValue(value: unknown): string {
+  if (value === null) return '—';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value) && value.every((item) => typeof item === 'string' || typeof item === 'number')) return value.join(', ');
+  return '—';
+}
+
+function ActivityLogDetails({ details }: { details: ApiActivityLog['detalhes'] }) {
+  const entries = Object.entries(details).filter(([, value]) => activityLogDetailValue(value) !== '—');
+  if (entries.length === 0) return <span className="text-slate-500">Sem detalhes adicionais.</span>;
+  return (
+    <dl className="mt-1 flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-slate-300">
+      {entries.map(([key, value]) => (
+        <div key={key} className="min-w-0 break-words gap-1 sm:flex">
+          <dt className="break-words text-slate-500">{activityLogDetailLabel(key)}:</dt>
+          <dd className="break-all">{activityLogDetailValue(value)}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+export function AdminLogs() {
+  const [offset, setOffset] = useState(0);
+  const { data, loading, err } = useActivityLogsPage(offset);
+
+  // Um resultado de uma página anterior nunca é mostrado durante a mudança.
+  const current = data?.pagination.offset === offset ? data : null;
+  const pagination = current?.pagination;
+  const itemCount = current?.items.length ?? 0;
+  const hasItems = itemCount > 0;
+  const from = hasItems && pagination ? pagination.offset + 1 : 0;
+  const to = hasItems && pagination ? Math.min(pagination.offset + itemCount, pagination.total) : 0;
+  const rangeLabel = !pagination || pagination.total === 0
+    ? '0 registos'
+    : hasItems
+      ? `${from}–${to} de ${pagination.total} registos`
+      : 'Nenhum registo nesta página';
+  const previousDisabled = loading || offset === 0;
+  const nextDisabled = loading || !pagination?.has_more || pagination.next_offset === null;
 
   return (
     <div>
       <PageHeader
         title="Logs de Auditoria"
-        subtitle="Registo completo de atividades da plataforma (últimos 200 eventos)"
+        subtitle="Registo real de atividades da plataforma, ordenado do mais recente para o mais antigo."
       />
-      {loading ? <Loader /> : err ? <ErrorCard msg={err} /> : (
+      {err ? <ErrorCard msg={err} /> : loading || !current ? <Loader text="A carregar logs de atividade..." /> : (
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-900 shadow-sm">
           <div className="max-h-[65vh] overflow-y-auto">
-            <pre className="p-5 text-[11px] leading-6 text-slate-200 font-mono">
-{data.map((l, i) => {
-  const time = l.criado_em ? new Date(l.criado_em).toLocaleString('pt-PT') : '';
-  const type = l.tipo || 'INFO';
-  const color = type.includes('LOGIN') || type.includes('SUCESSO') ? 'text-emerald-400' :
-    type.includes('FALHA') || type.includes('ERRO') ? 'text-rose-400' :
-    type.includes('CRIAR') || type.includes('EDITAR') || type.includes('ELIMINAR') ? 'text-amber-400' :
-    'text-sky-400';
-  return (
-    <div key={i} className="whitespace-pre-wrap break-words">
-      <span className="text-slate-500">[{time}]</span>{' '}
-      <span className={color}>[{type}]</span>{' '}
-      <span className="text-violet-400">({l.tabela || '-'})</span>{' '}
-      <span className="text-slate-100">{String(l.detalhes ? (typeof l.detalhes === 'string' ? l.detalhes : JSON.stringify(l.detalhes)) : l.mensagem || '').slice(0, 300)}</span>
-    </div>
-  );
-})}
-            </pre>
+            {current.items.length === 0 ? (
+              <div className="p-8 text-center text-sm text-slate-400">
+                {pagination?.total === 0 ? 'Ainda não existem eventos de atividade registados.' : 'Nenhum registo nesta página.'}
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-800">
+                {current.items.map((item) => (
+                  <ActivityLogRow key={item.id} item={item} />
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 bg-slate-950/40 px-5 py-3 text-sm text-slate-300">
+            <span>{rangeLabel}</span>
+            <div className="flex gap-2">
+              <button type="button" className="btn-secondary px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-50" disabled={previousDisabled} onClick={() => setOffset(Math.max(0, offset - (pagination?.limit ?? ACTIVITY_LOG_PAGE_SIZE)))}>Anterior</button>
+              <button type="button" className="btn-secondary px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-50" disabled={nextDisabled} onClick={() => pagination?.next_offset !== null && pagination?.next_offset !== undefined && setOffset(pagination.next_offset)}>Seguinte</button>
+            </div>
           </div>
         </div>
       )}
     </div>
   );
+}
+
+function activityLogTime(timestamp: string): string {
+  const parsed = Date.parse(timestamp);
+  return Number.isNaN(parsed) ? 'Data indisponível' : new Date(parsed).toLocaleString('pt-PT');
+}
+
+function ActivityLogRow({ item }: { item: ApiActivityLog }) {
+  const time = activityLogTime(item.criado_em);
+  return (
+    <article className="min-w-0 break-words p-5 text-sm text-slate-200">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs">
+        <span className="break-all text-slate-500">[{time}]</span>
+        <span className={`${activityLogColor(item.acao)} break-all`}>[{item.acao}]</span>
+        <span className="break-all text-violet-400">({item.entidade}{item.entidade_id === null ? '' : ` #${item.entidade_id}`})</span>
+      </div>
+      <div className="mt-2 break-all text-slate-100">
+        {item.utilizador ? `${item.utilizador.nome} · ${item.utilizador.email}` : 'Utilizador não disponível'}
+      </div>
+      <ActivityLogDetails details={item.detalhes} />
+    </article>
+  );
+}
+
+export function useActivityLogsPage(offset: number) {
+  const [data, setData] = useState<ApiActivityLogsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    setLoading(true);
+    setErr(null);
+    logsApi(ACTIVITY_LOG_PAGE_SIZE, offset, controller.signal)
+      .then((response) => {
+        if (active) setData(response);
+      })
+      .catch((error: unknown) => {
+        if (active && !controller.signal.aborted) {
+          setErr(error instanceof Error && error.message ? error.message : 'Não foi possível carregar os logs.');
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [offset]);
+
+  return { data, loading, err };
 }
 
 // ========== ADMIN SITE CONTENT & PERMISSIONS ==========

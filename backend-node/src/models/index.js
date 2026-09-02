@@ -360,6 +360,8 @@ export function getModels() {
   Client.belongsToMany(User, { through: UserClient, foreignKey: 'cliente_id', otherKey: 'utilizador_id', as: 'utilizadores' });
   UserClient.belongsTo(User, { foreignKey: 'utilizador_id', as: 'utilizador' });
   UserClient.belongsTo(Client, { foreignKey: 'cliente_id', as: 'cliente' });
+  User.hasMany(ActivityLog, { foreignKey: 'utilizador_id', as: 'logsAtividade' });
+  ActivityLog.belongsTo(User, { foreignKey: 'utilizador_id', as: 'utilizador' });
   Client.hasMany(ClientContact, { foreignKey: 'cliente_id', as: 'contactos' });
   ClientContact.belongsTo(Client, { foreignKey: 'cliente_id', as: 'cliente' });
   Client.hasMany(RiskAssessment, { foreignKey: 'cliente_id', as: 'avaliacoes' });
