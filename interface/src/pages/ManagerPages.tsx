@@ -628,7 +628,6 @@ export function MgrClientDetail({ setPage, backPage = 'mgr-clients', backLabel =
   const res = data.resumo || {};
   const assets: ApiAtivo[] = Array.isArray(data.ativos) ? data.ativos : [];
   const incidents: ApiIncidente[] = Array.isArray(data.incidentes) ? data.incidentes : [];
-  const documents: ApiDocumento[] = Array.isArray(data.documentos) ? data.documentos : [];
   const evaluations: ApiAvaliacao[] = Array.isArray(data.avaliacoes) ? data.avaliacoes : [];
   const requests: ApiPedido[] = Array.isArray(data.pedidos) ? data.pedidos : [];
   const latestEvaluation = [...evaluations].sort((a, b) => {
@@ -645,17 +644,6 @@ export function MgrClientDetail({ setPage, backPage = 'mgr-clients', backLabel =
     if (typeof window !== 'undefined') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${tab}`);
   };
   const tabEmpty = (title: string, description: string) => <section className="mgr-client-detail-v98__empty"><FolderOpen aria-hidden="true" /><h3>{title}</h3><p>{description}</p></section>;
-
-  const renderDocuments = (items: ApiDocumento[], emptyText: string) => <DataTable
-    data={items}
-    emptyText={emptyText}
-    columns={[
-      { key: 'titulo', label: 'Documento', render: (item) => <div><strong className="font-medium text-slate-900">{item.titulo}</strong><div className="mt-1 text-xs text-slate-500">{item.cliente_nome || c.nome}</div></div> },
-      { key: 'tipo', label: 'Tipo', render: (item) => <span className="badge bg-blue-50 text-blue-700">{item.tipo || item.categoria || '—'}</span> },
-      { key: 'formato', label: 'Formato', render: (item) => <span className="font-mono text-xs text-slate-600">{item.formato || item.tipo_mime || '—'}</span> },
-      { key: 'submetido_em', label: 'Data', render: (item) => formatDate(item.submetido_em) },
-    ]}
-  />;
 
   return (
     <div className="mgr-visual-page mgr-client-detail-v98">
@@ -691,10 +679,10 @@ export function MgrClientDetail({ setPage, backPage = 'mgr-clients', backLabel =
       </section>}
       {detailTab === 'assets' && <AssetsWorkspace role={role} clientId={cid} compact title="Ativos Tecnológicos" subtitle="Inventário associado a este cliente" onChanged={() => void refreshDetail()} />}
       {detailTab === 'incidents' && <IncidentsWorkspace role={role} clientId={cid} compact title="Incidentes de Segurança" subtitle="Incidentes associados a este cliente" onChanged={() => void refreshDetail()} />}
-      {detailTab === 'documents' && <section className="mgr-client-detail-v98__panel"><h2>Documentos</h2>{renderDocuments(documents, 'Sem documentos disponíveis para este cliente.')}</section>}
-      {detailTab === 'reports' && <section className="mgr-client-detail-v98__panel"><h2>Relatórios</h2>{renderDocuments(documents.filter((document) => `${document.tipo || ''} ${document.categoria || ''}`.toLowerCase().includes('relat')), 'Sem relatórios disponíveis para este cliente.')}</section>}
-      {detailTab === 'pentests' && <section className="mgr-client-detail-v98__panel"><h2>Testes de penetração</h2>{renderDocuments(documents.filter((document) => `${document.tipo || ''} ${document.categoria || ''}`.toLowerCase().includes('pentest')), 'Sem documentos de PenTest disponíveis para este cliente.')}</section>}
-      {detailTab === 'evidence' && <section className="mgr-client-detail-v98__panel"><h2>Evidências</h2>{renderDocuments(documents.filter((document) => `${document.tipo || ''} ${document.categoria || ''}`.toLowerCase().includes('evid')), 'Sem evidências disponíveis para este cliente.')}</section>}
+      {detailTab === 'documents' && <section className="mgr-client-detail-v98__panel"><h2>Documentos</h2><DocumentsWorkspace role={role} clientId={cid} compact emptyTitle="Sem documentos disponíveis para este cliente." emptyDescription="Os documentos privados autorizados deste cliente aparecerão aqui." /></section>}
+      {detailTab === 'reports' && <section className="mgr-client-detail-v98__panel"><h2>Relatórios</h2><DocumentsWorkspace role={role} clientId={cid} compact categoryScope={['RELATORIO', 'RELATORIO_CNCS']} emptyTitle="Sem relatórios disponíveis para este cliente." emptyDescription="Os relatórios privados deste cliente aparecerão aqui depois de submetidos." /></section>}
+      {detailTab === 'pentests' && <section className="mgr-client-detail-v98__panel"><h2>Testes de penetração</h2><DocumentsWorkspace role={role} clientId={cid} compact categoryScope={['PENTEST']} emptyTitle="Sem documentos de PenTest disponíveis para este cliente." emptyDescription="Os PenTests privados deste cliente aparecerão aqui depois de submetidos." /></section>}
+      {detailTab === 'evidence' && <section className="mgr-client-detail-v98__panel"><h2>Evidências</h2><DocumentsWorkspace role={role} clientId={cid} compact categoryScope={['EVIDENCIA']} emptyTitle="Sem evidências disponíveis para este cliente." emptyDescription="As evidências privadas deste cliente aparecerão aqui depois de submetidas." /></section>}
       {detailTab === 'requests' && <section className="mgr-client-detail-v98__panel"><h2>Pedidos</h2><DataTable data={requests} emptyText="Sem pedidos submetidos por este cliente." columns={[{ key: 'assunto', label: 'Assunto', render: (item) => item.assunto }, { key: 'estado_nome', label: 'Estado', render: (item) => item.estado_nome || item.estado_codigo || '—' }, { key: 'prioridade', label: 'Prioridade', render: (item) => item.prioridade || '—' }, { key: 'criado_em', label: 'Data', render: (item) => formatDate(item.criado_em) }]} /></section>}
       {detailTab === 'communication' && tabEmpty('Comunicação', 'A comunicação segura para este cliente ainda não está disponível na API atual.')}
     </div>

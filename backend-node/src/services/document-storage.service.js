@@ -18,6 +18,11 @@ export const ALLOWED_DOCUMENT_TYPES = Object.freeze({
   jpeg: { mime: 'image/jpeg', label: 'JPEG' },
 });
 
+// Os PenTests são entregues como documentação técnica. Imagens continuam
+// permitidas noutras categorias documentais, mas não são um formato de
+// submissão Pentest para evitar que a página específica alargue o seu âmbito.
+export const PENTEST_DOCUMENT_EXTENSIONS = Object.freeze(['pdf', 'docx', 'xlsx', 'csv']);
+
 function text(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
@@ -28,7 +33,10 @@ function extensionFromName(name) {
 }
 
 function safeOriginalName(value) {
-  const name = text(value).replace(/[\\/\0]/g, '_');
+  // A mesma versão saneada é usada no armazenamento e no Content-Disposition.
+  // Isto elimina separadores de caminho e quebras de linha antes de o nome ser
+  // persistido, não apenas no momento do download.
+  const name = text(value).replace(/[\\/\r\n\0]/g, '_');
   if (!name || name.length > 255) throw httpError(400, 'Nome de ficheiro inválido.');
   return name;
 }
@@ -43,12 +51,15 @@ function isSafeCsv(buffer) {
   }
 }
 
-export async function validateDocumentFile(file, maximumBytes) {
+export async function validateDocumentFile(file, maximumBytes, { allowedExtensions = null } = {}) {
   if (!file?.buffer || !Buffer.isBuffer(file.buffer)) throw httpError(400, 'É obrigatório selecionar um ficheiro.');
   const originalName = safeOriginalName(file.originalname);
   const extension = extensionFromName(originalName);
   const allowed = ALLOWED_DOCUMENT_TYPES[extension];
   if (!allowed) throw httpError(422, 'Formato de ficheiro não permitido.');
+  if (Array.isArray(allowedExtensions) && !allowedExtensions.includes(extension)) {
+    throw httpError(422, 'Formato de ficheiro não permitido para esta categoria documental.');
+  }
   if (file.size < 1) throw httpError(422, 'O ficheiro não pode estar vazio.');
   if (file.size > maximumBytes) throw httpError(413, 'O ficheiro excede o limite máximo permitido.');
 

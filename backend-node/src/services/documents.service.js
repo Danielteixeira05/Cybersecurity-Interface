@@ -7,7 +7,12 @@ import { assertClientAccess, clientIdsForUser } from './clients.service.js';
 import { recordAudit } from './audit-log.service.js';
 import { createDocumentNotifications } from './notifications.service.js';
 import { emitDocumentChanged, emitNotification } from '../socket/events.js';
-import { ALLOWED_DOCUMENT_TYPES, createVercelBlobStorage, validateDocumentFile } from './document-storage.service.js';
+import {
+  ALLOWED_DOCUMENT_TYPES,
+  createVercelBlobStorage,
+  PENTEST_DOCUMENT_EXTENSIONS,
+  validateDocumentFile,
+} from './document-storage.service.js';
 import { readDocumentUploadLimit } from './document-upload-config.service.js';
 
 export const DOCUMENT_CATEGORIES = Object.freeze([
@@ -17,6 +22,10 @@ export const DOCUMENT_CATEGORIES = Object.freeze([
   'DOCUMENTACAO', 'RELATORIO', 'EVIDENCIA',
 ]);
 export const DOCUMENT_STATES = Object.freeze(['SUBMETIDO', 'EM_ANALISE', 'APROVADO', 'REJEITADO', 'REQUER_ALTERACOES']);
+export const DOCUMENT_REVIEW_TRANSITIONS = Object.freeze({
+  SUBMETIDO: Object.freeze(['EM_ANALISE']),
+  EM_ANALISE: Object.freeze(['APROVADO', 'REJEITADO', 'REQUER_ALTERACOES']),
+});
 
 const CATEGORY_SET = new Set(DOCUMENT_CATEGORIES);
 const STATE_SET = new Set(DOCUMENT_STATES);
@@ -24,6 +33,21 @@ const UPLOAD_WINDOW_MS = 5 * 60 * 1000;
 const UPLOAD_LIMIT_PER_WINDOW = 5;
 const uploadAttempts = new Map();
 let testStorage = null;
+
+/** Permite anotações sem alteração de estado e apenas as transições do workflow. */
+export function isDocumentReviewTransitionAllowed(currentState, requestedState) {
+  if (currentState === requestedState) return true;
+  return DOCUMENT_REVIEW_TRANSITIONS[currentState]?.includes(requestedState) ?? false;
+}
+
+/** Mantém invariantes de organização e categoria em todas as versões. */
+export function documentVersionSubmissionInput(input, previousDocument) {
+  return {
+    ...input,
+    cliente_id: Number(previousDocument.cliente_id),
+    categoria: previousDocument.categoria,
+  };
+}
 
 function asNumber(value) {
   const number = Number(value);
@@ -240,7 +264,9 @@ async function createSubmission(auth, input, file, previousDocument = null) {
   const clientId = await submissionClientId(auth, input);
   const maximumBytes = await effectiveUploadLimitBytes();
   const fields = documentFields(input);
-  const validatedFile = await validateDocumentFile(file, maximumBytes);
+  const validatedFile = await validateDocumentFile(file, maximumBytes, {
+    allowedExtensions: fields.categoria === 'PENTEST' ? PENTEST_DOCUMENT_EXTENSIONS : null,
+  });
   reserveUploadAttempt(auth.sub);
   const objectKey = `documents/${clientId}/${randomUUID()}/${validatedFile.storageName}`;
   let uploaded = false;
@@ -303,7 +329,9 @@ export async function submitDocumentVersion(auth, documentId, input, file) {
   if (auth.role !== 'client' || Number(previous.submetido_por) !== Number(auth.sub) || previous.estado !== 'REQUER_ALTERACOES') {
     throw httpError(403, 'Só o autor pode submeter nova versão quando foram pedidas alterações.');
   }
-  return createSubmission(auth, { ...input, cliente_id: Number(previous.cliente_id) }, file, previous);
+  // Uma versão pertence sempre ao mesmo documento e categoria. O browser nunca
+  // pode transformar a revisão de um Pentest noutro tipo de documento.
+  return createSubmission(auth, documentVersionSubmissionInput(input, previous), file, previous);
 }
 
 export async function reviewDocument(auth, documentId, input) {
@@ -312,6 +340,9 @@ export async function reviewDocument(auth, documentId, input) {
   const initial = await findAuthorizedDocument(auth, documentId);
   const requestedState = input.estado === undefined ? initial.estado : cleanText(input.estado, 30, { required: true }).toUpperCase();
   if (!STATE_SET.has(requestedState)) throw httpError(400, 'Estado documental inválido.');
+  if (!isDocumentReviewTransitionAllowed(initial.estado, requestedState)) {
+    throw httpError(409, 'Transição de estado documental inválida.');
+  }
   const observation = cleanText(input.observacao, 6000) || null;
   if (requestedState === initial.estado && !observation) throw httpError(400, 'Indique uma observação ou altere o estado do documento.');
 
@@ -323,6 +354,11 @@ export async function reviewDocument(auth, documentId, input) {
     if (!document || !document.ativo) throw httpError(404, 'Documento não encontrado.');
     await assertClientAccess(auth, document.cliente_id);
     const previousState = document.estado;
+    // Revalidar sob lock impede uma transição obsoleta quando duas revisões
+    // chegam em simultâneo.
+    if (!isDocumentReviewTransitionAllowed(previousState, requestedState)) {
+      throw httpError(409, 'Transição de estado documental inválida.');
+    }
     await document.update({ estado: requestedState, revisto_por: Number(auth.sub), revisto_em: new Date(), atualizado_em: new Date() }, { transaction });
     await DocumentReview.create({
       documento_id: document.id, estado_anterior: previousState, estado_novo: requestedState,

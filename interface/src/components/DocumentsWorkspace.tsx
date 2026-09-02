@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { AlertCircle, Download, Eye, FilePlus2, FileText, History, LoaderCircle, RefreshCw, Search, Settings2, ShieldCheck, Upload, X } from 'lucide-react';
 import {
   configuracaoDocumentosApi,
@@ -66,6 +66,22 @@ function errorMessage(error: unknown, fallback = 'Não foi possível concluir a 
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
+function requestWasCancelled(error: unknown, signal?: AbortSignal) {
+  if (signal?.aborted) return true;
+  const candidate = error as { code?: string; name?: string } | null;
+  return candidate?.code === 'ERR_CANCELED' || candidate?.name === 'CanceledError' || candidate?.name === 'AbortError';
+}
+
+function reviewStateOptions(currentState: string | null | undefined, configuredStates: string[]) {
+  const transitions: Record<string, string[]> = {
+    SUBMETIDO: ['EM_ANALISE'],
+    EM_ANALISE: ['APROVADO', 'REJEITADO', 'REQUER_ALTERACOES'],
+  };
+  const current = currentState || 'SUBMETIDO';
+  const allowed = new Set([current, ...(transitions[current] || [])]);
+  return configuredStates.filter((state) => allowed.has(state));
+}
+
 function saveDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
@@ -88,11 +104,12 @@ function EmptyState({ role, title, description }: { role: DocumentRole; title?: 
 }
 
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
+  const titleId = useId();
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/45 p-4 sm:items-center" role="presentation" onMouseDown={onClose}>
-      <section className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="documents-modal-title" onMouseDown={(event) => event.stopPropagation()}>
+      <section className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby={titleId} onMouseDown={(event) => event.stopPropagation()}>
         <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
-          <h2 id="documents-modal-title" className="text-lg font-bold text-slate-900">{title}</h2>
+          <h2 id={titleId} className="text-lg font-bold text-slate-900">{title}</h2>
           <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900" aria-label="Fechar"><X size={19} /></button>
         </header>
         <div className="p-5">{children}</div>
@@ -116,35 +133,60 @@ export function DocumentsWorkspace({ role, title, subtitle, clientId, compact = 
   const [actionError, setActionError] = useState<string | null>(null);
   const [uploadLimitDraft, setUploadLimitDraft] = useState('');
   const [savingUploadLimit, setSavingUploadLimit] = useState(false);
+  const reloadRequest = useRef(0);
+  const reloadController = useRef<AbortController | null>(null);
+  const detailRequest = useRef(0);
+  const detailController = useRef<AbortController | null>(null);
 
   const scopedCategories = useMemo(() => Array.from(new Set(
     (categoryScope ?? []).map((category) => category.trim().toUpperCase()).filter(Boolean),
   )), [categoryScope]);
+  const filtersForCurrentClient = useMemo(() => (
+    clientId ? { ...filters, cliente_id: clientId } : filters
+  ), [clientId, filters]);
   const requestFilters = useMemo(() => (
-    scopedCategories.length === 1 ? { ...filters, categoria: scopedCategories[0] } : filters
-  ), [filters, scopedCategories]);
+    scopedCategories.length === 1 ? { ...filtersForCurrentClient, categoria: scopedCategories[0] } : filtersForCurrentClient
+  ), [filtersForCurrentClient, scopedCategories]);
 
   const pageTitle = title || (role === 'admin' ? 'Documentos da Plataforma' : role === 'manager' ? 'Documentos dos Clientes' : 'Os Meus Documentos');
   const pageSubtitle = subtitle || (role === 'client' ? 'Documentos privados associados à sua organização.' : 'Documentos das organizações a que tem acesso.');
 
   const reload = useCallback(async () => {
+    reloadController.current?.abort();
+    const controller = new AbortController();
+    reloadController.current = controller;
+    const request = ++reloadRequest.current;
     setLoading(true);
     setError(null);
+    // Os dados anteriores pertencem à combinação anterior de cliente e
+    // filtros. Limpá-los antes do pedido impede qualquer fuga visual.
+    setDocuments([]);
+    setSelected(null);
     try {
-      const tasks: [Promise<ApiDocumento[]>, Promise<ApiConfiguracaoDocumentos>, Promise<ApiCliente[]>?] = [documentosApi(requestFilters), configuracaoDocumentosApi()];
+      const tasks: [Promise<ApiDocumento[]>, Promise<ApiConfiguracaoDocumentos>, Promise<ApiCliente[]>?] = [
+        documentosApi(requestFilters, controller.signal),
+        configuracaoDocumentosApi(controller.signal),
+      ];
       if (role !== 'client' && !clientId) tasks[2] = clientesApi();
       const [rows, nextConfig, availableClients] = await Promise.all(tasks);
+      if (reloadRequest.current !== request || controller.signal.aborted) return;
       setDocuments(rows);
       setConfig(nextConfig);
       if (availableClients) setClients(availableClients);
     } catch (cause) {
-      setError(errorMessage(cause, 'Não foi possível carregar os documentos.'));
+      if (reloadRequest.current === request && !requestWasCancelled(cause, controller.signal)) {
+        setError(errorMessage(cause, 'Não foi possível carregar os documentos.'));
+      }
     } finally {
-      setLoading(false);
+      if (reloadRequest.current === request && !controller.signal.aborted) setLoading(false);
     }
   }, [clientId, requestFilters, role]);
 
-  useEffect(() => { void reload(); }, [reload]);
+  useEffect(() => {
+    void reload();
+    return () => reloadController.current?.abort();
+  }, [reload]);
+  useEffect(() => () => detailController.current?.abort(), []);
   useEffect(() => {
     setUploadLimitDraft(String(config.configured_upload_mb ?? config.max_upload_mb));
   }, [config.configured_upload_mb, config.max_upload_mb]);
@@ -171,14 +213,22 @@ export function DocumentsWorkspace({ role, title, subtitle, clientId, compact = 
   };
 
   const openDetail = async (document: ApiDocumento) => {
+    detailController.current?.abort();
+    const controller = new AbortController();
+    detailController.current = controller;
+    const request = ++detailRequest.current;
     setBusy(true);
     setActionError(null);
+    setSelected(null);
     try {
-      setSelected(await documentoDetalheApi(document.id));
+      const detail = await documentoDetalheApi(document.id, controller.signal);
+      if (detailRequest.current === request && !controller.signal.aborted) setSelected(detail);
     } catch (cause) {
-      setActionError(errorMessage(cause, 'Não foi possível abrir o documento.'));
+      if (detailRequest.current === request && !requestWasCancelled(cause, controller.signal)) {
+        setActionError(errorMessage(cause, 'Não foi possível abrir o documento.'));
+      }
     } finally {
-      setBusy(false);
+      if (detailRequest.current === request && !controller.signal.aborted) setBusy(false);
     }
   };
 
@@ -272,7 +322,7 @@ export function DocumentsWorkspace({ role, title, subtitle, clientId, compact = 
 
       {selected && <DocumentDetailModal document={selected} role={role} busy={busy} onClose={() => setSelected(null)} onDownload={() => void download(selected)} onReview={() => setReviewTarget(selected)} onNewVersion={() => setUploadTarget(selected)} onDeactivate={() => void deactivate(selected)} />}
       {uploadTarget && <UploadModal role={role} clients={visibleClients} config={{ ...config, categorias: categories }} versionOf={uploadTarget === 'new' ? null : uploadTarget} onClose={() => setUploadTarget(null)} onSuccess={onUploaded} setActionError={setActionError} />}
-      {reviewTarget && <ReviewModal document={reviewTarget} states={config.estados} onClose={() => setReviewTarget(null)} onSuccess={onReviewed} setActionError={setActionError} />}
+      {reviewTarget && <ReviewModal document={reviewTarget} states={reviewStateOptions(reviewTarget.estado, config.estados)} onClose={() => setReviewTarget(null)} onSuccess={onReviewed} setActionError={setActionError} />}
     </div>
   );
 }
@@ -283,8 +333,9 @@ function DocumentDetailModal({ document, role, busy, onClose, onDownload, onRevi
   return <Modal title={document.titulo} onClose={onClose}>
     <div className="space-y-5"><div className="flex flex-wrap gap-2"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${stateClass(document.estado)}`}>{labelFor(document.estado)}</span><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">Versão {document.versao || '1.0'}</span><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{labelFor(document.categoria)}</span></div>
     <dl className="grid gap-x-5 gap-y-3 text-sm sm:grid-cols-2"><div><dt className="text-slate-500">Organização</dt><dd className="font-medium text-slate-900">{document.cliente_nome || '—'}</dd></div><div><dt className="text-slate-500">Ficheiro</dt><dd className="break-all font-medium text-slate-900">{document.nome_ficheiro_original || '—'}</dd></div><div><dt className="text-slate-500">Submetido</dt><dd className="font-medium text-slate-900">{formatDate(document.submetido_em)}</dd></div><div><dt className="text-slate-500">Tamanho</dt><dd className="font-medium text-slate-900">{formatBytes(document.tamanho_bytes)}</dd></div></dl>
-    {document.descricao && <section><h3 className="font-semibold text-slate-900">Descrição</h3><p className="mt-1 whitespace-pre-wrap text-sm text-slate-600">{document.descricao}</p></section>}
-    <section><h3 className="flex items-center gap-2 font-semibold text-slate-900"><History size={17} />Histórico</h3>{document.historico?.length ? <ol className="mt-3 space-y-3 border-l border-slate-200 pl-4">{document.historico.map((review) => <li key={review.id} className="relative text-sm"><span className="absolute -left-[1.35rem] top-1.5 h-2 w-2 rounded-full bg-blue-500" /><strong className="text-slate-800">{labelFor(review.estado_novo)}</strong><span className="text-slate-500"> · {formatDate(review.criado_em)}{review.autor?.nome ? ` · ${review.autor.nome}` : ''}</span>{review.observacao && <p className="mt-1 text-slate-600">{review.observacao}</p>}</li>)}</ol> : <p className="mt-2 text-sm text-slate-500">Sem entradas de histórico.</p>}</section>
+    {document.descricao && <section><h3 className="font-semibold text-slate-900">Descrição</h3><p className="mt-1 break-words whitespace-pre-wrap text-sm text-slate-600">{document.descricao}</p></section>}
+    <section><h3 className="flex items-center gap-2 font-semibold text-slate-900"><History size={17} />Histórico</h3>{document.historico?.length ? <ol className="mt-3 space-y-3 border-l border-slate-200 pl-4">{document.historico.map((review) => <li key={review.id} className="relative text-sm"><span className="absolute -left-[1.35rem] top-1.5 h-2 w-2 rounded-full bg-blue-500" /><strong className="text-slate-800">{labelFor(review.estado_novo)}</strong><span className="text-slate-500"> · {formatDate(review.criado_em)}{review.autor?.nome ? ` · ${review.autor.nome}` : ''}</span>{review.observacao && <p className="mt-1 break-words text-slate-600">{review.observacao}</p>}</li>)}</ol> : <p className="mt-2 text-sm text-slate-500">Sem entradas de histórico.</p>}</section>
+    <section><h3 className="font-semibold text-slate-900">Versões</h3>{document.versoes?.length ? <ol className="mt-2 space-y-2 text-sm text-slate-600">{document.versoes.map((version) => <li key={version.id} className="flex flex-wrap justify-between gap-x-3 rounded-lg bg-slate-50 px-3 py-2"><span className="min-w-0 break-words"><strong className="text-slate-800">v{version.versao || '1.0'}</strong>{version.nome_ficheiro_original ? ` · ${version.nome_ficheiro_original}` : ''}</span><span>{labelFor(version.estado)}</span></li>)}</ol> : <p className="mt-2 text-sm text-slate-500">Sem versões relacionadas.</p>}</section>
     <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4"><button type="button" onClick={onDownload} disabled={busy} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold hover:bg-slate-50"><Download size={16} />Download</button>{(role === 'admin' || role === 'manager') && <button type="button" onClick={onReview} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700"><ShieldCheck size={16} />Rever</button>}{clientCanVersion && <button type="button" onClick={onNewVersion} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700"><Upload size={16} />Nova versão</button>}{(role === 'admin' || clientCanDeactivate) && <button type="button" onClick={onDeactivate} disabled={busy} className="rounded-lg border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50">Desativar</button>}</div></div>
   </Modal>;
 }
@@ -297,12 +348,14 @@ function UploadModal({ role, clients, config, versionOf, onClose, onSuccess, set
   const [clientId, setClientId] = useState(versionOf?.cliente_id ? String(versionOf.cliente_id) : '');
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const categoryIsFixed = config.categorias.length === 1;
+  const pentestOnly = categoryIsFixed && config.categorias[0] === 'PENTEST';
   const submit = async (event: FormEvent) => { event.preventDefault(); if (!file) { setActionError('Selecione um ficheiro antes de submeter.'); return; } if (role !== 'client' && !versionOf && !clientId) { setActionError('Selecione a organização a que o documento pertence.'); return; } setSubmitting(true); setActionError(null); try { const payload = { cliente_id: clientId ? Number(clientId) : undefined, titulo: title, categoria: category, descricao: description, data_documento: documentDate, file }; if (versionOf) await submeterVersaoDocumentoApi(versionOf.id, payload); else await submeterDocumentoApi(payload); await onSuccess(); } catch (cause) { setActionError(errorMessage(cause)); } finally { setSubmitting(false); } };
-  return <Modal title={versionOf ? 'Submeter nova versão' : 'Submeter documento'} onClose={onClose}><form onSubmit={submit} className="space-y-4"><p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">Ficheiro privado. Limite atual: {config.max_upload_mb} MB.</p>{role !== 'client' && !versionOf && <label className="block text-sm font-semibold text-slate-700">Organização<select required value={clientId} onChange={(event) => setClientId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal"><option value="">Selecionar organização</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.nome}{client.nif ? ` — NIF ${client.nif}` : ''}</option>)}</select></label>}<label className="block text-sm font-semibold text-slate-700">Título<input required value={title} onChange={(event) => setTitle(event.target.value)} maxLength={180} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal" /></label><label className="block text-sm font-semibold text-slate-700">Categoria<select value={category} onChange={(event) => setCategory(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal">{config.categorias.map((item) => <option key={item} value={item}>{labelFor(item)}</option>)}</select></label><label className="block text-sm font-semibold text-slate-700">Data do documento<input type="date" value={documentDate} onChange={(event) => setDocumentDate(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal" /></label><label className="block text-sm font-semibold text-slate-700">Descrição<textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={6000} rows={3} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal" /></label><label className="block text-sm font-semibold text-slate-700">Ficheiro<input required type="file" accept=".pdf,.docx,.xlsx,.csv,.png,.jpg,.jpeg" onChange={(event) => setFile(event.target.files?.[0] || null)} className="mt-1 block w-full text-sm font-normal" /></label><div className="flex justify-end gap-2 border-t border-slate-200 pt-4"><button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold">Cancelar</button><button disabled={submitting} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"><Upload size={16} />{submitting ? 'A submeter…' : 'Submeter'}</button></div></form></Modal>;
+  return <Modal title={versionOf ? 'Submeter nova versão' : 'Submeter documento'} onClose={onClose}><form onSubmit={submit} className="space-y-4"><p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">Ficheiro privado. Limite atual: {config.max_upload_mb} MB.</p>{role !== 'client' && !versionOf && <label className="block text-sm font-semibold text-slate-700">Organização<select required value={clientId} onChange={(event) => setClientId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal"><option value="">Selecionar organização</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.nome}{client.nif ? ` — NIF ${client.nif}` : ''}</option>)}</select></label>}<label className="block text-sm font-semibold text-slate-700">Título<input required value={title} onChange={(event) => setTitle(event.target.value)} maxLength={180} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal" /></label>{categoryIsFixed ? <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700"><strong>Categoria:</strong> {labelFor(category)}</p> : <label className="block text-sm font-semibold text-slate-700">Categoria<select value={category} onChange={(event) => setCategory(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal">{config.categorias.map((item) => <option key={item} value={item}>{labelFor(item)}</option>)}</select></label>}<label className="block text-sm font-semibold text-slate-700">Data do documento<input type="date" value={documentDate} onChange={(event) => setDocumentDate(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal" /></label><label className="block text-sm font-semibold text-slate-700">Descrição<textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={6000} rows={3} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal" /></label><label className="block text-sm font-semibold text-slate-700">Ficheiro<input required type="file" accept={pentestOnly ? '.pdf,.docx,.xlsx,.csv' : '.pdf,.docx,.xlsx,.csv,.png,.jpg,.jpeg'} onChange={(event) => setFile(event.target.files?.[0] || null)} className="mt-1 block w-full text-sm font-normal" /></label><div className="flex justify-end gap-2 border-t border-slate-200 pt-4"><button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold">Cancelar</button><button disabled={submitting} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"><Upload size={16} />{submitting ? 'A submeter…' : 'Submeter'}</button></div></form></Modal>;
 }
 
 function ReviewModal({ document, states, onClose, onSuccess, setActionError }: { document: ApiDocumento; states: string[]; onClose: () => void; onSuccess: () => Promise<void>; setActionError: (value: string | null) => void }) {
-  const [state, setState] = useState(document.estado || 'EM_ANALISE'); const [note, setNote] = useState(''); const [submitting, setSubmitting] = useState(false);
+  const [state, setState] = useState(states.find((item) => item !== document.estado) || document.estado || 'EM_ANALISE'); const [note, setNote] = useState(''); const [submitting, setSubmitting] = useState(false);
   const submit = async (event: FormEvent) => { event.preventDefault(); setSubmitting(true); setActionError(null); try { await reverDocumentoApi(document.id, { estado: state, observacao: note }); await onSuccess(); } catch (cause) { setActionError(errorMessage(cause)); } finally { setSubmitting(false); } };
   return <Modal title="Rever documento" onClose={onClose}><form onSubmit={submit} className="space-y-4"><p className="text-sm text-slate-600">{document.titulo}</p><label className="block text-sm font-semibold text-slate-700">Estado<select value={state} onChange={(event) => setState(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal">{states.map((item) => <option key={item} value={item}>{labelFor(item)}</option>)}</select></label><label className="block text-sm font-semibold text-slate-700">Observação<textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={6000} rows={5} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal" /></label><div className="flex justify-end gap-2 border-t border-slate-200 pt-4"><button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold">Cancelar</button><button disabled={submitting} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">Guardar revisão</button></div></form></Modal>;
 }

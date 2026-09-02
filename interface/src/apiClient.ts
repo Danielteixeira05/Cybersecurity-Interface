@@ -1241,19 +1241,19 @@ export async function marcarConversaLidaApi(conversaId: number): Promise<{ conve
   await ensureCsrfToken();
   return apiFetch(`/api/conversations/${conversaId}/read`, { method: 'PATCH', body: JSON.stringify({}) });
 }
-export async function documentosApi(filters: FiltrosDocumentos | number = {}): Promise<ApiDocumento[]> {
+export async function documentosApi(filters: FiltrosDocumentos | number = {}, signal?: AbortSignal): Promise<ApiDocumento[]> {
   const resolvedFilters: FiltrosDocumentos = typeof filters === 'number' ? { cliente_id: filters } : filters;
   const search = new URLSearchParams();
   Object.entries(resolvedFilters).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== '') search.set(key, String(value));
   });
   const qs = search.toString() ? `?${search.toString()}` : '';
-  const result = await apiFetch<unknown>(`/api/documents/${qs}`);
+  const result = await apiFetch<unknown>(`/api/documents/${qs}`, { signal });
   return Array.isArray(result) ? result.map(normaliseDocumento) : [];
 }
 
-export async function documentoDetalheApi(documentId: number): Promise<ApiDocumentoDetalhe> {
-  const raw = await apiFetch<Record<string, unknown>>(`/api/documents/${documentId}`);
+export async function documentoDetalheApi(documentId: number, signal?: AbortSignal): Promise<ApiDocumentoDetalhe> {
+  const raw = await apiFetch<Record<string, unknown>>(`/api/documents/${documentId}`, { signal });
   const document = normaliseDocumento(raw.documento);
   const history = Array.isArray(raw.historico) ? raw.historico.map((entry) => {
     const review = asRecord(entry);
@@ -1271,8 +1271,8 @@ export async function documentoDetalheApi(documentId: number): Promise<ApiDocume
   return { ...document, historico: history, versoes: versions };
 }
 
-export async function configuracaoDocumentosApi(): Promise<ApiConfiguracaoDocumentos> {
-  const raw = await apiFetch<Record<string, unknown>>('/api/documents/config');
+export async function configuracaoDocumentosApi(signal?: AbortSignal): Promise<ApiConfiguracaoDocumentos> {
+  const raw = await apiFetch<Record<string, unknown>>('/api/documents/config', { signal });
   return {
     max_upload_mb: requiredNumber(raw.max_upload_mb, 'documentos.max_upload_mb'),
     configured_upload_mb: typeof raw.configured_upload_mb === 'number' && Number.isSafeInteger(raw.configured_upload_mb) ? raw.configured_upload_mb : null,
