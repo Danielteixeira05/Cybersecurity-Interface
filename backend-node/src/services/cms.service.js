@@ -1,14 +1,100 @@
+import { Op } from 'sequelize';
 import { getModels } from '../models/index.js';
 import { httpError } from '../middleware/errors.js';
 import { recordAudit } from './audit-log.service.js';
 
 const CONTACT_STATES = new Set(['NOVA', 'EM_ANALISE', 'RESPONDIDA', 'ARQUIVADA']);
 
+// The database table is intentionally shared, but its keys are not free-form.
+// This registry is the public-content contract: it keeps legacy unknown rows
+// out of the public site while retaining them untouched in PostgreSQL.
+export const SITE_CONTENT_DEFINITIONS = Object.freeze({
+  'homepage.hero': { page: 'homepage', repeatable: false },
+  servicos_cabecalho: { page: 'services', repeatable: false },
+  'servicos.proof.cncs': { page: 'services', repeatable: false },
+  'servicos.proof.sla-24-7': { page: 'services', repeatable: false },
+  'servicos.proof.dados-ue': { page: 'services', repeatable: false },
+  'servicos.proof.gestor-dedicado': { page: 'services', repeatable: false },
+  servicos_catalogo: { page: 'services', repeatable: false },
+  'servicos.card.pentesting': { page: 'services', repeatable: false },
+  'servicos.card.incidentes-nis2': { page: 'services', repeatable: false },
+  'servicos.card.auditoria-nis2': { page: 'services', repeatable: false },
+  'servicos.card.siem': { page: 'services', repeatable: false },
+  'servicos.card.formacao': { page: 'services', repeatable: false },
+  'servicos.card.cloud-devsecops': { page: 'services', repeatable: false },
+  servicos_processo_cabecalho: { page: 'services', repeatable: false },
+  'servicos.processo.avaliacao': { page: 'services', repeatable: false },
+  'servicos.processo.planeamento': { page: 'services', repeatable: false },
+  'servicos.processo.implementacao': { page: 'services', repeatable: false },
+  'servicos.processo.monitorizacao': { page: 'services', repeatable: false },
+  servicos_nis2_cabecalho: { page: 'services', repeatable: false },
+  'servicos.nis2.abrangencia': { page: 'services', repeatable: false },
+  'servicos.nis2.obrigacoes': { page: 'services', repeatable: false },
+  'servicos.nis2.notificacao': { page: 'services', repeatable: false },
+  'servicos.nis2.cadeia-abastecimento': { page: 'services', repeatable: false },
+  'servicos.nis2.gestao': { page: 'services', repeatable: false },
+  'servicos.nis2.formacao': { page: 'services', repeatable: false },
+  servicos_nis2_cta: { page: 'services', repeatable: false },
+  servicos_cta_final: { page: 'services', repeatable: false },
+  contacto_cabecalho: { page: 'contact', repeatable: false },
+  contacto_formulario: { page: 'contact', repeatable: false },
+  'contacto.channel.morada': { page: 'contact', repeatable: false },
+  'contacto.channel.telefone': { page: 'contact', repeatable: false },
+  'contacto.channel.email': { page: 'contact', repeatable: false },
+  'contacto.channel.website': { page: 'contact', repeatable: false },
+  contacto_horario: { page: 'contact', repeatable: false },
+  'contacto.certification.iso-27001': { page: 'contact', repeatable: false },
+  'contacto.certification.cncs': { page: 'contact', repeatable: false },
+  'contacto.certification.nis2': { page: 'contact', repeatable: false },
+  'contacto.certification.rgpd': { page: 'contact', repeatable: false },
+});
+
+export const SITE_CONTENT_KEYS = Object.freeze(Object.keys(SITE_CONTENT_DEFINITIONS));
+
 function cleanText(value, maximum, { required = false } = {}) {
   const text = typeof value === 'string' ? value.trim() : '';
   if (required && !text) throw httpError(400, 'Campo obrigatório.');
   if (text.length > maximum) throw httpError(400, `Máximo de ${maximum} caracteres.`);
   return text;
+}
+
+function cleanPublicText(value, maximum, { required = false } = {}) {
+  const text = cleanText(value, maximum, { required });
+  if (text && (/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(text) || /<\s*\/?\s*[a-z!][^>]*>/i.test(text))) {
+    throw httpError(400, 'O conteúdo não pode incluir HTML ou caracteres de controlo.');
+  }
+  return text;
+}
+
+function contentDefinition(key) {
+  const value = typeof key === 'string' ? key.trim() : '';
+  const definition = SITE_CONTENT_DEFINITIONS[value];
+  if (!definition) throw httpError(400, 'Página ou tipo de conteúdo inválido.');
+  return { key: value, definition };
+}
+
+function safeHttpsUrl(value) {
+  const text = cleanText(value, 500);
+  if (!text) return null;
+  let parsed;
+  try { parsed = new URL(text); } catch { throw httpError(400, 'URL inválido.'); }
+  if (parsed.protocol !== 'https:' || parsed.username || parsed.password) {
+    throw httpError(400, 'A URL tem de utilizar HTTPS.');
+  }
+  return parsed.toString();
+}
+
+function validateContactChannel(payload) {
+  if (!payload.chave.startsWith('contacto.channel.')) return payload;
+  const label = payload.titulo.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const value = payload.corpo || payload.subtitulo || '';
+  if (label.includes('email') && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+    throw httpError(400, 'O canal de email tem de conter um endereço válido.');
+  }
+  if ((label.includes('telefone') || label.includes('telemovel')) && !/^\+?[0-9][0-9 ().-]{5,29}$/.test(value)) {
+    throw httpError(400, 'O canal telefónico tem de conter um número válido.');
+  }
+  return payload;
 }
 
 function requiredBoolean(value, fallback) {
@@ -23,14 +109,26 @@ function nonNegativeInteger(value, fallback = 0) {
   return resolved;
 }
 
-function serialiseContent(record) {
+function serialiseContent(record, { publicView = false } = {}) {
   const row = record.get ? record.get({ plain: true }) : record;
-  return {
-    ...row,
+  const definition = SITE_CONTENT_DEFINITIONS[row.chave] ?? null;
+  const serialised = {
+    chave: row.chave,
     id: Number(row.id),
+    titulo: row.titulo,
+    subtitulo: row.subtitulo ?? null,
+    corpo: row.corpo ?? null,
+    imagem_url: row.imagem_url ?? null,
+    ativo: Boolean(row.ativo),
+    ordem: Number(row.ordem),
+  };
+  if (publicView) return serialised;
+  return {
+    ...serialised,
     atualizado_por: row.atualizado_por === null || row.atualizado_por === undefined ? null : Number(row.atualizado_por),
     atualizado_por_nome: row.atualizadoPor?.nome ?? row.atualizado_por_nome ?? null,
-    atualizadoPor: undefined,
+    pagina: definition?.page ?? null,
+    tipo_conhecido: Boolean(definition),
   };
 }
 
@@ -57,15 +155,25 @@ function serialiseContactMessage(record) {
 }
 
 function contentPayload(input, current = {}) {
-  return {
-    chave: cleanText(input.chave ?? current.chave, 80, { required: true }),
-    titulo: cleanText(input.titulo ?? current.titulo, 180, { required: true }),
-    subtitulo: cleanText(input.subtitulo ?? current.subtitulo, 240) || null,
-    corpo: cleanText(input.corpo ?? current.corpo, 10000) || null,
-    imagem_url: cleanText(input.imagem_url ?? current.imagem_url, 500) || null,
+  const { key } = contentDefinition(input.chave ?? current.chave);
+  if (current.chave && input.chave !== undefined && input.chave !== current.chave) {
+    throw httpError(400, 'A página e o tipo de conteúdo não podem ser alterados.');
+  }
+  return validateContactChannel({
+    chave: key,
+    titulo: cleanPublicText(input.titulo ?? current.titulo, 180, { required: true }),
+    subtitulo: cleanPublicText(input.subtitulo ?? current.subtitulo, 240) || null,
+    corpo: cleanPublicText(input.corpo ?? current.corpo, 10000) || null,
+    imagem_url: safeHttpsUrl(input.imagem_url ?? current.imagem_url),
     ativo: requiredBoolean(input.ativo, current.ativo ?? true),
     ordem: nonNegativeInteger(input.ordem, current.ordem ?? 0),
-  };
+  });
+}
+
+// Exportada para validar o contrato editorial em testes sem abrir ligações à BD.
+// As operações reais continuam a passar pela mesma função antes de escrever.
+export function validateSiteContentPayload(input, current = {}) {
+  return contentPayload(input, current);
 }
 
 function newsPayload(input, current = {}) {
@@ -113,16 +221,16 @@ async function findNews(id, { publicOnly = false } = {}) {
   return news;
 }
 
-export async function listPublicContents(chave) {
-  const { SiteContent, User } = getModels();
-  const where = { ativo: true };
-  if (chave) where.chave = cleanText(chave, 80, { required: true });
+export async function listPublicContents(chave, models = getModels()) {
+  const { SiteContent, User } = models;
+  const where = { ativo: true, chave: { [Op.in]: SITE_CONTENT_KEYS } };
+  if (chave) where.chave = contentDefinition(chave).key;
   const rows = await SiteContent.findAll({
     where,
     include: [{ model: User, as: 'atualizadoPor', attributes: ['nome'] }],
     order: [['ordem', 'ASC'], ['id', 'ASC']],
   });
-  return rows.map(serialiseContent);
+  return rows.map((row) => serialiseContent(row, { publicView: true }));
 }
 
 export async function listAdminContents() {
@@ -138,10 +246,14 @@ export async function getAdminContent(id) {
   return serialiseContent(await findContent(id));
 }
 
-export async function createContent(input, actorId) {
-  const { sequelize, SiteContent } = getModels();
+export async function createContent(input, actorId, models = getModels()) {
+  const { sequelize, SiteContent } = models;
   const payload = contentPayload(input);
   const contentId = await sequelize.transaction(async (transaction) => {
+    if (!SITE_CONTENT_DEFINITIONS[payload.chave].repeatable) {
+      const existing = await SiteContent.findOne({ where: { chave: payload.chave }, transaction, lock: transaction.LOCK.UPDATE });
+      if (existing) throw httpError(409, 'Já existe uma configuração para este bloco.');
+    }
     const row = await SiteContent.create({ ...payload, atualizado_por: actorId, criado_em: new Date(), atualizado_em: new Date() }, { transaction });
     await recordAudit({ userId: actorId, action: 'CRIAR', entity: 'conteudos_site', entityId: Number(row.id), details: { chave: payload.chave, ativo: payload.ativo } }, transaction);
     return row.id;

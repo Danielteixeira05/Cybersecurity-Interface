@@ -33,7 +33,15 @@ import {
   conteudosPublicosApi, enviarContactoPublicoApi, noticiaPublicaDetalheApi, noticiasPublicasApi, session,
   type ApiConteudoSite, type ApiNoticia,
 } from '../apiClient';
-import { PUBLIC_CONTENT_KEYS } from '../publicContentCms';
+import {
+  PUBLIC_CONTACT_CERTIFICATION_KEYS,
+  PUBLIC_CONTACT_CHANNEL_KEYS,
+  PUBLIC_CONTENT_KEYS,
+  PUBLIC_SERVICE_CARD_KEYS,
+  PUBLIC_SERVICE_NIS2_KEYS,
+  PUBLIC_SERVICE_PROCESS_KEYS,
+  PUBLIC_SERVICE_PROOF_KEYS,
+} from '../publicContentCms';
 import type { Page } from '../types';
 
 interface PageProps {
@@ -536,12 +544,17 @@ function usePublicSiteContents() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
     let active = true;
-    conteudosPublicosApi()
+    conteudosPublicosApi(undefined, controller.signal)
       .then((rows) => { if (active) setContents(rows); })
-      .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : 'Não foi possível carregar o conteúdo publicado.'); })
+      .catch((cause) => {
+        if (active && !controller.signal.aborted) {
+          setError(cause instanceof Error ? cause.message : 'Não foi possível carregar o conteúdo publicado.');
+        }
+      })
       .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+    return () => { active = false; controller.abort(); };
   }, []);
 
   return { contents, loading, error };
@@ -549,10 +562,6 @@ function usePublicSiteContents() {
 
 function firstContent(contents: ApiConteudoSite[], chave: string) {
   return contents.find((content) => content.chave === chave);
-}
-
-function repeatedContent(contents: ApiConteudoSite[], chave: string) {
-  return contents.filter((content) => content.chave === chave);
 }
 
 function contentText(value: string | null | undefined, fallback: string) {
@@ -577,15 +586,6 @@ function contactScheduleRows(value: string | null | undefined) {
 }
 
 function PublicFooter({ setPage }: PageProps) {
-  const { contents } = usePublicSiteContents();
-  const channelRows = repeatedContent(contents, PUBLIC_CONTENT_KEYS.contactChannel);
-  const contacts = channelRows.length
-    ? channelRows.map((content, index) => ({
-      id: content.id,
-      label: contentText(content.corpo, contentText(content.subtitulo, content.titulo)),
-      icon: HOME_FOOTER_CONTACTS[index % HOME_FOOTER_CONTACTS.length].icon,
-    }))
-    : HOME_FOOTER_CONTACTS;
   const navigateTo = (target: Page) => {
     window.scrollTo({ top: 0, behavior: 'auto' });
     setPage(target);
@@ -634,10 +634,10 @@ function PublicFooter({ setPage }: PageProps) {
           <div className="col-12 col-md-4">
             <h2 className="home-footer__heading">Contacto</h2>
             <ul className="home-footer__contacts">
-              {contacts.map((contact) => {
+              {HOME_FOOTER_CONTACTS.map((contact) => {
                 const Icon = contact.icon;
                 return (
-                  <li key={'id' in contact ? contact.id : contact.label}>
+                  <li key={contact.label}>
                     <span className="home-footer__contact-icon" aria-hidden="true">
                       <Icon />
                     </span>
@@ -663,6 +663,11 @@ function PublicFooter({ setPage }: PageProps) {
 }
 
 export function HomePage({ setPage }: PageProps) {
+  const { contents, loading: loadingContent, error: contentError } = usePublicSiteContents();
+  const hero = firstContent(contents, PUBLIC_CONTENT_KEYS.homepageHero);
+  const heroTitle = contentText(hero?.titulo, `${HOME_HERO_CONTENT.title}|${HOME_HERO_CONTENT.highlightedTitle}`);
+  const heroBadge = contentText(hero?.subtitulo, HOME_HERO_CONTENT.certification);
+  const heroDescription = contentText(hero?.corpo, HOME_HERO_CONTENT.description);
   const navigateTo = (target: Page) => {
     window.scrollTo({ top: 0, behavior: 'auto' });
     setPage(target);
@@ -671,7 +676,7 @@ export function HomePage({ setPage }: PageProps) {
   return (
     <>
       <main className="public-home">
-        <section className="public-hero" aria-labelledby="home-hero-title">
+        <section className="public-hero" aria-labelledby="home-hero-title" aria-busy={loadingContent}>
           <div className="public-hero__glow public-hero__glow--violet" aria-hidden="true" />
           <div className="public-hero__glow public-hero__glow--blue" aria-hidden="true" />
           <div className="container-xl public-hero__container">
@@ -680,13 +685,15 @@ export function HomePage({ setPage }: PageProps) {
                 <div className="public-hero__content">
                   <span className="public-hero__badge">
                     <span className="public-hero__badge-dot" aria-hidden="true" />
-                    {HOME_HERO_CONTENT.certification}
+                    {heroBadge}
                   </span>
-                  <h1 id="home-hero-title" className="public-hero__title">
-                    {HOME_HERO_CONTENT.title}
-                    <span>{HOME_HERO_CONTENT.highlightedTitle}</span>
-                  </h1>
-                  <p className="public-hero__description">{HOME_HERO_CONTENT.description}</p>
+                  <h1 id="home-hero-title" className="public-hero__title">{highlightedHeading(heroTitle)}</h1>
+                  <p className="public-hero__description">{heroDescription}</p>
+                  {contentError && (
+                    <p className="visually-hidden" role="status">
+                      Conteúdo atualizado temporariamente indisponível; é apresentada a informação institucional.
+                    </p>
+                  )}
                   <div className="public-hero__actions">
                     <button
                       type="button"
@@ -894,52 +901,54 @@ export function ServicesPage({ setPage }: PageProps) {
   const nis2Header = firstContent(contents, PUBLIC_CONTENT_KEYS.servicesNis2Header);
   const nis2Cta = firstContent(contents, PUBLIC_CONTENT_KEYS.servicesNis2Cta);
   const finalCta = firstContent(contents, PUBLIC_CONTENT_KEYS.servicesFinalCta);
-  const proofRows = repeatedContent(contents, PUBLIC_CONTENT_KEYS.servicesProof);
-  const serviceRows = repeatedContent(contents, PUBLIC_CONTENT_KEYS.service);
-  const processRows = repeatedContent(contents, PUBLIC_CONTENT_KEYS.servicesProcessStep);
-  const nis2RequirementRows = repeatedContent(contents, PUBLIC_CONTENT_KEYS.servicesNis2Requirement);
-  const proofPoints = proofRows.length
-    ? proofRows.map((content, index) => ({
-      id: content.id,
-      title: content.titulo,
-      detail: contentText(content.subtitulo, contentText(content.corpo, '—')),
-      icon: SERVICE_PROOF_POINTS[index % SERVICE_PROOF_POINTS.length].icon,
-      accent: SERVICE_PROOF_POINTS[index % SERVICE_PROOF_POINTS.length].accent,
-    }))
-    : SERVICE_PROOF_POINTS;
-  const services = serviceRows.length
-    ? serviceRows.map((content, index) => {
-      const presentation = PUBLIC_SERVICES[index % PUBLIC_SERVICES.length];
-      return {
-        id: content.id,
-        title: content.titulo,
-        price: contentText(content.subtitulo, 'Sob consulta'),
-        features: contentLines(content.corpo).length ? contentLines(content.corpo) : ['Consulte-nos para uma proposta personalizada.'],
-        icon: presentation.icon,
-        accent: presentation.accent,
-        nis2: /\bnis2\b/i.test([content.titulo, content.subtitulo, content.corpo].filter(Boolean).join(' ')),
-      };
-    })
-    : PUBLIC_SERVICES;
-  const processSteps = processRows.length
-    ? processRows.map((content, index) => ({
-      id: content.id,
-      step: String(index + 1).padStart(2, '0'),
-      title: content.titulo,
-      description: contentText(content.corpo, 'Informação a disponibilizar pelo Back Office.'),
-      icon: SERVICE_PROCESS_STEPS[index % SERVICE_PROCESS_STEPS.length].icon,
-    }))
-    : SERVICE_PROCESS_STEPS;
-  const nis2Requirements = nis2RequirementRows.length
-    ? nis2RequirementRows.map((content, index) => ({
-      id: content.id,
-      title: content.titulo,
-      description: contentText(content.corpo, 'Informação a disponibilizar pelo Back Office.'),
-      icon: NIS2_REQUIREMENTS[index % NIS2_REQUIREMENTS.length].icon,
-      accent: NIS2_REQUIREMENTS[index % NIS2_REQUIREMENTS.length].accent,
-    }))
-    : NIS2_REQUIREMENTS;
-  const nis2CtaLink = nis2Cta?.imagem_url?.trim() || (nis2Cta ? '' : 'https://www.cncs.gov.pt/');
+  const proofPoints = PUBLIC_SERVICE_PROOF_KEYS.map((key, index) => {
+    const content = firstContent(contents, key);
+    const fallback = SERVICE_PROOF_POINTS[index];
+    return {
+      id: key,
+      title: contentText(content?.titulo, fallback.title),
+      detail: contentText(content?.subtitulo, contentText(content?.corpo, fallback.detail)),
+      icon: fallback.icon,
+      accent: fallback.accent,
+    };
+  });
+  const services = PUBLIC_SERVICE_CARD_KEYS.map((key, index) => {
+    const content = firstContent(contents, key);
+    const fallback = PUBLIC_SERVICES[index];
+    const features = contentLines(content?.corpo);
+    return {
+      id: key,
+      title: contentText(content?.titulo, fallback.title),
+      price: contentText(content?.subtitulo, fallback.price),
+      features: features.length ? features : fallback.features,
+      icon: fallback.icon,
+      accent: fallback.accent,
+      nis2: fallback.nis2,
+    };
+  });
+  const processSteps = PUBLIC_SERVICE_PROCESS_KEYS.map((key, index) => {
+    const content = firstContent(contents, key);
+    const fallback = SERVICE_PROCESS_STEPS[index];
+    return {
+      id: key,
+      step: fallback.step,
+      title: contentText(content?.titulo, fallback.title),
+      description: contentText(content?.corpo, fallback.description),
+      icon: fallback.icon,
+    };
+  });
+  const nis2Requirements = PUBLIC_SERVICE_NIS2_KEYS.map((key, index) => {
+    const content = firstContent(contents, key);
+    const fallback = NIS2_REQUIREMENTS[index];
+    return {
+      id: key,
+      title: contentText(content?.titulo, fallback.title),
+      description: contentText(content?.corpo, fallback.description),
+      icon: fallback.icon,
+      accent: fallback.accent,
+    };
+  });
+  const nis2CtaLink = nis2Cta?.imagem_url?.trim() || 'https://www.cncs.gov.pt/';
 
   return (
     <>
@@ -991,7 +1000,7 @@ export function ServicesPage({ setPage }: PageProps) {
               {proofPoints.map((point) => {
                 const Icon = point.icon;
                 return (
-                  <div className="col-12 col-sm-6 col-xl-3" key={'id' in point ? point.id : point.title}>
+                  <div className="col-12 col-sm-6 col-xl-3" key={point.id}>
                     <article className="service-proof-card">
                       <span className={`service-proof-card__icon service-proof-card__icon--${point.accent}`} aria-hidden="true">
                         <Icon />
@@ -1024,7 +1033,7 @@ export function ServicesPage({ setPage }: PageProps) {
               {services.map((service) => {
                 const Icon = service.icon;
                 return (
-                  <div className="col-12 col-md-6 col-xl-4" key={'id' in service ? service.id : service.title}>
+                  <div className="col-12 col-md-6 col-xl-4" key={service.id}>
                     <article className="service-detail-card">
                       <div className="service-detail-card__topline">
                         <span
@@ -1075,7 +1084,7 @@ export function ServicesPage({ setPage }: PageProps) {
               {processSteps.map((item) => {
                 const Icon = item.icon;
                 return (
-                  <div className="col-12 col-sm-6 col-xl-3" key={'id' in item ? item.id : item.step}>
+                  <div className="col-12 col-sm-6 col-xl-3" key={item.id}>
                     <article className="service-process-step">
                       <div className="service-process-step__icon" aria-hidden="true">
                         <Icon />
@@ -1103,7 +1112,7 @@ export function ServicesPage({ setPage }: PageProps) {
               {nis2Requirements.map((requirement) => {
                 const Icon = requirement.icon;
                 return (
-                  <div className="col-12 col-md-6 col-xl-4" key={'id' in requirement ? requirement.id : requirement.title}>
+                  <div className="col-12 col-md-6 col-xl-4" key={requirement.id}>
                     <article className="nis2-requirement-card">
                       <span
                         className={`nis2-requirement-card__icon nis2-requirement-card__icon--${requirement.accent}`}
@@ -1396,19 +1405,18 @@ export function ContactPage({ setPage }: PageProps) {
   const hero = firstContent(contents, PUBLIC_CONTENT_KEYS.contactHero);
   const formContent = firstContent(contents, PUBLIC_CONTENT_KEYS.contactForm);
   const scheduleContent = firstContent(contents, PUBLIC_CONTENT_KEYS.contactSchedule);
-  const channelRows = repeatedContent(contents, PUBLIC_CONTENT_KEYS.contactChannel);
-  const serviceRows = repeatedContent(contents, PUBLIC_CONTENT_KEYS.service);
-  const certificationRows = repeatedContent(contents, PUBLIC_CONTENT_KEYS.contactCertification);
-  const channels = channelRows.length
-    ? channelRows.map((content, index) => ({
-      id: content.id,
-      title: content.titulo,
-      value: contentText(content.corpo, contentText(content.subtitulo, '—')),
-      icon: CONTACT_CHANNELS[index % CONTACT_CHANNELS.length].icon,
-      tone: CONTACT_CHANNELS[index % CONTACT_CHANNELS.length].tone,
-    }))
-    : CONTACT_CHANNELS;
-  const serviceOptions = serviceRows.length ? serviceRows.map((service) => service.titulo) : CONTACT_SERVICE_OPTIONS;
+  const channels = PUBLIC_CONTACT_CHANNEL_KEYS.map((key, index) => {
+    const content = firstContent(contents, key);
+    const fallback = CONTACT_CHANNELS[index];
+    return {
+      id: key,
+      title: contentText(content?.titulo, fallback.title),
+      value: contentText(content?.corpo, contentText(content?.subtitulo, fallback.value)),
+      icon: fallback.icon,
+      tone: fallback.tone,
+    };
+  });
+  const serviceOptions = CONTACT_SERVICE_OPTIONS;
   const scheduleRows = scheduleContent
     ? contactScheduleRows(scheduleContent.corpo).length
       ? contactScheduleRows(scheduleContent.corpo)
@@ -1417,7 +1425,10 @@ export function ContactPage({ setPage }: PageProps) {
       { label: 'Segunda – Sexta', time: '09:00 – 18:00' },
       { label: 'SOC (clientes ativos)', time: '24 / 7' },
     ];
-  const certifications = certificationRows.length ? certificationRows.map((content) => ({ id: content.id, label: content.titulo })) : CONTACT_CERTIFICATIONS.map((label) => ({ id: label, label }));
+  const certifications = PUBLIC_CONTACT_CERTIFICATION_KEYS.map((key, index) => ({
+    id: key,
+    label: contentText(firstContent(contents, key)?.titulo, CONTACT_CERTIFICATIONS[index]),
+  }));
 
   async function submitContact(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1586,7 +1597,7 @@ export function ContactPage({ setPage }: PageProps) {
                   {channels.map((channel) => {
                     const Icon = channel.icon;
                     return (
-                      <article className="contact-v97__channel" key={'id' in channel ? channel.id : channel.title}>
+                      <article className="contact-v97__channel" key={channel.id}>
                         <span className={`contact-v97__channel-icon contact-v97__channel-icon--${channel.tone}`} aria-hidden="true">
                           <Icon />
                         </span>

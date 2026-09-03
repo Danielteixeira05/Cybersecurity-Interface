@@ -368,7 +368,7 @@ export function AppLayout({ role, page, setPage, setRole, children }: AppLayoutP
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex h-dvh min-h-screen w-64 flex-col overflow-hidden transform bg-gradient-to-b from-slate-900 via-slate-900 to-slate-800 text-white transition-transform ${isManager ? 'mgr-shell__sidebar ' : ''}lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex h-dvh w-64 flex-col overflow-hidden transform bg-gradient-to-b from-slate-900 via-slate-900 to-slate-800 text-white transition-transform ${isManager ? 'mgr-shell__sidebar ' : ''}lg:fixed lg:top-0 lg:h-dvh lg:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -472,7 +472,7 @@ export function AppLayout({ role, page, setPage, setRole, children }: AppLayoutP
         </div>
       </aside>
 
-      <div className="app-shell__main flex min-h-screen min-w-0 flex-1 flex-col">
+      <div className="app-shell__main flex min-h-dvh min-w-0 flex-1 flex-col">
         <header className={`sticky top-0 z-20 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4 sm:px-6${isManager ? ' mgr-shell__header' : ''}${isClient ? ' client-shell__header' : ''}`}>
           <div className="flex items-center gap-3">
             <button

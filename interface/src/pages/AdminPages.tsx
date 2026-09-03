@@ -21,7 +21,7 @@ import { AssetsWorkspace, IncidentsWorkspace } from '../components/OperationalRe
 import { DocumentsWorkspace } from '../components/DocumentsWorkspace';
 import { INCIDENT_CHANGED_EVENT } from '../realtime';
 import {
-  PUBLIC_CONTENT_EDITOR_PRESETS, getPublicContentEditorPreset, isPublicContentScope,
+  PUBLIC_CONTENT_EDITOR_PRESETS, getPublicContentEditorPreset,
   type PublicContentDraftTemplate, type PublicContentEditorPreset, type PublicContentScope,
 } from '../publicContentCms';
 
@@ -999,25 +999,38 @@ export function AdminSiteContent() {
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-  const [contentScope, setContentScope] = useState<'all' | PublicContentScope>('all');
-  const [presetKey, setPresetKey] = useState(PUBLIC_CONTENT_EDITOR_PRESETS[0].chave);
+  const [contentFieldErrors, setContentFieldErrors] = useState<Partial<Record<'titulo' | 'ordem' | 'imagem_url', string>>>({});
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'homepage' | 'services' | 'news' | 'contact'>('homepage');
+  const [reloadKey, setReloadKey] = useState(0);
+  const load = () => setReloadKey((value) => value + 1);
 
-  const load = () => {
+  useEffect(() => {
+    const controller = new AbortController();
+    let current = true;
     setLoading(true);
     setLoadError(null);
-    Promise.all([conteudosAdminApi(), noticiasAdminApi(), mensagensContactoAdminApi()])
-      .then(([contentRows, newsRows, messageRows]) => { setItems(contentRows); setNews(newsRows); setMessages(messageRows); })
-      .catch((cause) => setLoadError(cause instanceof Error ? cause.message : 'Erro ao carregar conteúdos.'))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(load, []);
+    const request = activeTab === 'news'
+      ? noticiasAdminApi(controller.signal).then((rows) => { if (current) setNews(rows); })
+      : activeTab === 'contact'
+        ? Promise.all([conteudosAdminApi(controller.signal), mensagensContactoAdminApi(controller.signal)])
+          .then(([contentRows, messageRows]) => { if (current) { setItems(contentRows); setMessages(messageRows); } })
+        : conteudosAdminApi(controller.signal).then((rows) => { if (current) setItems(rows); });
+    request
+      .catch((cause: unknown) => {
+        if (current && !controller.signal.aborted) setLoadError(cause instanceof Error ? cause.message : 'Erro ao carregar conteúdos.');
+      })
+      .finally(() => { if (current) setLoading(false); });
+    return () => { current = false; controller.abort(); };
+  }, [activeTab, reloadKey]);
 
   const openNew = (preset?: PublicContentEditorPreset) => {
     setEditing(null);
     setDraft(preset ? { ...preset.draft } : emptyDraft());
     setFormOpen(true);
     setFormError(null);
+    setContentFieldErrors({});
+    setSuccessMessage(null);
   };
 
   const openEdit = (item: ApiConteudoSite) => {
@@ -1028,17 +1041,32 @@ export function AdminSiteContent() {
     });
     setFormOpen(true);
     setFormError(null);
+    setContentFieldErrors({});
+    setSuccessMessage(null);
   };
 
   const save = async () => {
+    const validation: typeof contentFieldErrors = {};
+    if (!draft.titulo.trim()) validation.titulo = 'O título é obrigatório.';
+    if (!Number.isSafeInteger(draft.ordem) || draft.ordem < 0) validation.ordem = 'A ordem deve ser um inteiro não negativo.';
+    if (draft.imagem_url) {
+      try {
+        const parsed = new URL(draft.imagem_url);
+        if (parsed.protocol !== 'https:' || parsed.username || parsed.password) validation.imagem_url = 'Utilize uma ligação HTTPS sem credenciais.';
+      } catch { validation.imagem_url = 'Introduza uma ligação HTTPS válida.'; }
+    }
+    setContentFieldErrors(validation);
+    if (Object.keys(validation).length) return;
     setSaving(true);
     setFormError(null);
+    setSuccessMessage(null);
     try {
       if (editing) await atualizarConteudoAdminApi(editing.id, draft);
       else await criarConteudoAdminApi(draft);
       setEditing(null);
       setDraft(emptyDraft());
       setFormOpen(false);
+      setSuccessMessage('Conteúdo guardado com sucesso.');
       load();
     } catch (cause) {
       setFormError(cause instanceof Error ? cause.message : 'Não foi possível guardar o conteúdo.');
@@ -1060,11 +1088,13 @@ export function AdminSiteContent() {
   const saveNews = async () => {
     setSaving(true);
     setFormError(null);
+    setSuccessMessage(null);
     try {
       if (!newsDraft.titulo || !newsDraft.resumo || !newsDraft.corpo) throw new Error('Título, resumo e corpo são obrigatórios.');
       if (editingNews) await atualizarNoticiaAdminApi(editingNews.id, newsDraft);
       else await criarNoticiaAdminApi(newsDraft);
       setNewsFormOpen(false);
+      setSuccessMessage('Notícia guardada com sucesso.');
       load();
     } catch (cause) {
       setFormError(cause instanceof Error ? cause.message : 'Não foi possível guardar a notícia.');
@@ -1083,92 +1113,89 @@ export function AdminSiteContent() {
     }
   };
 
-  const visibleItems = contentScope === 'all'
-    ? items
-    : items.filter((item) => isPublicContentScope(item.chave, contentScope));
-  const selectedPreset = PUBLIC_CONTENT_EDITOR_PRESETS.find((preset) => preset.chave === presetKey) ?? PUBLIC_CONTENT_EDITOR_PRESETS[0];
-  const selectedPresetExistingItem = selectedPreset.repeatable ? undefined : items.find((item) => item.chave === selectedPreset.chave);
+  const contentScope: PublicContentScope = activeTab === 'homepage' ? 'homepage' : activeTab === 'services' ? 'services' : 'contact';
+  const tabPresets = PUBLIC_CONTENT_EDITOR_PRESETS.filter((preset) => preset.scope === contentScope);
+  const editableBlocks = tabPresets.map((preset) => ({
+    preset,
+    item: items.find((item) => item.chave === preset.chave),
+  }));
   const selectedDraftPreset = getPublicContentEditorPreset(draft.chave);
-  const openSelectedPreset = () => {
-    if (selectedPresetExistingItem) openEdit(selectedPresetExistingItem);
-    else openNew(selectedPreset);
-  };
 
   return (
     <div>
       <PageHeader
         title="Gestão de Conteúdo do Site"
-        subtitle="Conteúdos persistidos das páginas públicas"
-        actions={<button type="button" onClick={() => openNew()} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">+ Novo Conteúdo</button>}
+        subtitle="Edite conteúdos reais por página pública"
       />
+      <nav className="mb-6 flex flex-wrap gap-2 border-b border-slate-200 pb-3" aria-label="Páginas públicas editáveis">
+        {([
+          ['homepage', 'Homepage'],
+          ['services', 'Serviços'],
+          ['news', 'Notícias'],
+          ['contact', 'Contacto'],
+        ] as const).map(([tab, label]) => (
+          <button key={tab} type="button" onClick={() => {
+            setActiveTab(tab);
+            setFormOpen(false);
+            setNewsFormOpen(false);
+            setFormError(null);
+            setContentFieldErrors({});
+            setSuccessMessage(null);
+          }} className={`rounded-lg px-3 py-2 text-sm font-semibold ${activeTab === tab ? 'bg-blue-600 text-white' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}>
+            {label}
+          </button>
+        ))}
+      </nav>
+      {successMessage && <p className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">{successMessage}</p>}
+      {activeTab !== 'news' && (
       <section className="mb-6 rounded-2xl border border-blue-100 bg-blue-50/60 p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h2 className="font-display text-lg font-semibold text-slate-900">Serviços e Contacto</h2>
-            <p className="mt-1 max-w-3xl text-sm text-slate-600">Estes blocos alimentam diretamente as páginas públicas, incluindo quando são abertas por Gestor ou Cliente. Só Administradores podem criá-los ou editá-los.</p>
-          </div>
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="text-xs font-medium text-slate-600">Tipo de bloco
-              <select value={presetKey} onChange={(event) => setPresetKey(event.target.value)} className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800">
-                {PUBLIC_CONTENT_EDITOR_PRESETS.map((preset) => <option key={preset.chave} value={preset.chave}>{preset.scope === 'services' ? 'Serviços' : 'Contacto'} · {preset.label}</option>)}
-              </select>
-            </label>
-            <button type="button" onClick={openSelectedPreset} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">{selectedPresetExistingItem ? 'Editar bloco' : '+ Adicionar bloco'}</button>
-          </div>
-        </div>
-        <p className="mt-3 text-xs text-slate-500">{selectedPreset.description}</p>
+        <h2 className="font-display text-lg font-semibold text-slate-900">{activeTab === 'homepage' ? 'Hero da Homepage' : activeTab === 'services' ? 'Conteúdos da página Serviços' : 'Informação institucional de Contacto'}</h2>
+        <p className="mt-1 max-w-3xl text-sm text-slate-600">Cada cartão corresponde a um bloco estável do design público. Enquanto não existir uma versão guardada, o site utiliza estes valores originais.</p>
       </section>
+      )}
       {formOpen && (
         <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm" aria-label={editing ? 'Editar conteúdo' : 'Novo conteúdo'}>
           <div className="grid gap-4 md:grid-cols-2">
-            <label className="text-sm font-medium text-slate-700">Chave<input value={draft.chave} onChange={(event) => setDraft({ ...draft, chave: event.target.value })} list="public-content-keys" className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" required /><datalist id="public-content-keys">{PUBLIC_CONTENT_EDITOR_PRESETS.map((preset) => <option key={preset.chave} value={preset.chave}>{preset.label}</option>)}</datalist></label>
-            <label className="text-sm font-medium text-slate-700">Ordem<input value={draft.ordem} type="number" min="0" onChange={(event) => setDraft({ ...draft, ordem: Number(event.target.value) })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" required /></label>
-            <label className="text-sm font-medium text-slate-700 md:col-span-2">Título<input value={draft.titulo} onChange={(event) => setDraft({ ...draft, titulo: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" required /></label>
+            <label className="text-sm font-medium text-slate-700">Bloco<input value={selectedDraftPreset?.label ?? draft.chave} readOnly className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-600" /></label>
+            <label className="text-sm font-medium text-slate-700 md:col-span-2">Título<input value={draft.titulo} onChange={(event) => setDraft({ ...draft, titulo: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" required />{contentFieldErrors.titulo && <span className="mt-1 block text-xs text-rose-700">{contentFieldErrors.titulo}</span>}</label>
             <label className="text-sm font-medium text-slate-700 md:col-span-2">Subtítulo<input value={draft.subtitulo ?? ''} onChange={(event) => setDraft({ ...draft, subtitulo: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
-            <label className="text-sm font-medium text-slate-700 md:col-span-2">Imagem URL<input value={draft.imagem_url ?? ''} onChange={(event) => setDraft({ ...draft, imagem_url: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" type="url" /></label>
+            {draft.chave === 'servicos_nis2_cta' && <label className="text-sm font-medium text-slate-700 md:col-span-2">Ligação complementar (HTTPS)<input value={draft.imagem_url ?? ''} onChange={(event) => setDraft({ ...draft, imagem_url: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" type="url" />{contentFieldErrors.imagem_url && <span className="mt-1 block text-xs text-rose-700">{contentFieldErrors.imagem_url}</span>}</label>}
             <label className="text-sm font-medium text-slate-700 md:col-span-2">Corpo<textarea value={draft.corpo ?? ''} onChange={(event) => setDraft({ ...draft, corpo: event.target.value })} className="mt-1 min-h-32 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
           </div>
-          {selectedDraftPreset && <p className="mt-3 text-xs text-slate-500">{selectedDraftPreset.description}{selectedDraftPreset.repeatable ? ' Pode criar vários blocos com esta chave; a ordem determina a apresentação.' : ''}</p>}
+            {selectedDraftPreset && <p className="mt-3 text-xs text-slate-500">{selectedDraftPreset.description}</p>}
           <label className="mt-4 inline-flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={draft.ativo} onChange={(event) => setDraft({ ...draft, ativo: event.target.checked })} />Publicado</label>
           {formError && <p className="mt-3 text-sm text-rose-700" role="alert">{formError}</p>}
-          <div className="mt-5 flex gap-3"><button type="button" disabled={saving} onClick={save} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'A guardar...' : 'Guardar'}</button><button type="button" onClick={() => { setEditing(null); setDraft(emptyDraft()); setFormOpen(false); setFormError(null); }} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700">Cancelar</button></div>
+          <div className="mt-5 flex gap-3"><button type="button" disabled={saving} onClick={save} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'A guardar...' : 'Guardar'}</button><button type="button" onClick={() => { setEditing(null); setDraft(emptyDraft()); setFormOpen(false); setFormError(null); setContentFieldErrors({}); }} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700">Cancelar</button></div>
         </section>
       )}
       {loading ? <Loader /> : loadError ? <ErrorCard msg={loadError} /> : (
         <>
-          <div className="mb-4 flex flex-wrap gap-2" aria-label="Filtrar conteúdos">
-            {([
-              ['all', 'Todos'],
-              ['services', 'Serviços'],
-              ['contact', 'Contacto'],
-            ] as const).map(([scope, label]) => <button key={scope} type="button" onClick={() => setContentScope(scope)} className={`rounded-lg px-3 py-1.5 text-sm font-medium ${contentScope === scope ? 'bg-blue-600 text-white' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}>{label}</button>)}
-          </div>
-          {visibleItems.length === 0 ? <DataTable data={[]} columns={[]} emptyText={contentScope === 'all' ? 'Sem conteúdos institucionais disponíveis' : `Sem blocos de ${contentScope === 'services' ? 'Serviços' : 'Contacto'} publicados ou em rascunho`} /> : (
+          {activeTab !== 'news' && (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {visibleItems.map((item) => {
-                const preset = getPublicContentEditorPreset(item.chave);
+              {editableBlocks.map(({ preset, item }) => {
+                const preview = item ?? preset.draft;
                 return (
-                <div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-6">
-                  <div className="flex items-start justify-between"><span className="text-sm font-semibold text-blue-700">{preset ? (preset.scope === 'services' ? 'Serviços' : 'Contacto') : 'Conteúdo'}</span><span className={`badge ${item.ativo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700'}`}>{item.ativo ? 'Publicado' : 'Inativo'}</span></div>
-                  <h3 className="mt-4 font-display font-semibold text-slate-900">{item.titulo}</h3>
-                  <p className="mt-1 text-xs text-slate-500">{preset?.label ?? item.subtitulo ?? item.chave}</p>
-                  <button type="button" onClick={() => openEdit(item)} className="mt-4 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Editar Conteúdo</button>
+                <div key={preset.chave} className="rounded-2xl border border-slate-200 bg-white p-6">
+                  <div className="flex items-start justify-between gap-3"><span className="text-sm font-semibold text-blue-700">{preset.label}</span><span className={`badge ${item ? (item.ativo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700') : 'bg-blue-50 text-blue-700'}`}>{item ? (item.ativo ? 'Publicado' : 'Inativo') : 'Predefinição'}</span></div>
+                  <h3 className="mt-4 font-display font-semibold text-slate-900">{preview.titulo}</h3>
+                  <p className="mt-1 text-xs text-slate-500">{preset.description}</p>
+                  <button type="button" onClick={() => item ? openEdit(item) : openNew(preset)} className="mt-4 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Editar</button>
                 </div>
                 );
               })}
             </div>
           )}
 
-          <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          {activeTab === 'news' && <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-display text-lg font-semibold text-slate-900">Notícias</h2><p className="mt-1 text-sm text-slate-500">Crie, edite, publique, despublique ou desative notícias reais.</p></div><button type="button" onClick={() => openNews()} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white">+ Nova notícia</button></div>
             {newsFormOpen && <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="grid gap-3 md:grid-cols-2"><label className="text-sm font-medium text-slate-700 md:col-span-2">Título<input value={newsDraft.titulo} onChange={(event) => setNewsDraft({ ...newsDraft, titulo: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label><label className="text-sm font-medium text-slate-700 md:col-span-2">Resumo<textarea value={newsDraft.resumo} onChange={(event) => setNewsDraft({ ...newsDraft, resumo: event.target.value })} className="mt-1 min-h-20 w-full rounded-xl border border-slate-200 px-3 py-2" /></label><label className="text-sm font-medium text-slate-700 md:col-span-2">Corpo<textarea value={newsDraft.corpo} onChange={(event) => setNewsDraft({ ...newsDraft, corpo: event.target.value })} className="mt-1 min-h-32 w-full rounded-xl border border-slate-200 px-3 py-2" /></label><label className="text-sm font-medium text-slate-700 md:col-span-2">Imagem URL<input type="url" value={newsDraft.imagem_url ?? ''} onChange={(event) => setNewsDraft({ ...newsDraft, imagem_url: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label></div><div className="mt-4 flex flex-wrap gap-4"><label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={newsDraft.publicada} onChange={(event) => setNewsDraft({ ...newsDraft, publicada: event.target.checked })} />Publicada</label><label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={newsDraft.ativo} onChange={(event) => setNewsDraft({ ...newsDraft, ativo: event.target.checked })} />Ativa</label></div><div className="mt-4 flex gap-3"><button type="button" disabled={saving} onClick={saveNews} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'A guardar...' : 'Guardar notícia'}</button><button type="button" onClick={() => setNewsFormOpen(false)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700">Cancelar</button></div></div>}
             <div className="mt-5 space-y-3">{news.length === 0 ? <p className="text-sm text-slate-500">Sem notícias registadas.</p> : news.map((item) => <article key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-4"><div><h3 className="font-medium text-slate-900">{item.titulo}</h3><p className="mt-1 text-sm text-slate-500">{item.resumo}</p></div><div className="flex items-center gap-2"><span className={`badge ${item.ativo ? 'bg-slate-100 text-slate-700' : 'bg-rose-100 text-rose-700'}`}>{item.ativo ? (item.publicada ? 'Publicada' : 'Rascunho') : 'Inativa'}</span><button type="button" onClick={() => openNews(item)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700">Editar</button></div></article>)}</div>
-          </section>
+          </section>}
 
-          <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          {activeTab === 'contact' && <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="font-display text-lg font-semibold text-slate-900">Mensagens de contacto</h2>
             <div className="mt-4 overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-3 py-2">Remetente</th><th className="px-3 py-2">Assunto</th><th className="px-3 py-2">Estado</th><th className="px-3 py-2">Ação</th></tr></thead><tbody>{messages.length === 0 ? <tr><td colSpan={4} className="px-3 py-5 text-slate-500">Sem mensagens de contacto.</td></tr> : messages.map((message) => <tr key={message.id} className="border-b border-slate-100"><td className="px-3 py-3"><div className="font-medium text-slate-900">{message.nome}</div><div className="text-xs text-slate-500">{message.email}</div></td><td className="px-3 py-3 text-slate-700">{message.assunto}</td><td className="px-3 py-3"><span className="badge bg-slate-100 text-slate-700">{message.estado}</span></td><td className="px-3 py-3"><select aria-label={`Estado da mensagem ${message.id}`} value={message.estado} onChange={(event) => void updateMessage(message.id, event.target.value as ApiMensagemContacto['estado'])} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs"><option value="NOVA">Nova</option><option value="EM_ANALISE">Em análise</option><option value="RESPONDIDA">Respondida</option><option value="ARQUIVADA">Arquivada</option></select></td></tr>)}</tbody></table></div>
-          </section>
+          </section>}
         </>
       )}
     </div>

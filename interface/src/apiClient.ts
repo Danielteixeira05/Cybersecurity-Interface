@@ -1468,9 +1468,9 @@ export async function opcoesApi(): Promise<any> {
 
 // Conteúdo público e CMS. As rotas já existem no Django e têm o mesmo
 // contrato nas rotas Node equivalentes, para uma transição incremental.
-export async function conteudosPublicosApi(chave?: string): Promise<ApiConteudoSite[]> {
+export async function conteudosPublicosApi(chave?: string, signal?: AbortSignal): Promise<ApiConteudoSite[]> {
   const qs = chave ? `?chave=${encodeURIComponent(chave)}` : '';
-  return apiFetch<ApiConteudoSite[]>(`/api/public/conteudos/${qs}`);
+  return apiFetch<ApiConteudoSite[]>(`/api/public/conteudos/${qs}`, { signal });
 }
 
 export async function noticiasPublicasApi(): Promise<ApiNoticia[]> {
@@ -1489,8 +1489,8 @@ export async function enviarContactoPublicoApi(payload: ContactoPublicoPayload):
   });
 }
 
-export async function conteudosAdminApi(): Promise<ApiConteudoSite[]> {
-  return apiFetch<ApiConteudoSite[]>('/api/admin/conteudos/');
+export async function conteudosAdminApi(signal?: AbortSignal): Promise<ApiConteudoSite[]> {
+  return apiFetch<ApiConteudoSite[]>('/api/admin/conteudos/', { signal });
 }
 
 export async function criarConteudoAdminApi(payload: Omit<ApiConteudoSite, 'id' | 'atualizado_por' | 'atualizado_por_nome' | 'criado_em' | 'atualizado_em'>): Promise<ApiConteudoSite> {
@@ -1503,8 +1503,8 @@ export async function atualizarConteudoAdminApi(id: number, payload: Partial<Omi
   return apiFetch<ApiConteudoSite>(`/api/admin/conteudos/${id}/`, { method: 'PATCH', body: JSON.stringify(payload) });
 }
 
-export async function noticiasAdminApi(): Promise<ApiNoticia[]> {
-  return apiFetch<ApiNoticia[]>('/api/admin/noticias/');
+export async function noticiasAdminApi(signal?: AbortSignal): Promise<ApiNoticia[]> {
+  return apiFetch<ApiNoticia[]>('/api/admin/noticias/', { signal });
 }
 
 export async function criarNoticiaAdminApi(payload: Omit<ApiNoticia, 'id' | 'autor_id' | 'autor_nome' | 'publicada_em' | 'criado_em' | 'atualizado_em'>): Promise<ApiNoticia> {
@@ -1517,8 +1517,8 @@ export async function atualizarNoticiaAdminApi(id: number, payload: Partial<Omit
   return apiFetch<ApiNoticia>(`/api/admin/noticias/${id}/`, { method: 'PATCH', body: JSON.stringify(payload) });
 }
 
-export async function mensagensContactoAdminApi(): Promise<ApiMensagemContacto[]> {
-  return apiFetch<ApiMensagemContacto[]>('/api/admin/contactos/');
+export async function mensagensContactoAdminApi(signal?: AbortSignal): Promise<ApiMensagemContacto[]> {
+  return apiFetch<ApiMensagemContacto[]>('/api/admin/contactos/', { signal });
 }
 
 export async function atualizarMensagemContactoAdminApi(id: number, estado: ApiMensagemContacto['estado']): Promise<ApiMensagemContacto> {

@@ -112,6 +112,23 @@ img, video, canvas, svg {
   min-width: 0;
 }
 
+/* The portal navigation is viewport-anchored on desktop.  Keeping its width
+   out of normal flow means long Admin, Manager and Client pages cannot end the
+   sticky containing block before the document scroll does. */
+@media (min-width: 1024px) {
+  .app-shell__main {
+    flex: 0 0 calc(100% - 16rem);
+    width: calc(100% - 16rem);
+    margin-left: 16rem;
+  }
+
+  .mgr-shell .app-shell__main {
+    flex-basis: calc(100% - 18rem);
+    width: calc(100% - 18rem);
+    margin-left: 18rem;
+  }
+}
+
 /* Admin data workspaces opt into cards below the table breakpoint. */
 .admin-workspace-page {
   min-width: 0;
