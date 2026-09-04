@@ -66,6 +66,40 @@ const HOME_HERO_CONTENT = {
   secondaryAction: 'Agendar Serviços',
 } as const;
 
+const HOME_IDENTITY_CONTENT = {
+  eyebrow: 'Quem Somos',
+  title: 'A nossa identidade',
+  description:
+    'Trabalhamos para tornar a cibersegurança clara, acessível e alinhada com as necessidades de cada organização.',
+} as const;
+
+const HOME_IDENTITY_CARDS = [
+  {
+    key: PUBLIC_CONTENT_KEYS.homepageMission,
+    title: 'Missão',
+    description:
+      'Ajudar organizações a proteger os seus ativos digitais, reduzir riscos e responder com confiança aos desafios de cibersegurança.',
+    icon: ShieldCheck,
+    accent: 'violet',
+  },
+  {
+    key: PUBLIC_CONTENT_KEYS.homepageVision,
+    title: 'Visão',
+    description:
+      'Contribuir para um ecossistema digital mais resiliente, no qual a segurança acompanha a evolução de cada organização.',
+    icon: Eye,
+    accent: 'blue',
+  },
+  {
+    key: PUBLIC_CONTENT_KEYS.homepageValues,
+    title: 'Valores',
+    description:
+      'Rigor, proximidade, transparência e melhoria contínua orientam a forma como colaboramos e tomamos decisões.',
+    icon: UsersRound,
+    accent: 'cyan',
+  },
+] as const;
+
 const HOME_SERVICES = [
   {
     title: 'Testes de Penetração',
@@ -105,13 +139,18 @@ const HOME_SERVICES = [
   },
 ] as const;
 
-const HOME_FOOTER_LINKS = [
-  { label: 'Início', page: 'home' },
-  { label: 'Sobre Nós', page: 'about' },
-  { label: 'Serviços', page: 'services' },
-  { label: 'Contacto', page: 'contact' },
-  { label: 'Dashboard', page: 'login' },
-] satisfies ReadonlyArray<{ label: string; page: Page }>;
+type HomeFooterLink = {
+  label: string;
+  target: { type: 'page'; page: Page } | { type: 'anchor'; href: string };
+};
+
+const HOME_FOOTER_LINKS: readonly HomeFooterLink[] = [
+  { label: 'Início', target: { type: 'page', page: 'home' } },
+  { label: 'Sobre Nós', target: { type: 'anchor', href: '/#quem-somos' } },
+  { label: 'Serviços', target: { type: 'page', page: 'services' } },
+  { label: 'Contacto', target: { type: 'page', page: 'contact' } },
+  { label: 'Dashboard', target: { type: 'page', page: 'login' } },
+];
 
 const HOME_FOOTER_CONTACTS = [
   { label: 'info@ciberboxsecur.pt', icon: Mail },
@@ -620,14 +659,24 @@ function PublicFooter({ setPage }: PageProps) {
           <div className="col-12 col-md-4">
             <h2 className="home-footer__heading">Links Rápidos</h2>
             <ul className="home-footer__links">
-              {HOME_FOOTER_LINKS.map((item) => (
+              {HOME_FOOTER_LINKS.map((item) => {
+                const target = item.target;
+                return (
                 <li key={item.label}>
-                  <button type="button" onClick={() => navigateTo(item.page)}>
-                    <ChevronRight aria-hidden="true" />
-                    {item.label}
-                  </button>
+                  {target.type === 'anchor' ? (
+                    <a href={target.href}>
+                      <ChevronRight aria-hidden="true" />
+                      {item.label}
+                    </a>
+                  ) : (
+                    <button type="button" onClick={() => navigateTo(target.page)}>
+                      <ChevronRight aria-hidden="true" />
+                      {item.label}
+                    </button>
+                  )}
                 </li>
-              ))}
+                );
+              })}
             </ul>
           </div>
 
@@ -665,13 +714,28 @@ function PublicFooter({ setPage }: PageProps) {
 export function HomePage({ setPage }: PageProps) {
   const { contents, loading: loadingContent, error: contentError } = usePublicSiteContents();
   const hero = firstContent(contents, PUBLIC_CONTENT_KEYS.homepageHero);
+  const identityHeader = firstContent(contents, PUBLIC_CONTENT_KEYS.homepageIdentityHeader);
   const heroTitle = contentText(hero?.titulo, `${HOME_HERO_CONTENT.title}|${HOME_HERO_CONTENT.highlightedTitle}`);
   const heroBadge = contentText(hero?.subtitulo, HOME_HERO_CONTENT.certification);
   const heroDescription = contentText(hero?.corpo, HOME_HERO_CONTENT.description);
+  const identityCards = HOME_IDENTITY_CARDS.map((card) => {
+    const content = firstContent(contents, card.key);
+    return {
+      ...card,
+      title: contentText(content?.titulo, card.title),
+      description: contentText(content?.corpo, card.description),
+    };
+  });
   const navigateTo = (target: Page) => {
     window.scrollTo({ top: 0, behavior: 'auto' });
     setPage(target);
   };
+
+  useEffect(() => {
+    if (window.location.hash === '#quem-somos') {
+      document.getElementById('quem-somos')?.scrollIntoView({ block: 'start' });
+    }
+  }, []);
 
   return (
     <>
@@ -713,6 +777,35 @@ export function HomePage({ setPage }: PageProps) {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="quem-somos" className="home-identity" aria-labelledby="home-identity-title" data-home-section="identity">
+          <div className="container-xl">
+            <header className="home-section-heading">
+              <p className="home-section-heading__eyebrow">
+                {HOME_IDENTITY_CONTENT.eyebrow}
+              </p>
+              <h2 id="home-identity-title">{contentText(identityHeader?.titulo, HOME_IDENTITY_CONTENT.title)}</h2>
+              <p>{contentText(identityHeader?.corpo, HOME_IDENTITY_CONTENT.description)}</p>
+            </header>
+
+            <div className="row g-4">
+              {identityCards.map((card) => {
+                const Icon = card.icon;
+                return (
+                  <div className="col-12 col-md-4" key={card.key}>
+                    <article className="home-identity-card">
+                      <div className={`home-identity-card__icon home-identity-card__icon--${card.accent}`} aria-hidden="true">
+                        <Icon />
+                      </div>
+                      <h3>{card.title}</h3>
+                      <p>{card.description}</p>
+                    </article>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </section>

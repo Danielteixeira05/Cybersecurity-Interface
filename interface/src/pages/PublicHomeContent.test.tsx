@@ -46,9 +46,14 @@ describe('conteúdo público com design canónico', () => {
     expect(screen.getByText('Plataforma Certificada NIS2 · ISO/IEC 27001')).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Segurança Digital para um Mundo Conectado' })).toBeVisible();
     expect(screen.getByText(/Proteja a sua empresa contra ameaças digitais/)).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'A nossa identidade' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Missão' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Visão' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Valores' })).toBeVisible();
     expect(screen.getByRole('button', { name: /Explorar Serviços/ })).toBeVisible();
     expect(screen.getAllByRole('button', { name: 'Agendar Serviços' })[0]).toBeVisible();
     expect(screen.getByText('Links Rápidos')).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Sobre Nós' })).toHaveAttribute('href', '/#quem-somos');
 
     await act(async () => {
       resolve([]);
@@ -74,6 +79,7 @@ describe('conteúdo público com design canónico', () => {
     const heading = screen.getByRole('heading', { name: 'Proteção digital feita à sua medida' });
     expect(heading).toBeVisible();
     expect(screen.getByText('Serviços de Cibersegurança Completos')).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'A nossa identidade' })).toBeVisible();
     expect(screen.getByText('Links Rápidos')).toBeVisible();
 
     const hero = heading.closest('section');
@@ -82,11 +88,41 @@ describe('conteúdo público com design canónico', () => {
     expect(setPage).toHaveBeenLastCalledWith('services');
   });
 
+  it('sobrepõe os quatro blocos institucionais sem alterar a estrutura da Homepage', async () => {
+    apiMocks.conteudosPublicosApi.mockResolvedValue([
+      content({
+        id: 110,
+        chave: 'homepage_identidade_cabecalho',
+        titulo: 'Identidade publicada',
+        subtitulo: null,
+        corpo: 'Introdução institucional publicada.',
+      }),
+      content({ id: 111, chave: 'homepage_missao', titulo: 'Missão publicada', corpo: 'Descrição publicada da missão.' }),
+      content({ id: 112, chave: 'homepage_visao', titulo: 'Visão publicada', corpo: 'Descrição publicada da visão.' }),
+      content({ id: 113, chave: 'homepage_valores', titulo: 'Valores publicados', corpo: 'Descrição publicada dos valores.' }),
+    ]);
+
+    render(<HomePage setPage={vi.fn()} />);
+
+    expect(await screen.findByRole('heading', { name: 'Identidade publicada' })).toBeVisible();
+    expect(screen.getByText('Quem Somos')).toBeVisible();
+    expect(screen.getByText('Introdução institucional publicada.')).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Missão publicada' })).toBeVisible();
+    expect(screen.getByText('Descrição publicada da missão.')).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Visão publicada' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Valores publicados' })).toBeVisible();
+    expect(document.querySelectorAll('.home-identity-card')).toHaveLength(3);
+    expect(document.querySelectorAll('.home-service-card')).toHaveLength(6);
+    expect(screen.getByRole('heading', { name: 'Serviços de Cibersegurança Completos' })).toBeVisible();
+  });
+
   it('mantém Homepage e footer quando a API de CMS falha', async () => {
     apiMocks.conteudosPublicosApi.mockRejectedValue(new Error('Falha controlada.'));
     render(<HomePage setPage={vi.fn()} />);
 
     expect(screen.getByRole('heading', { name: 'Segurança Digital para um Mundo Conectado' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'A nossa identidade' })).toBeVisible();
+    expect(document.querySelectorAll('.home-identity-card')).toHaveLength(3);
     expect(screen.getByText('Links Rápidos')).toBeVisible();
     expect(await screen.findByText(/Conteúdo atualizado temporariamente indisponível/)).toBeInTheDocument();
   });

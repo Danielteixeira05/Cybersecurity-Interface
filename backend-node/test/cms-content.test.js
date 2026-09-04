@@ -7,6 +7,7 @@ import { createAdminCmsRouter, createPublicCmsRouter } from '../src/routes/cms.r
 import {
   createContent,
   listPublicContents,
+  SITE_CONTENT_DEFINITIONS,
   SITE_CONTENT_KEYS,
   validateSiteContentPayload,
 } from '../src/services/cms.service.js';
@@ -71,12 +72,23 @@ test('o contrato editorial aceita apenas chaves canónicas e conteúdo público 
 });
 
 test('o contrato editorial expõe apenas blocos estáveis do design público', () => {
+  const identityKeys = [
+    'homepage_identidade_cabecalho',
+    'homepage_missao',
+    'homepage_visao',
+    'homepage_valores',
+  ];
   assert.equal(new Set(SITE_CONTENT_KEYS).size, SITE_CONTENT_KEYS.length);
   assert.equal(SITE_CONTENT_KEYS.includes('servico'), false);
   assert.equal(SITE_CONTENT_KEYS.includes('servicos_prova'), false);
   assert.equal(SITE_CONTENT_KEYS.includes('contacto_canal'), false);
   assert.ok(SITE_CONTENT_KEYS.includes('servicos.card.pentesting'));
   assert.ok(SITE_CONTENT_KEYS.includes('contacto.channel.morada'));
+  for (const chave of identityKeys) {
+    assert.ok(SITE_CONTENT_KEYS.includes(chave));
+    assert.deepEqual(SITE_CONTENT_DEFINITIONS[chave], { page: 'homepage', repeatable: false });
+    assert.equal(validateSiteContentPayload({ ...validHero, chave }).chave, chave);
+  }
 });
 
 test('o Hero usa apenas colunas existentes e a chave não pode mudar durante uma edição', () => {

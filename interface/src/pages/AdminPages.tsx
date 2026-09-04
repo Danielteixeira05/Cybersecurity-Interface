@@ -1120,6 +1120,10 @@ export function AdminSiteContent() {
     item: items.find((item) => item.chave === preset.chave),
   }));
   const selectedDraftPreset = getPublicContentEditorPreset(draft.chave);
+  const isHomepageIdentityDraft = draft.chave.startsWith('homepage_');
+  const bodyFieldLabel = draft.chave === 'homepage_identidade_cabecalho'
+    ? 'Introdução'
+    : isHomepageIdentityDraft ? 'Descrição' : 'Corpo';
 
   return (
     <div>
@@ -1149,7 +1153,7 @@ export function AdminSiteContent() {
       {successMessage && <p className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">{successMessage}</p>}
       {activeTab !== 'news' && (
       <section className="mb-6 rounded-2xl border border-blue-100 bg-blue-50/60 p-5">
-        <h2 className="font-display text-lg font-semibold text-slate-900">{activeTab === 'homepage' ? 'Hero da Homepage' : activeTab === 'services' ? 'Conteúdos da página Serviços' : 'Informação institucional de Contacto'}</h2>
+        <h2 className="font-display text-lg font-semibold text-slate-900">{activeTab === 'homepage' ? 'Conteúdos da Homepage' : activeTab === 'services' ? 'Conteúdos da página Serviços' : 'Informação institucional de Contacto'}</h2>
         <p className="mt-1 max-w-3xl text-sm text-slate-600">Cada cartão corresponde a um bloco estável do design público. Enquanto não existir uma versão guardada, o site utiliza estes valores originais.</p>
       </section>
       )}
@@ -1158,9 +1162,9 @@ export function AdminSiteContent() {
           <div className="grid gap-4 md:grid-cols-2">
             <label className="text-sm font-medium text-slate-700">Bloco<input value={selectedDraftPreset?.label ?? draft.chave} readOnly className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-600" /></label>
             <label className="text-sm font-medium text-slate-700 md:col-span-2">Título<input value={draft.titulo} onChange={(event) => setDraft({ ...draft, titulo: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" required />{contentFieldErrors.titulo && <span className="mt-1 block text-xs text-rose-700">{contentFieldErrors.titulo}</span>}</label>
-            <label className="text-sm font-medium text-slate-700 md:col-span-2">Subtítulo<input value={draft.subtitulo ?? ''} onChange={(event) => setDraft({ ...draft, subtitulo: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+            {!isHomepageIdentityDraft && <label className="text-sm font-medium text-slate-700 md:col-span-2">Subtítulo<input value={draft.subtitulo ?? ''} onChange={(event) => setDraft({ ...draft, subtitulo: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>}
             {draft.chave === 'servicos_nis2_cta' && <label className="text-sm font-medium text-slate-700 md:col-span-2">Ligação complementar (HTTPS)<input value={draft.imagem_url ?? ''} onChange={(event) => setDraft({ ...draft, imagem_url: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" type="url" />{contentFieldErrors.imagem_url && <span className="mt-1 block text-xs text-rose-700">{contentFieldErrors.imagem_url}</span>}</label>}
-            <label className="text-sm font-medium text-slate-700 md:col-span-2">Corpo<textarea value={draft.corpo ?? ''} onChange={(event) => setDraft({ ...draft, corpo: event.target.value })} className="mt-1 min-h-32 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+            <label className="text-sm font-medium text-slate-700 md:col-span-2">{bodyFieldLabel}<textarea value={draft.corpo ?? ''} onChange={(event) => setDraft({ ...draft, corpo: event.target.value })} className="mt-1 min-h-32 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
           </div>
             {selectedDraftPreset && <p className="mt-3 text-xs text-slate-500">{selectedDraftPreset.description}</p>}
           <label className="mt-4 inline-flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={draft.ativo} onChange={(event) => setDraft({ ...draft, ativo: event.target.checked })} />Publicado</label>

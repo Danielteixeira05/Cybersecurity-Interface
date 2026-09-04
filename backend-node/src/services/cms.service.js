@@ -10,6 +10,10 @@ const CONTACT_STATES = new Set(['NOVA', 'EM_ANALISE', 'RESPONDIDA', 'ARQUIVADA']
 // out of the public site while retaining them untouched in PostgreSQL.
 export const SITE_CONTENT_DEFINITIONS = Object.freeze({
   'homepage.hero': { page: 'homepage', repeatable: false },
+  homepage_identidade_cabecalho: { page: 'homepage', repeatable: false },
+  homepage_missao: { page: 'homepage', repeatable: false },
+  homepage_visao: { page: 'homepage', repeatable: false },
+  homepage_valores: { page: 'homepage', repeatable: false },
   servicos_cabecalho: { page: 'services', repeatable: false },
   'servicos.proof.cncs': { page: 'services', repeatable: false },
   'servicos.proof.sla-24-7': { page: 'services', repeatable: false },

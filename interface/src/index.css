@@ -2089,6 +2089,93 @@ img, video, canvas, svg {
   line-height: 1.7;
 }
 
+.home-identity {
+  scroll-margin-top: 5rem;
+  border-top: 1px solid #eef2ff;
+  border-bottom: 1px solid #e2e8f0;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(139, 92, 246, 0.08), transparent 28%),
+    radial-gradient(circle at 88% 92%, rgba(37, 99, 235, 0.08), transparent 30%),
+    #f8fafc;
+  padding: 4rem 0;
+}
+
+.home-identity-card {
+  position: relative;
+  height: 100%;
+  min-height: 220px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 1.75rem;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.home-identity-card::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #7c3aed, #2563eb);
+  content: '';
+}
+
+.home-identity-card:hover {
+  border-color: rgba(124, 58, 237, 0.24);
+  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.1);
+  transform: translateY(-3px);
+}
+
+.home-identity-card__icon {
+  display: inline-flex;
+  width: 48px;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.25rem;
+  border-radius: 14px;
+}
+
+.home-identity-card__icon svg {
+  width: 23px;
+  height: 23px;
+}
+
+.home-identity-card__icon--violet {
+  background: #f3e8ff;
+  color: #7c3aed;
+}
+
+.home-identity-card__icon--blue {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.home-identity-card__icon--cyan {
+  background: #cffafe;
+  color: #0891b2;
+}
+
+.home-identity-card h3 {
+  margin: 0 0 0.7rem;
+  color: #172033;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.home-identity-card p {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.875rem;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
 .home-service-card {
   height: 100%;
   min-height: 210px;
@@ -2189,7 +2276,7 @@ img, video, canvas, svg {
 
 .home-services__details:focus-visible,
 .home-final-cta button:focus-visible,
-.home-footer__links button:focus-visible {
+.home-footer__links :is(button, a):focus-visible {
   outline: 3px solid rgba(124, 58, 237, 0.3);
   outline-offset: 3px;
 }
@@ -2342,7 +2429,7 @@ img, video, canvas, svg {
   list-style: none;
 }
 
-.home-footer__links button {
+.home-footer__links :is(button, a) {
   display: inline-flex;
   align-items: center;
   gap: 0.38rem;
@@ -2352,10 +2439,11 @@ img, video, canvas, svg {
   color: #cbd5e1;
   cursor: pointer;
   font-size: 0.875rem;
+  text-decoration: none;
   transition: color 180ms ease, transform 180ms ease;
 }
 
-.home-footer__links button:hover {
+.home-footer__links :is(button, a):hover {
   color: #a78bfa;
   transform: translateX(2px);
 }
@@ -3088,6 +3176,7 @@ select.contact-form__control {
     width: 100%;
   }
 
+  .home-identity,
   .home-services,
   .home-final-cta {
     padding-top: 3rem;
@@ -3103,6 +3192,10 @@ select.contact-form__control {
   }
 
   .home-service-card {
+    min-height: 0;
+  }
+
+  .home-identity-card {
     min-height: 0;
   }
 
@@ -3718,10 +3811,11 @@ select.contact-form__control {
   .public-navbar__login,
   .public-hero__button,
   .public-hero__button--primary span,
+  .home-identity-card,
   .home-service-card,
   .home-services__details,
   .home-final-cta button,
-  .home-footer__links button,
+  .home-footer__links :is(button, a),
   .service-detail-card,
   .service-detail-card button,
   .public-news-card,
