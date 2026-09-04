@@ -9,7 +9,7 @@ import {
 import LoginPage from './pages/LoginPage';
 import {
   AdminDashboard, AdminAnalytics, AdminUsers, AdminClients, AdminAssets, AdminDocuments,
-  AdminIncidents, AdminLogs, AdminSiteContent, AdminManagerDetail, AdminPermissions,
+  AdminIncidents, AdminLogs, AdminSiteContent, AdminManagerDetail,
 } from './pages/AdminPages';
 import {
   MgrDashboard, MgrAnalytics, MgrClients, MgrClientDetail, MgrIncidents, MgrDocuments,
@@ -48,7 +48,6 @@ const PAGE_PATHS: Partial<Record<Page, string>> = {
   'admin-incidents': '/administrador/incidentes',
   'admin-logs': '/administrador/logs',
   'admin-site-content': '/administrador/conteudo',
-  'admin-permissions': '/administrador/permissoes',
   'admin-communication': '/administrador/comunicacao',
   'mgr-dashboard': '/gestor',
   'mgr-analytics': '/gestor/analises',
@@ -89,6 +88,7 @@ const LEGACY_CLIENT_PAGE_PATHS: Record<string, Page> = {
 
 export function pageFromPathname(pathname: string): Page {
   const path = pathname.replace(/\/+$/, '') || '/';
+  if (path === '/administrador/permissoes') return 'admin-dashboard';
   if (/^\/administrador\/clientes\/detalhe$/.test(path)) return 'admin-clients';
   if (/^\/administrador\/clientes\/[^/]+$/.test(path)) return 'admin-client-detail';
   if (/^\/gestor\/clientes\/[^/]+$/.test(path)) return 'mgr-client-detail';
@@ -263,6 +263,10 @@ export default function App() {
     const path = location.pathname.replace(/\/+$/, '') || '/';
     if (path === '/administrador/clientes/detalhe') {
       navigate('/administrador/clientes', { replace: true });
+      return;
+    }
+    if (path === '/administrador/permissoes') {
+      navigate('/administrador', { replace: true });
     }
   }, [location.pathname, navigate]);
 
@@ -315,7 +319,6 @@ export default function App() {
       {page === 'admin-incidents' && <AdminIncidents />}
       {page === 'admin-logs' && <AdminLogs />}
       {page === 'admin-site-content' && <AdminSiteContent />}
-      {page === 'admin-permissions' && <AdminPermissions />}
       {page === 'admin-communication' && <CommunicationPage role="admin" />}
       {page === 'admin-client-detail' && <MgrClientDetail setPage={setPage} backPage="admin-clients" areaLabel="Administrador" backLabel="Clientes" role="admin" clientId={adminClientIdFromPathname(location.pathname)} />}
       {page === 'admin-user-client' && <MgrClientDetail setPage={setPage} backPage="admin-users" backLabel="Utilizadores" />}

@@ -8,6 +8,8 @@ const smallId = { type: DataTypes.SMALLINT, primaryKey: true, autoIncrement: tru
 const createdAt = { type: DataTypes.DATE, allowNull: false, field: 'criado_em' };
 const updatedAt = { type: DataTypes.DATE, allowNull: false, field: 'atualizado_em' };
 
+export const RISK_ASSESSMENT_SCORE_VALIDATION = Object.freeze({ min: 0, max: 10 });
+
 /**
  * Mapeamento estrito do esquema SQL existente (sql/01_criacao.sql e sql/06_extensao_projetoIII.sql).
  * `timestamps: false` é intencional: o PostgreSQL, e não o Sequelize, gere os defaults existentes.
@@ -95,7 +97,7 @@ export function getModels() {
     estado_conformidade_id: { type: DataTypes.SMALLINT, allowNull: false },
     data_avaliacao: { type: DataTypes.DATEONLY, allowNull: false },
     nivel_risco: { type: DataTypes.STRING(20), allowNull: false },
-    pontuacao: DataTypes.DECIMAL(5, 2),
+    pontuacao: { type: DataTypes.DECIMAL(5, 2), validate: RISK_ASSESSMENT_SCORE_VALIDATION },
     resumo: { type: DataTypes.TEXT, allowNull: false },
     recomendacoes: DataTypes.TEXT,
     criado_por: DataTypes.BIGINT,

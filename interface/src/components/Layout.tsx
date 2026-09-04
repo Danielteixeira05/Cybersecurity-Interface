@@ -288,12 +288,6 @@ const ICON = {
       <path d="M7 8h10M7 12h10M7 16h6" strokeLinecap="round" />
     </svg>
   ),
-  permissions: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
-      <rect x="3" y="11" width="18" height="11" rx="2" />
-      <path d="M7 11V7a5 5 0 0110 0v4" />
-    </svg>
-  ),
 };
 
 const ADMIN_ITEMS: SideItem[] = [
@@ -305,7 +299,6 @@ const ADMIN_ITEMS: SideItem[] = [
   { key: 'admin-incidents', label: 'Incidentes', icon: ICON.incidents },
   { key: 'admin-logs', label: 'Logs', icon: ICON.logs },
   { key: 'admin-site-content', label: 'Conteúdo', icon: ICON.content },
-  { key: 'admin-permissions', label: 'Permissões', icon: ICON.permissions },
   { key: 'admin-communication', label: 'Comunicação', icon: ICON.communication },
 ];
 

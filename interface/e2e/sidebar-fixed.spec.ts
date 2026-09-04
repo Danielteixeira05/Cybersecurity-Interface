@@ -162,3 +162,13 @@ for (const profile of profiles) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 }
+
+test('Administrador: a página demonstrativa Permissões foi removida', async ({ page }) => {
+  const admin = profiles[0];
+  await mockAuthenticatedSession(page, admin);
+  await page.goto('/administrador/permissoes');
+
+  await expect(page).toHaveURL(/\/administrador$/);
+  await expect(page.locator('aside').getByRole('button', { name: 'Permissões', exact: true })).toHaveCount(0);
+  await expect(page.getByText('Permissões & Perfis')).toHaveCount(0);
+});

@@ -30,7 +30,7 @@ import newsNis2Image from '../assets/news/nis2-compliance.jpg';
 import newsPentestingImage from '../assets/news/pentesting.jpg';
 import newsRansomwareImage from '../assets/news/ransomware.jpg';
 import {
-  conteudosPublicosApi, enviarContactoPublicoApi, noticiaPublicaDetalheApi, noticiasPublicasApi, session,
+  conteudosPublicosApi, defaultHomePageForRole, enviarContactoPublicoApi, noticiaPublicaDetalheApi, noticiasPublicasApi, session,
   type ApiConteudoSite, type ApiNoticia,
 } from '../apiClient';
 import {
@@ -109,7 +109,7 @@ const HOME_SERVICES = [
   },
   {
     title: 'Gestão de Incidentes NIS2',
-    description: 'Resposta rápida a incidentes com notificação às autoridades dentro dos prazos NIS2 (24h/72h).',
+    description: 'Resposta rápida a incidentes com alerta inicial em 24 horas e notificação do incidente em 72 horas.',
     icon: Shield,
     accent: 'rose',
   },
@@ -141,15 +141,16 @@ const HOME_SERVICES = [
 
 type HomeFooterLink = {
   label: string;
-  target: { type: 'page'; page: Page } | { type: 'anchor'; href: string };
+  target: { type: 'page'; page: Page } | { type: 'anchor'; href: string } | { type: 'portal' };
 };
 
 const HOME_FOOTER_LINKS: readonly HomeFooterLink[] = [
   { label: 'Início', target: { type: 'page', page: 'home' } },
   { label: 'Sobre Nós', target: { type: 'anchor', href: '/#quem-somos' } },
   { label: 'Serviços', target: { type: 'page', page: 'services' } },
+  { label: 'Notícias', target: { type: 'page', page: 'news' } },
   { label: 'Contacto', target: { type: 'page', page: 'contact' } },
-  { label: 'Dashboard', target: { type: 'page', page: 'login' } },
+  { label: 'Dashboard', target: { type: 'portal' } },
 ];
 
 const HOME_FOOTER_CONTACTS = [
@@ -177,7 +178,7 @@ const PUBLIC_SERVICES = [
   {
     title: 'Gestão de Incidentes NIS2',
     price: 'Retainer 950€/mês',
-    features: ['Resposta de emergência 24/7', 'Notificação às autoridades 24h/72h', 'Análise forense digital', 'Relatório pós-incidente'],
+    features: ['Resposta de emergência 24/7', 'Alerta inicial em 24h e notificação em 72h', 'Análise forense digital', 'Relatório pós-incidente'],
     icon: Shield,
     accent: 'rose',
     nis2: true,
@@ -254,7 +255,7 @@ const NIS2_REQUIREMENTS = [
   {
     title: 'Quem é abrangido?',
     description:
-      'Entidades essenciais e importantes em setores como energia, saúde, transportes, banca, infraestruturas digitais e prestadores de serviços TIC com mais de 50 colaboradores ou 10M€ de faturação.',
+      'Entidades essenciais e importantes de setores abrangidos, tendo em conta a atividade, a dimensão e as exceções previstas na Diretiva NIS2.',
     icon: UsersRound,
     accent: 'blue',
   },
@@ -268,7 +269,7 @@ const NIS2_REQUIREMENTS = [
   {
     title: 'Notificação de incidentes',
     description:
-      'Incidentes significativos devem ser notificados ao CNCS (Centro Nacional de Cibersegurança) em 24 horas (alerta inicial) e 72 horas (relatório detalhado).',
+      'Os incidentes significativos exigem um alerta inicial em 24 horas, uma notificação com avaliação inicial em 72 horas e, normalmente, um relatório final até um mês.',
     icon: CircleAlert,
     accent: 'orange',
   },
@@ -282,14 +283,14 @@ const NIS2_REQUIREMENTS = [
   {
     title: 'Responsabilidade de gestão',
     description:
-      'Os órgãos de gestão são diretamente responsáveis pelo cumprimento da NIS2. A negligência pode resultar em coimas até 10M€ ou 2% do volume de negócios global.',
+      'Os órgãos de gestão das entidades abrangidas devem aprovar as medidas de gestão de riscos de cibersegurança e supervisionar a sua aplicação.',
     icon: Shield,
     accent: 'rose',
   },
   {
     title: 'Formação obrigatória',
     description:
-      'Colaboradores e gestores devem receber formação regular em cibersegurança. A consciencialização é considerada um controlo de segurança obrigatório pela diretiva.',
+      'Os membros dos órgãos de gestão devem receber formação, e as entidades são incentivadas a disponibilizar regularmente formação semelhante aos colaboradores.',
     icon: BookOpen,
     accent: 'cyan',
   },
@@ -630,6 +631,11 @@ function PublicFooter({ setPage }: PageProps) {
     setPage(target);
   };
 
+  const navigateToPortal = () => {
+    const role = session.get().role;
+    navigateTo(role ? defaultHomePageForRole(role) : 'login');
+  };
+
   return (
     <footer className="home-footer" data-home-section="footer">
       <div className="container-xl home-footer__container">
@@ -668,6 +674,11 @@ function PublicFooter({ setPage }: PageProps) {
                       <ChevronRight aria-hidden="true" />
                       {item.label}
                     </a>
+                  ) : target.type === 'portal' ? (
+                    <button type="button" onClick={navigateToPortal}>
+                      <ChevronRight aria-hidden="true" />
+                      {item.label}
+                    </button>
                   ) : (
                     <button type="button" onClick={() => navigateTo(target.page)}>
                       <ChevronRight aria-hidden="true" />
@@ -699,7 +710,7 @@ function PublicFooter({ setPage }: PageProps) {
         </div>
 
         <div className="home-footer__bottom">
-          <p>© 2025 CiberBoxSecur Lda. Todos os direitos reservados. Lisboa, Portugal.</p>
+          <p>© {new Date().getFullYear()} CiberBoxSecur Lda. Todos os direitos reservados. Lisboa, Portugal.</p>
           <div className="home-footer__legal" aria-label="Informação legal">
             <span>Política de Privacidade</span>
             <span>Termos de Serviço</span>
@@ -1198,7 +1209,7 @@ export function ServicesPage({ setPage }: PageProps) {
             <header className="services-section-heading services-section-heading--nis2">
               <p className="services-section-heading__eyebrow">{contentText(nis2Header?.subtitulo, 'Diretiva NIS2')}</p>
               <h2 id="services-nis2-title">{contentText(nis2Header?.titulo, 'O que é a NIS2 e o que implica para a sua empresa?')}</h2>
-              <p>{contentText(nis2Header?.corpo, 'A Diretiva NIS2 (Network and Information Security 2) é a lei europeia de cibersegurança mais abrangente até à data. Entrou em vigor em outubro de 2024 e obriga milhares de organizações portuguesas a adotarem medidas concretas de segurança.')}</p>
+              <p>{contentText(nis2Header?.corpo, 'A Diretiva NIS2 é uma diretiva da União Europeia que entrou em vigor em janeiro de 2023. Os Estados-Membros tiveram até 17 de outubro de 2024 para a transpor para o direito nacional.')}</p>
             </header>
 
             <div className="row g-4 services-nis2__grid">

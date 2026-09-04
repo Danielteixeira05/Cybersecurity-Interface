@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import express from 'express';
+import { readFile } from 'node:fs/promises';
 import { app as application } from '../src/app.js';
 import { createAssessmentsControllers } from '../src/controllers/assessments.controller.js';
 import { errorHandler, httpError, notFound } from '../src/middleware/errors.js';
 import { createAssessmentsRouter } from '../src/routes/assessments.routes.js';
 import { sanitiseAuditDetails } from '../src/services/audit-log.service.js';
+import { RISK_ASSESSMENT_SCORE_VALIDATION } from '../src/models/index.js';
 import {
   assessmentClientId,
   createConformityStatusReader,
@@ -52,6 +54,16 @@ test('o payload NIS2 aceita apenas campos e valores estritos', () => {
   }
   assert.throws(() => normaliseAssessmentPayload({ ...validPayload, criado_por: 999 }), (error) => error?.status === 400);
   assert.throws(() => normaliseAssessmentPayload({ ...validPayload, criado_em: '2026-01-01' }), (error) => error?.status === 400);
+});
+
+test('modelo e migrations alinham a pontuação NIS2 entre 0 e 10', async () => {
+  assert.deepEqual(RISK_ASSESSMENT_SCORE_VALIDATION, { min: 0, max: 10 });
+
+  const up = await readFile(new URL('../migrations/20260904_align_risk_assessment_score_constraint.up.sql', import.meta.url), 'utf8');
+  const down = await readFile(new URL('../migrations/20260904_align_risk_assessment_score_constraint.down.sql', import.meta.url), 'utf8');
+  assert.match(up, /pontuacao >= 0 AND pontuacao <= 10/);
+  assert.match(down, /pontuacao >= 0 AND pontuacao <= 100/);
+  assert.doesNotMatch(up, /\b(?:INSERT|UPDATE|DELETE)\b/i);
 });
 
 test('o filtro de cliente do GET é lexical e não aceita IDs ambíguos', () => {

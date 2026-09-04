@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ApiConteudoSite, ApiNoticia } from '../apiClient';
+import { session, type ApiConteudoSite, type ApiNoticia } from '../apiClient';
 import { ContactPage, HomePage, NewsPage, ServicesPage } from './PublicPages';
 
 const apiMocks = vi.hoisted(() => ({
@@ -35,6 +35,7 @@ describe('conteúdo público com design canónico', () => {
     apiMocks.enviarContactoPublicoApi.mockResolvedValue({ id: 1 });
     apiMocks.noticiasPublicasApi.mockResolvedValue([]);
     vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined);
+    session.clear();
   });
 
   it('mostra imediatamente o Hero original completo sem registos CMS', async () => {
@@ -54,12 +55,35 @@ describe('conteúdo público com design canónico', () => {
     expect(screen.getAllByRole('button', { name: 'Agendar Serviços' })[0]).toBeVisible();
     expect(screen.getByText('Links Rápidos')).toBeVisible();
     expect(screen.getByRole('link', { name: 'Sobre Nós' })).toHaveAttribute('href', '/#quem-somos');
+    expect(screen.getByText(`© ${new Date().getFullYear()} CiberBoxSecur Lda. Todos os direitos reservados. Lisboa, Portugal.`)).toBeVisible();
 
     await act(async () => {
       resolve([]);
       await Promise.resolve();
     });
     expect(screen.getByRole('heading', { name: 'Segurança Digital para um Mundo Conectado' })).toBeVisible();
+  });
+
+  it('mantém os destinos reais do footer e abre o portal adequado à sessão', async () => {
+    const user = userEvent.setup();
+    const setPage = vi.fn();
+    render(<HomePage setPage={setPage} />);
+
+    const footer = document.querySelector('.home-footer');
+    expect(footer).not.toBeNull();
+    expect(screen.getByRole('link', { name: 'Sobre Nós' })).toHaveAttribute('href', '/#quem-somos');
+
+    for (const [label, page] of [['Início', 'home'], ['Serviços', 'services'], ['Notícias', 'news'], ['Contacto', 'contact']] as const) {
+      await user.click(withinSection(footer!, new RegExp(`^${label}$`)));
+      expect(setPage).toHaveBeenLastCalledWith(page);
+    }
+
+    await user.click(withinSection(footer!, /^Dashboard$/));
+    expect(setPage).toHaveBeenLastCalledWith('login');
+
+    session.set({ utilizador: null, cliente: null, role: 'manager' });
+    await user.click(withinSection(footer!, /^Dashboard$/));
+    expect(setPage).toHaveBeenLastCalledWith('mgr-dashboard');
   });
 
   it('sobrepõe apenas os campos publicados do Hero e mantém CTAs, secções e footer', async () => {
@@ -137,6 +161,11 @@ describe('conteúdo público com design canónico', () => {
     expect(document.querySelectorAll('.service-proof-card')).toHaveLength(4);
     expect(document.querySelectorAll('.service-process-step')).toHaveLength(4);
     expect(document.querySelectorAll('.nis2-requirement-card')).toHaveLength(6);
+    expect(screen.getByText(/entrou em vigor em janeiro de 2023/i)).toBeVisible();
+    expect(screen.getByText(/até 17 de outubro de 2024/i)).toBeVisible();
+    expect(screen.getByText(/alerta inicial em 24 horas, uma notificação com avaliação inicial em 72 horas/i)).toBeVisible();
+    expect(screen.getByText(/relatório final até um mês/i)).toBeVisible();
+    expect(screen.getByText(/atividade, a dimensão e as exceções previstas/i)).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Pronto para Proteger o Seu Negócio?' })).toBeVisible();
     expect(screen.getByText('Links Rápidos')).toBeVisible();
     await waitFor(() => expect(apiMocks.conteudosPublicosApi).toHaveBeenCalled());

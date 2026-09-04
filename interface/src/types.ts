@@ -5,7 +5,7 @@ export type Page =
   | 'home' | 'about' | 'mission' | 'services' | 'news' | 'news-detail' | 'contact' | 'login'
   // Admin
   | 'admin-dashboard' | 'admin-analytics' | 'admin-users' | 'admin-clients' | 'admin-assets' | 'admin-documents'
-  | 'admin-incidents' | 'admin-logs' | 'admin-site-content' | 'admin-permissions'
+  | 'admin-incidents' | 'admin-logs' | 'admin-site-content'
   | 'admin-client-detail' | 'admin-user-client' | 'admin-user-manager' | 'admin-communication'
   // Manager
   | 'mgr-dashboard' | 'mgr-analytics' | 'mgr-clients' | 'mgr-client-detail' | 'mgr-assets' | 'mgr-incidents'

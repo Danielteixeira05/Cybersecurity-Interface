@@ -16,6 +16,13 @@ describe('rota de detalhe administrativo de Gestor', () => {
   });
 });
 
+describe('rota administrativa demonstrativa removida', () => {
+  it('resolve a antiga rota de Permissões para o dashboard', () => {
+    expect(pageFromPathname('/administrador/permissoes')).toBe('admin-dashboard');
+    expect(pageFromPathname('/administrador/permissoes/')).toBe('admin-dashboard');
+  });
+});
+
 describe('rota de detalhe administrativo de Cliente', () => {
   it('transporta um ID canónico, preservado após refresh', () => {
     expect(pageFromPathname('/administrador/clientes/42')).toBe('admin-client-detail');

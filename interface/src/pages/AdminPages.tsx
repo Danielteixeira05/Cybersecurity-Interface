@@ -1206,57 +1206,6 @@ export function AdminSiteContent() {
   );
 }
 
-export function AdminPermissions() {
-  const roles = [
-    { n: 'ADMINISTRADOR', d: 'Acesso total à plataforma. Gestão global de utilizadores, clientes e sistema.', c: 3, f: 12 },
-    { n: 'COLABORADOR', d: 'Gestão operacional: clientes, ativos, incidentes, documentos e pedidos.', c: 8, f: 9 },
-    { n: 'CLIENTE', d: 'Apenas aos dados da própria empresa: ativos, incidentes, documentos, pedidos.', c: 56, f: 5 },
-  ];
-  const features = [
-    'Dashboard global', 'Gerir utilizadores', 'Gerir clientes', 'Logs de auditoria',
-    'Gestão de ativos', 'Reportar incidentes', 'Submeter documentos',
-    'Avaliações NIS2', 'Importar Excel', 'Configurações do sistema',
-  ];
-  const access: Record<string, boolean[]> = {
-    ADMINISTRADOR: features.map(() => true),
-    COLABORADOR: [true, false, true, false, true, true, true, true, true, false],
-    CLIENTE: [false, false, false, false, true, true, true, true, false, false],
-  };
-  return (
-    <div>
-      <PageHeader title="Permissões & Perfis" subtitle="Matriz de acesso por perfil de utilizador" />
-      <div className="grid gap-6 lg:grid-cols-3">
-        {roles.map((r) => (
-          <div key={r.n} className="rounded-2xl border border-slate-200 bg-white p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-display text-xl font-bold text-slate-900">{r.n}</h3>
-                <p className="mt-1 text-sm text-slate-500">{r.d}</p>
-              </div>
-              <span className="badge bg-blue-100 text-blue-700">{r.c} users</span>
-            </div>
-            <ul className="mt-6 space-y-3">
-              {features.slice(0, r.f).map((f, i) => (
-                <li key={f} className="flex items-center gap-3 text-sm text-slate-700">
-                  <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[11px] ${
-                    access[r.n][i] ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'
-                  }`}>
-                    {access[r.n][i] ? '✓' : '✕'}
-                  </span>
-                  {f}
-                </li>
-              ))}
-            </ul>
-            <button className="mt-6 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-              Personalizar permissões
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function formatDateTime(value?: string | null) {
   if (!value) return '—';
   const date = new Date(value);
