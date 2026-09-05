@@ -24,6 +24,8 @@ export const PUBLIC_CONTENT_KEYS = {
   homepageMission: 'homepage_missao',
   homepageVision: 'homepage_visao',
   homepageValues: 'homepage_valores',
+  homepageServicesHeader: 'homepage_servicos_cabecalho',
+  homepageFinalCta: 'homepage_cta_final',
   servicesHero: 'servicos_cabecalho',
   servicesCatalog: 'servicos_catalogo',
   servicesProcessHeader: 'servicos_processo_cabecalho',
@@ -34,6 +36,15 @@ export const PUBLIC_CONTENT_KEYS = {
   contactForm: 'contacto_formulario',
   contactSchedule: 'contacto_horario',
 } as const;
+
+export const PUBLIC_HOME_SERVICE_KEYS = [
+  'homepage.servico.pentesting',
+  'homepage.servico.incidentes-nis2',
+  'homepage.servico.conformidade-nis2',
+  'homepage.servico.siem',
+  'homepage.servico.formacao',
+  'homepage.servico.cloud-devsecops',
+] as const;
 
 export const PUBLIC_SERVICE_PROOF_KEYS = [
   'servicos.proof.cncs',
@@ -117,7 +128,7 @@ export const PUBLIC_CONTENT_EDITOR_PRESETS: readonly PublicContentEditorPreset[]
     'Hero da Homepage',
     'Etiqueta, título e descrição do Hero. Use “|” no título para destacar a segunda parte.',
     'Segurança Digital para um|Mundo Conectado',
-    'Plataforma Certificada NIS2 · ISO/IEC 27001',
+    'Apoio à conformidade NIS2 · Segurança digital',
     'Proteja a sua empresa contra ameaças digitais e garanta conformidade com as diretivas europeias de cibersegurança.',
   ),
   fixedPreset(
@@ -161,15 +172,41 @@ export const PUBLIC_CONTENT_EDITOR_PRESETS: readonly PublicContentEditorPreset[]
     4,
   ),
   fixedPreset(
+    PUBLIC_CONTENT_KEYS.homepageServicesHeader,
+    'homepage',
+    'Cabeçalho dos serviços da Homepage',
+    'Etiqueta, título e introdução da secção de serviços apresentada na Homepage.',
+    'Serviços de Cibersegurança Completos',
+    'O Que Fazemos',
+    'Proteção de ponta a ponta para a sua infraestrutura digital, desde a deteção de ameaças à conformidade regulatória.',
+    5,
+  ),
+  fixedPreset(PUBLIC_HOME_SERVICE_KEYS[0], 'homepage', 'Homepage — Testes de Penetração', 'Título e descrição do cartão.', 'Testes de Penetração', '', 'Avaliações de vulnerabilidades e testes de intrusão autorizados por profissionais de segurança.', 6),
+  fixedPreset(PUBLIC_HOME_SERVICE_KEYS[1], 'homepage', 'Homepage — Incidentes NIS2', 'Título e descrição do cartão.', 'Gestão de Incidentes NIS2', '', 'Resposta rápida a incidentes com alerta inicial em 24 horas e notificação do incidente em 72 horas.', 7),
+  fixedPreset(PUBLIC_HOME_SERVICE_KEYS[2], 'homepage', 'Homepage — Conformidade NIS2', 'Título e descrição do cartão.', 'Conformidade NIS2', '', 'Apoio completo em auditoria e gestão de conformidade para os requisitos da Diretiva NIS2 da UE.', 8),
+  fixedPreset(PUBLIC_HOME_SERVICE_KEYS[3], 'homepage', 'Homepage — SIEM', 'Título e descrição do cartão.', 'SIEM & Monitorização Contínua', '', 'Monitorização contínua com deteção de ameaças em tempo real nos ativos digitais e no perímetro de rede.', 9),
+  fixedPreset(PUBLIC_HOME_SERVICE_KEYS[4], 'homepage', 'Homepage — Formação', 'Título e descrição do cartão.', 'Formação e Consciencialização', '', 'Programas de formação personalizados para aumentar a maturidade de segurança das suas equipas.', 10),
+  fixedPreset(PUBLIC_HOME_SERVICE_KEYS[5], 'homepage', 'Homepage — Cloud & DevSecOps', 'Título e descrição do cartão.', 'Segurança Cloud & DevSecOps', '', 'Proteção de ambientes cloud e integração de segurança no ciclo de desenvolvimento de software.', 11),
+  fixedPreset(
+    PUBLIC_CONTENT_KEYS.homepageFinalCta,
+    'homepage',
+    'Chamada final da Homepage',
+    'Etiqueta, título e descrição da chamada final. Use “|” no título para destacar a segunda parte.',
+    'Pronto para Proteger o|Seu Negócio?',
+    'Comece Hoje',
+    'Agende uma demonstração gratuita e veja como a nossa tecnologia pode proteger a sua empresa contra as ameaças digitais.',
+    12,
+  ),
+  fixedPreset(
     PUBLIC_CONTENT_KEYS.servicesHero,
     'services',
     'Cabeçalho de Serviços',
     'Etiqueta, título e texto introdutório. Use “|” no título para destacar a segunda parte.',
     'Proteção abrangente para |cada ameaça.',
-    'Os Nossos Serviços · Equipa Certificada',
-    'Do SOC 24/7 à conformidade NIS2, a nossa equipa certificada cobre todo o ciclo de vida da cibersegurança empresarial.',
+    'Os Nossos Serviços · Equipa de Cibersegurança',
+    'Da monitorização contínua à conformidade NIS2, a nossa equipa acompanha todo o ciclo de vida da cibersegurança empresarial.',
   ),
-  fixedPreset(PUBLIC_SERVICE_PROOF_KEYS[0], 'services', 'Compromisso — Certificado CNCS', 'Título e detalhe do compromisso.', 'Certificado CNCS', 'Autoridade Nacional', '', 0),
+  fixedPreset(PUBLIC_SERVICE_PROOF_KEYS[0], 'services', 'Compromisso — Referencial CNCS', 'Título e detalhe do compromisso.', 'Referencial CNCS', 'Orientações nacionais', '', 0),
   fixedPreset(PUBLIC_SERVICE_PROOF_KEYS[1], 'services', 'Compromisso — SLA 24/7', 'Título e detalhe do compromisso.', 'SLA 24/7', 'Resposta garantida', '', 1),
   fixedPreset(PUBLIC_SERVICE_PROOF_KEYS[2], 'services', 'Compromisso — Dados na UE', 'Título e detalhe do compromisso.', 'Dados na UE', 'RGPD compliant', '', 2),
   fixedPreset(PUBLIC_SERVICE_PROOF_KEYS[3], 'services', 'Compromisso — Gestor Dedicado', 'Título e detalhe do compromisso.', 'Gestor Dedicado', 'Por cada cliente', '', 3),
@@ -180,7 +217,7 @@ export const PUBLIC_CONTENT_EDITOR_PRESETS: readonly PublicContentEditorPreset[]
     'Etiqueta, título e texto apresentados antes dos cartões.',
     'O que oferecemos',
     'Catálogo de Serviços',
-    'Todos os serviços são prestados pela nossa equipa certificada com SLAs documentados.',
+    'Todos os serviços são prestados pela nossa equipa com âmbito e condições documentados.',
   ),
   fixedPreset(
     PUBLIC_SERVICE_CARD_KEYS[0],
@@ -253,7 +290,7 @@ export const PUBLIC_CONTENT_EDITOR_PRESETS: readonly PublicContentEditorPreset[]
   ),
   fixedPreset(PUBLIC_SERVICE_PROCESS_KEYS[0], 'services', 'Processo — Avaliação', 'Título e descrição da etapa.', 'Avaliação', '', 'Diagnóstico inicial do estado de segurança e identificação de lacunas.', 0),
   fixedPreset(PUBLIC_SERVICE_PROCESS_KEYS[1], 'services', 'Processo — Planeamento', 'Título e descrição da etapa.', 'Planeamento', '', 'Desenvolvimento de plano de ação priorizado por risco e impacto.', 1),
-  fixedPreset(PUBLIC_SERVICE_PROCESS_KEYS[2], 'services', 'Processo — Implementação', 'Título e descrição da etapa.', 'Implementação', '', 'Execução por especialistas certificados com relatórios contínuos.', 2),
+  fixedPreset(PUBLIC_SERVICE_PROCESS_KEYS[2], 'services', 'Processo — Implementação', 'Título e descrição da etapa.', 'Implementação', '', 'Execução acompanhada por especialistas, com relatórios contínuos.', 2),
   fixedPreset(PUBLIC_SERVICE_PROCESS_KEYS[3], 'services', 'Processo — Monitorização', 'Título e descrição da etapa.', 'Monitorização', '', 'Acompanhamento contínuo, relatórios periódicos e melhoria contínua.', 3),
   fixedPreset(
     PUBLIC_CONTENT_KEYS.servicesNis2Header,
@@ -318,10 +355,10 @@ export const PUBLIC_CONTENT_EDITOR_PRESETS: readonly PublicContentEditorPreset[]
     '',
     'Segunda – Sexta | 09:00 – 18:00\nSOC (clientes ativos) | 24 / 7',
   ),
-  fixedPreset(PUBLIC_CONTACT_CERTIFICATION_KEYS[0], 'contact', 'Certificação — ISO 27001', 'Designação apresentada no cartão de certificações.', 'ISO 27001', '', '', 0),
-  fixedPreset(PUBLIC_CONTACT_CERTIFICATION_KEYS[1], 'contact', 'Certificação — CNCS', 'Designação apresentada no cartão de certificações.', 'CNCS', '', '', 1),
-  fixedPreset(PUBLIC_CONTACT_CERTIFICATION_KEYS[2], 'contact', 'Certificação — NIS2', 'Designação apresentada no cartão de certificações.', 'NIS2', '', '', 2),
-  fixedPreset(PUBLIC_CONTACT_CERTIFICATION_KEYS[3], 'contact', 'Certificação — RGPD', 'Designação apresentada no cartão de certificações.', 'RGPD', '', '', 3),
+  fixedPreset(PUBLIC_CONTACT_CERTIFICATION_KEYS[0], 'contact', 'Referencial — ISO/IEC 27001', 'Designação apresentada na lista de referenciais.', 'Boas práticas ISO/IEC 27001', '', '', 0),
+  fixedPreset(PUBLIC_CONTACT_CERTIFICATION_KEYS[1], 'contact', 'Referencial — CNCS', 'Designação apresentada na lista de referenciais.', 'Orientações CNCS', '', '', 1),
+  fixedPreset(PUBLIC_CONTACT_CERTIFICATION_KEYS[2], 'contact', 'Referencial — NIS2', 'Designação apresentada na lista de referenciais.', 'Apoio à conformidade NIS2', '', '', 2),
+  fixedPreset(PUBLIC_CONTACT_CERTIFICATION_KEYS[3], 'contact', 'Referencial — RGPD', 'Designação apresentada na lista de referenciais.', 'Apoio à proteção de dados', '', '', 3),
 ];
 
 export function getPublicContentEditorPreset(chave: string): PublicContentEditorPreset | undefined {

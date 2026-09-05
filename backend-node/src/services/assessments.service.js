@@ -8,6 +8,12 @@ const RISK_LEVELS = new Set(['BAIXO', 'MEDIO', 'ALTO', 'CRITICO']);
 const MAX_SUMMARY_LENGTH = 4000;
 const MAX_RECOMMENDATIONS_LENGTH = 8000;
 
+function hasAtMostTwoDecimalPlaces(value) {
+  const scaled = value * 100;
+  const tolerance = Number.EPSILON * Math.max(1, Math.abs(scaled)) * 4;
+  return Math.abs(scaled - Math.round(scaled)) <= tolerance;
+}
+
 function positiveInteger(value, field) {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1) {
     throw httpError(400, `${field} tem de ser um inteiro positivo.`);
@@ -53,7 +59,7 @@ export function normaliseAssessmentPayload(input) {
   const nivelRisco = typeof payload.nivel_risco === 'string' ? payload.nivel_risco : '';
   if (!RISK_LEVELS.has(nivelRisco)) throw httpError(400, 'nivel_risco inválido.');
   const score = payload.pontuacao;
-  if (typeof score !== 'number' || !Number.isFinite(score) || score < 0 || score > 10 || Math.round(score * 100) !== score * 100) {
+  if (typeof score !== 'number' || !Number.isFinite(score) || score < 0 || score > 10 || !hasAtMostTwoDecimalPlaces(score)) {
     throw httpError(400, 'pontuacao tem de ser um número entre 0 e 10, com no máximo duas casas decimais.');
   }
 

@@ -16,6 +16,13 @@ import { ExcelImportWorkspace } from './ManagerPages';
 import { DocumentsWorkspace } from '../components/DocumentsWorkspace';
 import { INCIDENT_CHANGED_EVENT } from '../realtime';
 
+export const CLIENT_RISK_SCORE_DOMAIN = [0, 10] as const;
+export const CLIENT_RISK_SCORE_TICKS = [0, 2, 4, 6, 8, 10] as const;
+
+export function formatClientRiskScoreTooltip(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? `${value} / 10` : '— / 10';
+}
+
 interface PageProps {
   setPage: (p: Page) => void;
 }
@@ -608,8 +615,8 @@ export function ClientRisk() {
               }))}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="aval" stroke="#64748b" />
-                <YAxis stroke="#64748b" domain={[0, 100]} />
-                <Tooltip />
+                <YAxis stroke="#64748b" domain={CLIENT_RISK_SCORE_DOMAIN} ticks={CLIENT_RISK_SCORE_TICKS} allowDecimals={false} />
+                <Tooltip formatter={(value) => [formatClientRiskScoreTooltip(value), 'Score']} />
                 <Line type="monotone" dataKey="score" stroke="#2563eb" strokeWidth={3} dot={{ r: 5, fill: '#2563eb' }} />
               </LineChart>
             </ResponsiveContainer>

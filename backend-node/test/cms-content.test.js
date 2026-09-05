@@ -78,6 +78,16 @@ test('o contrato editorial expõe apenas blocos estáveis do design público', (
     'homepage_visao',
     'homepage_valores',
   ];
+  const homepageServiceKeys = [
+    'homepage_servicos_cabecalho',
+    'homepage.servico.pentesting',
+    'homepage.servico.incidentes-nis2',
+    'homepage.servico.conformidade-nis2',
+    'homepage.servico.siem',
+    'homepage.servico.formacao',
+    'homepage.servico.cloud-devsecops',
+    'homepage_cta_final',
+  ];
   assert.equal(new Set(SITE_CONTENT_KEYS).size, SITE_CONTENT_KEYS.length);
   assert.equal(SITE_CONTENT_KEYS.includes('servico'), false);
   assert.equal(SITE_CONTENT_KEYS.includes('servicos_prova'), false);
@@ -85,6 +95,11 @@ test('o contrato editorial expõe apenas blocos estáveis do design público', (
   assert.ok(SITE_CONTENT_KEYS.includes('servicos.card.pentesting'));
   assert.ok(SITE_CONTENT_KEYS.includes('contacto.channel.morada'));
   for (const chave of identityKeys) {
+    assert.ok(SITE_CONTENT_KEYS.includes(chave));
+    assert.deepEqual(SITE_CONTENT_DEFINITIONS[chave], { page: 'homepage', repeatable: false });
+    assert.equal(validateSiteContentPayload({ ...validHero, chave }).chave, chave);
+  }
+  for (const chave of homepageServiceKeys) {
     assert.ok(SITE_CONTENT_KEYS.includes(chave));
     assert.deepEqual(SITE_CONTENT_DEFINITIONS[chave], { page: 'homepage', repeatable: false });
     assert.equal(validateSiteContentPayload({ ...validHero, chave }).chave, chave);

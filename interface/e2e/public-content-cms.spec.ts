@@ -64,12 +64,11 @@ test('Admin edita o Hero canónico e a Homepage reflete a API pública', async (
   await expect(page.getByText('Links Rápidos')).toBeVisible();
 });
 
-test('Admin cria, atualiza e recarrega os quatro blocos institucionais da Homepage', async ({ page }) => {
+test('Admin cria, atualiza e recarrega os novos blocos editoriais da Homepage', async ({ page }) => {
   const presets = [
-    { key: 'homepage_identidade_cabecalho', label: 'Cabeçalho da identidade', created: 'Identidade criada pela API E2E', revised: 'Identidade revista pela API E2E' },
-    { key: 'homepage_missao', label: 'Missão', created: 'Missão criada pela API E2E', revised: 'Missão revista pela API E2E' },
-    { key: 'homepage_visao', label: 'Visão', created: 'Visão criada pela API E2E', revised: 'Visão revista pela API E2E' },
-    { key: 'homepage_valores', label: 'Valores', created: 'Valores criados pela API E2E', revised: 'Valores revistos pela API E2E' },
+    { key: 'homepage_servicos_cabecalho', label: 'Cabeçalho dos serviços da Homepage', created: 'Serviços criados pela API E2E', revised: 'Serviços revistos pela API E2E' },
+    { key: 'homepage.servico.pentesting', label: 'Homepage — Testes de Penetração', created: 'Pentesting criado pela API E2E', revised: 'Pentesting revisto pela API E2E' },
+    { key: 'homepage_cta_final', label: 'Chamada final da Homepage', created: 'Chamada criada pela API E2E', revised: 'Chamada revista pela API E2E' },
   ] as const;
   type IdentityContent = {
     id: number;
@@ -141,8 +140,7 @@ test('Admin cria, atualiza e recarrega os quatro blocos institucionais da Homepa
     await expect(card.getByText('Predefinição')).toBeVisible();
     await card.getByRole('button', { name: 'Editar' }).click();
     await page.getByRole('textbox', { name: 'Título', exact: true }).fill(preset.created);
-    const bodyLabel = preset.key === 'homepage_identidade_cabecalho' ? 'Introdução' : 'Descrição';
-    await page.getByRole('textbox', { name: bodyLabel }).fill(`Descrição criada para ${preset.label}.`);
+    await page.getByRole('textbox', { name: 'Descrição' }).fill(`Descrição criada para ${preset.label}.`);
     await page.getByRole('button', { name: 'Guardar' }).click();
     await expect(page.getByText('Conteúdo guardado com sucesso.')).toBeVisible();
   }
@@ -169,10 +167,9 @@ test('Admin cria, atualiza e recarrega os quatro blocos institucionais da Homepa
   await expect(page.getByRole('button', { name: 'Editar' })).toHaveCount(26);
 
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Identidade revista pela API E2E' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Missão revista pela API E2E' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Visão revista pela API E2E' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Valores revistos pela API E2E' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Serviços revistos pela API E2E' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pentesting revisto pela API E2E' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Chamada revista pela API E2E' })).toBeVisible();
   await expect(page.locator('.home-identity-card')).toHaveCount(3);
   await expect(page.locator('.home-service-card')).toHaveCount(6);
   const aboutLink = page.getByRole('link', { name: 'Sobre Nós' });
@@ -245,7 +242,6 @@ test('design público original permanece completo sem CMS em desktop e mobile', 
       expect(overflow).toBe(false);
       await page.screenshot({
         path: path.join(screenshotDir, `${target.name}-${viewport.label}.png`),
-        fullPage: true,
       });
     }
   }

@@ -1,5 +1,6 @@
 import { getModels } from '../models/index.js';
 import { assertClientAccess, clientIdsForUser } from './clients.service.js';
+import { serialiseDocument } from './document.serializer.js';
 export { listRiskAssessments } from './assessments.service.js';
 export { listRequests } from './requests.service.js';
 
@@ -43,12 +44,5 @@ export async function listDocuments(auth, clientId) {
     where: await accessibleWhere(auth, clientId, { hasActiveFlag: true }),
     include: [{ model: Client, as: 'cliente', attributes: ['nome'] }],
     order: [['submetido_em', 'DESC'], ['id', 'DESC']],
-  })).map((document) => {
-    const item = withClientName(document);
-    // O metadata não expõe armazenamento interno, hash nem o nome de ficheiro guardado.
-    delete item.caminho_ficheiro;
-    delete item.hash_sha256;
-    delete item.nome_ficheiro_guardado;
-    return item;
-  });
+  })).map(serialiseDocument);
 }

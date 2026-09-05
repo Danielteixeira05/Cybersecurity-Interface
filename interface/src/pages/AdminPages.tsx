@@ -1120,10 +1120,13 @@ export function AdminSiteContent() {
     item: items.find((item) => item.chave === preset.chave),
   }));
   const selectedDraftPreset = getPublicContentEditorPreset(draft.chave);
-  const isHomepageIdentityDraft = draft.chave.startsWith('homepage_');
+  const isHomepageDraft = draft.chave.startsWith('homepage_') || draft.chave.startsWith('homepage.');
+  const hidesHomepageSubtitle = [
+    'homepage_identidade_cabecalho', 'homepage_missao', 'homepage_visao', 'homepage_valores',
+  ].includes(draft.chave) || draft.chave.startsWith('homepage.servico.');
   const bodyFieldLabel = draft.chave === 'homepage_identidade_cabecalho'
     ? 'Introdução'
-    : isHomepageIdentityDraft ? 'Descrição' : 'Corpo';
+    : isHomepageDraft ? 'Descrição' : 'Corpo';
 
   return (
     <div>
@@ -1162,7 +1165,7 @@ export function AdminSiteContent() {
           <div className="grid gap-4 md:grid-cols-2">
             <label className="text-sm font-medium text-slate-700">Bloco<input value={selectedDraftPreset?.label ?? draft.chave} readOnly className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-600" /></label>
             <label className="text-sm font-medium text-slate-700 md:col-span-2">Título<input value={draft.titulo} onChange={(event) => setDraft({ ...draft, titulo: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" required />{contentFieldErrors.titulo && <span className="mt-1 block text-xs text-rose-700">{contentFieldErrors.titulo}</span>}</label>
-            {!isHomepageIdentityDraft && <label className="text-sm font-medium text-slate-700 md:col-span-2">Subtítulo<input value={draft.subtitulo ?? ''} onChange={(event) => setDraft({ ...draft, subtitulo: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>}
+            {!hidesHomepageSubtitle && <label className="text-sm font-medium text-slate-700 md:col-span-2">Subtítulo<input value={draft.subtitulo ?? ''} onChange={(event) => setDraft({ ...draft, subtitulo: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>}
             {draft.chave === 'servicos_nis2_cta' && <label className="text-sm font-medium text-slate-700 md:col-span-2">Ligação complementar (HTTPS)<input value={draft.imagem_url ?? ''} onChange={(event) => setDraft({ ...draft, imagem_url: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2" type="url" />{contentFieldErrors.imagem_url && <span className="mt-1 block text-xs text-rose-700">{contentFieldErrors.imagem_url}</span>}</label>}
             <label className="text-sm font-medium text-slate-700 md:col-span-2">{bodyFieldLabel}<textarea value={draft.corpo ?? ''} onChange={(event) => setDraft({ ...draft, corpo: event.target.value })} className="mt-1 min-h-32 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
           </div>

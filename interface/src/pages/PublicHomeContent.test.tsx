@@ -44,7 +44,8 @@ describe('conteúdo público com design canónico', () => {
 
     render(<HomePage setPage={vi.fn()} />);
 
-    expect(screen.getByText('Plataforma Certificada NIS2 · ISO/IEC 27001')).toBeVisible();
+    expect(screen.getByText('Apoio à conformidade NIS2 · Segurança digital')).toBeVisible();
+    expect(screen.queryByText('Plataforma Certificada NIS2 · ISO/IEC 27001')).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Segurança Digital para um Mundo Conectado' })).toBeVisible();
     expect(screen.getByText(/Proteja a sua empresa contra ameaças digitais/)).toBeVisible();
     expect(screen.getByRole('heading', { name: 'A nossa identidade' })).toBeVisible();
@@ -140,6 +141,43 @@ describe('conteúdo público com design canónico', () => {
     expect(screen.getByRole('heading', { name: 'Serviços de Cibersegurança Completos' })).toBeVisible();
   });
 
+  it('sobrepõe cabeçalho, cartões e chamada final da Homepage sem alterar a grelha', async () => {
+    apiMocks.conteudosPublicosApi.mockResolvedValue([
+      content({
+        id: 120,
+        chave: 'homepage_servicos_cabecalho',
+        titulo: 'Capacidades publicadas',
+        subtitulo: 'O que fazemos agora',
+        corpo: 'Introdução dos serviços publicada.',
+      }),
+      content({
+        id: 121,
+        chave: 'homepage.servico.pentesting',
+        titulo: 'Pentesting publicado',
+        corpo: 'Descrição publicada do serviço.',
+      }),
+      content({
+        id: 122,
+        chave: 'homepage_cta_final',
+        titulo: 'Proteção à medida|Começa agora',
+        subtitulo: 'Próximo passo',
+        corpo: 'Chamada final publicada.',
+      }),
+    ]);
+
+    render(<HomePage setPage={vi.fn()} />);
+
+    expect(await screen.findByRole('heading', { name: 'Capacidades publicadas' })).toBeVisible();
+    expect(screen.getByText('O que fazemos agora')).toBeVisible();
+    expect(screen.getByText('Introdução dos serviços publicada.')).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Pentesting publicado' })).toBeVisible();
+    expect(screen.getByText('Descrição publicada do serviço.')).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Proteção à medida Começa agora' })).toBeVisible();
+    expect(screen.getByText('Próximo passo')).toBeVisible();
+    expect(screen.getByText('Chamada final publicada.')).toBeVisible();
+    expect(document.querySelectorAll('.home-service-card')).toHaveLength(6);
+  });
+
   it('mantém Homepage e footer quando a API de CMS falha', async () => {
     apiMocks.conteudosPublicosApi.mockRejectedValue(new Error('Falha controlada.'));
     render(<HomePage setPage={vi.fn()} />);
@@ -147,6 +185,8 @@ describe('conteúdo público com design canónico', () => {
     expect(screen.getByRole('heading', { name: 'Segurança Digital para um Mundo Conectado' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'A nossa identidade' })).toBeVisible();
     expect(document.querySelectorAll('.home-identity-card')).toHaveLength(3);
+    expect(document.querySelectorAll('.home-service-card')).toHaveLength(6);
+    expect(screen.getByRole('heading', { name: 'Pronto para Proteger o Seu Negócio?' })).toBeVisible();
     expect(screen.getByText('Links Rápidos')).toBeVisible();
     expect(await screen.findByText(/Conteúdo atualizado temporariamente indisponível/)).toBeInTheDocument();
   });
@@ -210,7 +250,7 @@ describe('conteúdo público com design canónico', () => {
     expect(screen.getByRole('heading', { name: 'O nosso escritório' })).toBeVisible();
     expect(screen.getByText('Av. da Liberdade 110, 3.º', { exact: false })).toBeVisible();
     expect(screen.getByText('Horário de Atendimento')).toBeVisible();
-    expect(screen.getByText('ISO 27001')).toBeVisible();
+    expect(screen.getByText('Boas práticas ISO/IEC 27001')).toBeVisible();
     expect(screen.getByText('Links Rápidos')).toBeVisible();
     await waitFor(() => expect(apiMocks.conteudosPublicosApi).toHaveBeenCalled());
   });

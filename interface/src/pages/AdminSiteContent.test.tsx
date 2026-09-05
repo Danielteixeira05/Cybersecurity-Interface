@@ -84,14 +84,17 @@ describe('AdminSiteContent', () => {
     expect(screen.getByText('Título e descrição do cartão Missão.')).toBeVisible();
     expect(screen.getByText('Título e descrição do cartão Visão.')).toBeVisible();
     expect(screen.getByText('Título e descrição do cartão Valores.')).toBeVisible();
-    expect(screen.getAllByText('Predefinição')).toHaveLength(4);
+    expect(screen.getByText('Cabeçalho dos serviços da Homepage')).toBeVisible();
+    expect(screen.getByText('Homepage — Testes de Penetração')).toBeVisible();
+    expect(screen.getByText('Chamada final da Homepage')).toBeVisible();
+    expect(screen.getAllByText('Predefinição')).toHaveLength(12);
     expect(screen.queryByText('Conteúdo legado que deve ficar oculto')).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/^Chave$/i)).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Serviços' }));
     expect(await screen.findByText('Serviço real')).toBeVisible();
     expect(screen.getByText('Segurança Cloud & DevSecOps')).toBeVisible();
-    expect(screen.getByText('Compromisso — Certificado CNCS')).toBeVisible();
+    expect(screen.getByText('Compromisso — Referencial CNCS')).toBeVisible();
     expect(screen.getByText('Processo — Monitorização')).toBeVisible();
     expect(screen.getByText('NIS2 — Formação')).toBeVisible();
     expect(screen.queryByRole('combobox', { name: 'Tipo de bloco' })).not.toBeInTheDocument();
@@ -106,7 +109,7 @@ describe('AdminSiteContent', () => {
     const defaultTitle = await screen.findByText('Segurança Digital para um|Mundo Conectado');
     const card = defaultTitle.closest('div.rounded-2xl');
     if (!(card instanceof HTMLElement)) throw new Error('Cartão do Hero não encontrado.');
-    expect(screen.getAllByText('Predefinição')).toHaveLength(5);
+    expect(screen.getAllByText('Predefinição')).toHaveLength(13);
     expect(within(card).getByText('Predefinição')).toBeVisible();
     await user.click(within(card).getByRole('button', { name: 'Editar' }));
     expect(screen.getByLabelText('Bloco')).toHaveValue('Hero da Homepage');

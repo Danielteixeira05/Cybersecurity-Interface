@@ -34,10 +34,10 @@ test('o payload NIS2 aceita apenas campos e valores estritos', () => {
   assert.deepEqual(normaliseAssessmentPayload(validPayload), {
     ...validPayload, resumo: 'Avaliação interna concluída.', recomendacoes: 'Rever os controlos de acesso.',
   });
-  for (const score of [0, 10, 4.5, 7.25]) {
+  for (const score of [0, 1.1, 4.1, 4.5, 7.25, 7.5, 8.2, 10]) {
     assert.equal(normaliseAssessmentPayload({ ...validPayload, pontuacao: score }).pontuacao, score);
   }
-  for (const score of ['7.25', Number.NaN, Number.POSITIVE_INFINITY, -0.01, 10.01, 1.234]) {
+  for (const score of [undefined, null, '', '7.25', Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -0.01, 10.01, 1.234]) {
     assert.throws(() => normaliseAssessmentPayload({ ...validPayload, pontuacao: score }), (error) => error?.status === 400);
   }
   for (const id of [0, -1, 1.1, '4', Number.NaN]) {

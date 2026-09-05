@@ -2,6 +2,7 @@ import { Op } from 'sequelize';
 import { getModels } from '../models/index.js';
 import { httpError } from '../middleware/errors.js';
 import { recordAudit } from './audit-log.service.js';
+import { serialiseDocument } from './document.serializer.js';
 import { serialiseRiskAssessment } from './risk-assessment.serializer.js';
 
 const CONTACT_TYPES = new Set(['RESPONSAVEL_SEGURANCA', 'CONTACTO_PERMANENTE', 'OUTRO']);
@@ -57,6 +58,12 @@ function validNif(value) {
   return nif;
 }
 
+function requiredPhone(value) {
+  const phone = cleanText(value, 30);
+  if (!phone) throw httpError(400, 'O telefone é obrigatório.');
+  return phone;
+}
+
 function optionalInteger(value, field, current = null) {
   const resolved = value === undefined ? current : value;
   if (resolved === null || resolved === '') return null;
@@ -88,7 +95,7 @@ function clientPayload(input, current = {}) {
   };
 }
 
-function contactPayload(input, current = {}) {
+export function normaliseClientContactPayload(input, current = {}) {
   const tipo = cleanText(input.tipo ?? current.tipo, 40, { required: true }).toUpperCase();
   if (!CONTACT_TYPES.has(tipo)) throw httpError(400, 'Tipo de contacto inválido.');
   const comunicado = input.comunicado_cncs ?? input.comunicadoCncs ?? current.comunicado_cncs ?? false;
@@ -100,7 +107,7 @@ function contactPayload(input, current = {}) {
     nome: cleanText(input.nome ?? current.nome, 120, { required: true }),
     cargo: cleanText(input.cargo ?? current.cargo, 100) || null,
     email: validEmail(input.email ?? current.email),
-    telefone: cleanText(input.telefone ?? current.telefone, 30) || null,
+    telefone: requiredPhone(input.telefone ?? current.telefone),
     comunicado_cncs: comunicado,
     ativo,
   };
@@ -108,7 +115,7 @@ function contactPayload(input, current = {}) {
 
 function contactInputList(value) {
   if (!Array.isArray(value)) throw httpError(400, 'contactos tem de ser uma lista.');
-  const contacts = value.map((contact) => contactPayload(contact));
+  const contacts = value.map((contact) => normaliseClientContactPayload(contact));
   for (const mandatory of ['RESPONSAVEL_SEGURANCA', 'CONTACTO_PERMANENTE']) {
     if (!contacts.some((contact) => contact.tipo === mandatory && contact.ativo)) {
       throw httpError(400, 'É obrigatório indicar um Responsável de Segurança e um Contacto Permanente ativos.');
@@ -252,7 +259,7 @@ export async function getClient(auth, clientId) {
     gestores: managerLinks.map((link) => ({ id: Number(link.utilizador.id), nome: link.utilizador.nome, email: link.utilizador.email })),
     ativos: assets.map((asset) => asset.get({ plain: true })),
     incidentes: incidents.map((incident) => incident.get({ plain: true })),
-    documentos: documents.map((document) => document.get({ plain: true })),
+    documentos: documents.map(serialiseDocument),
     pedidos: requests.map((request) => request.get({ plain: true })),
     avaliacoes: assessments.map(serialiseRiskAssessment),
   };
@@ -322,7 +329,7 @@ export async function createContact(clientId, input, actorId) {
   const { Client, ClientContact, sequelize } = getModels();
   const client = await Client.findByPk(clientId);
   if (!client) throw httpError(404, 'Cliente não encontrado.');
-  const payload = contactPayload(input);
+  const payload = normaliseClientContactPayload(input);
   const id = await sequelize.transaction(async (transaction) => {
     const contact = await ClientContact.create({ ...payload, cliente_id: clientId, criado_em: new Date(), atualizado_em: new Date() }, { transaction });
     await recordAudit({ userId: actorId, action: 'CRIAR', entity: 'contactos_clientes', entityId: Number(contact.id), details: { cliente_id: Number(clientId), tipo: payload.tipo } }, transaction);
@@ -335,7 +342,7 @@ export async function updateContact(clientId, contactId, input, actorId) {
   const { ClientContact, sequelize } = getModels();
   const contact = await ClientContact.findOne({ where: { id: contactId, cliente_id: clientId } });
   if (!contact) throw httpError(404, 'Contacto não encontrado.');
-  const payload = contactPayload(input, contact.get({ plain: true }));
+  const payload = normaliseClientContactPayload(input, contact.get({ plain: true }));
   await sequelize.transaction(async (transaction) => {
     await contact.update({ ...payload, atualizado_em: new Date() }, { transaction });
     await recordAudit({ userId: actorId, action: payload.ativo ? 'ATUALIZAR' : 'DESATIVAR', entity: 'contactos_clientes', entityId: Number(contactId), details: { cliente_id: Number(clientId), tipo: payload.tipo } }, transaction);

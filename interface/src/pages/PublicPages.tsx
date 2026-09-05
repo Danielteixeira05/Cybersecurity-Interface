@@ -37,6 +37,7 @@ import {
   PUBLIC_CONTACT_CERTIFICATION_KEYS,
   PUBLIC_CONTACT_CHANNEL_KEYS,
   PUBLIC_CONTENT_KEYS,
+  PUBLIC_HOME_SERVICE_KEYS,
   PUBLIC_SERVICE_CARD_KEYS,
   PUBLIC_SERVICE_NIS2_KEYS,
   PUBLIC_SERVICE_PROCESS_KEYS,
@@ -57,7 +58,7 @@ interface NewsDetailPageProps extends NewsPageProps {
 }
 
 const HOME_HERO_CONTENT = {
-  certification: 'Plataforma Certificada NIS2 · ISO/IEC 27001',
+  certification: 'Apoio à conformidade NIS2 · Segurança digital',
   title: 'Segurança Digital para um',
   highlightedTitle: 'Mundo Conectado',
   description:
@@ -102,36 +103,42 @@ const HOME_IDENTITY_CARDS = [
 
 const HOME_SERVICES = [
   {
+    key: PUBLIC_HOME_SERVICE_KEYS[0],
     title: 'Testes de Penetração',
-    description: 'Avaliações de vulnerabilidades e testes de intrusão autorizados por hackers éticos certificados.',
+    description: 'Avaliações de vulnerabilidades e testes de intrusão autorizados por profissionais de segurança.',
     icon: Target,
     accent: 'blue',
   },
   {
+    key: PUBLIC_HOME_SERVICE_KEYS[1],
     title: 'Gestão de Incidentes NIS2',
     description: 'Resposta rápida a incidentes com alerta inicial em 24 horas e notificação do incidente em 72 horas.',
     icon: Shield,
     accent: 'rose',
   },
   {
+    key: PUBLIC_HOME_SERVICE_KEYS[2],
     title: 'Conformidade NIS2',
     description: 'Apoio completo em auditoria e gestão de conformidade para os requisitos da Diretiva NIS2 da UE.',
     icon: FileText,
     accent: 'violet',
   },
   {
+    key: PUBLIC_HOME_SERVICE_KEYS[3],
     title: 'SIEM & Monitorização Contínua',
-    description: 'SOC 24/7 com deteção de ameaças em tempo real em todos os seus ativos digitais e perímetro de rede.',
+    description: 'Monitorização contínua com deteção de ameaças em tempo real nos ativos digitais e no perímetro de rede.',
     icon: Eye,
     accent: 'teal',
   },
   {
+    key: PUBLIC_HOME_SERVICE_KEYS[4],
     title: 'Formação e Consciencialização',
     description: 'Programas de formação personalizados para aumentar a maturidade de segurança das suas equipas.',
     icon: BookOpen,
     accent: 'indigo',
   },
   {
+    key: PUBLIC_HOME_SERVICE_KEYS[5],
     title: 'Segurança Cloud & DevSecOps',
     description: 'Proteção de ambientes cloud e integração de segurança no ciclo de desenvolvimento de software.',
     icon: Globe,
@@ -218,7 +225,7 @@ const PUBLIC_SERVICES = [
 ] as const;
 
 const SERVICE_PROOF_POINTS = [
-  { title: 'Certificado CNCS', detail: 'Autoridade Nacional', icon: Shield, accent: 'violet' },
+  { title: 'Referencial CNCS', detail: 'Orientações nacionais', icon: Shield, accent: 'violet' },
   { title: 'SLA 24/7', detail: 'Resposta garantida', icon: Clock3, accent: 'blue' },
   { title: 'Dados na UE', detail: 'RGPD compliant', icon: Globe, accent: 'green' },
   { title: 'Gestor Dedicado', detail: 'Por cada cliente', icon: UserRoundCheck, accent: 'orange' },
@@ -240,7 +247,7 @@ const SERVICE_PROCESS_STEPS = [
   {
     step: '03',
     title: 'Implementação',
-    description: 'Execução por especialistas certificados com relatórios contínuos.',
+    description: 'Execução acompanhada por especialistas, com relatórios contínuos.',
     icon: ShieldCheck,
   },
   {
@@ -505,34 +512,34 @@ const NEWS_ARTICLES: readonly NewsArticle[] = [
     ],
   },
   {
-    id: 'recertificacao-iso-27001',
-    slug: 'ciberboxsecur-recertificacao-iso-27001-2022',
-    title: 'CiberBoxSecur Obtém Recertificação ISO/IEC 27001:2022',
+    id: 'boas-praticas-iso-27001',
+    slug: 'boas-praticas-iso-27001-seguranca-informacao',
+    title: 'ISO/IEC 27001: Boas práticas para a segurança da informação',
     category: 'Empresa',
     categoryTone: 'blue',
     date: '10 de janeiro de 2025',
     shortDate: '10/01/2025',
     dateTime: '2025-01-10',
     excerpt:
-      'Uma atualização institucional sobre a recertificação ISO/IEC 27001:2022 anunciada pela CiberBoxSecur.',
+      'Uma introdução às boas práticas de gestão da segurança da informação orientadas pelo referencial ISO/IEC 27001.',
     image: newsIsoImage,
     featured: false,
     content: [
       {
         type: 'paragraph',
-        text: 'Esta publicação reúne a informação introdutória associada ao anúncio de recertificação apresentado no Centro de Conhecimento da CiberBoxSecur.',
+        text: 'Esta publicação apresenta princípios gerais de gestão da segurança da informação que podem ser adaptados ao contexto de cada organização.',
       },
       {
         type: 'section',
         heading: 'Contexto e Importância',
         paragraphs: [
-          'A versão editorial definitiva deverá apresentar o âmbito, as evidências e os detalhes institucionais validados para publicação pelo Back Office.',
+          'A adoção de um referencial deve começar pela definição de âmbito, responsabilidades, riscos e medidas adequadas à organização.',
         ],
       },
       {
         type: 'note',
-        title: 'Conteúdo editorial provisório',
-        text: 'Os detalhes desta publicação devem ser revistos e completados no CMS antes da disponibilização pública definitiva.',
+        title: 'Nota importante',
+        text: 'A utilização de boas práticas não constitui, por si só, uma certificação da organização.',
       },
       {
         type: 'section',
@@ -576,7 +583,7 @@ const CONTACT_SERVICE_OPTIONS = [
   'Outro',
 ] as const;
 
-const CONTACT_CERTIFICATIONS = ['ISO 27001', 'CNCS', 'NIS2', 'RGPD'] as const;
+const CONTACT_CERTIFICATIONS = ['Boas práticas ISO/IEC 27001', 'Orientações CNCS', 'Apoio à conformidade NIS2', 'Apoio à proteção de dados'] as const;
 
 function usePublicSiteContents() {
   const [contents, setContents] = useState<ApiConteudoSite[]>([]);
@@ -604,8 +611,23 @@ function firstContent(contents: ApiConteudoSite[], chave: string) {
   return contents.find((content) => content.chave === chave);
 }
 
+const LEGACY_UNVERIFIED_PUBLIC_COPY: Readonly<Record<string, string>> = Object.freeze({
+  'Plataforma Certificada NIS2 · ISO/IEC 27001': 'Apoio à conformidade NIS2 · Segurança digital',
+  'Os Nossos Serviços · Equipa Certificada': 'Os Nossos Serviços · Equipa de Cibersegurança',
+  'Certificado CNCS': 'Referencial CNCS',
+  'Autoridade Nacional': 'Orientações nacionais',
+  'Todos os serviços são prestados pela nossa equipa certificada com SLAs documentados.': 'Todos os serviços são prestados pela nossa equipa com âmbito e condições documentados.',
+  'Execução por especialistas certificados com relatórios contínuos.': 'Execução acompanhada por especialistas, com relatórios contínuos.',
+  'Do SOC 24/7 à conformidade NIS2, a nossa equipa certificada cobre todo o ciclo de vida da cibersegurança empresarial.': 'Da monitorização contínua à conformidade NIS2, a nossa equipa acompanha todo o ciclo de vida da cibersegurança empresarial.',
+  'ISO 27001': 'Boas práticas ISO/IEC 27001',
+  'CNCS': 'Orientações CNCS',
+  'NIS2': 'Apoio à conformidade NIS2',
+  'RGPD': 'Apoio à proteção de dados',
+});
+
 function contentText(value: string | null | undefined, fallback: string) {
-  return value?.trim() || fallback;
+  const resolved = value?.trim() || fallback;
+  return LEGACY_UNVERIFIED_PUBLIC_COPY[resolved] ?? resolved;
 }
 
 function contentLines(value: string | null | undefined) {
@@ -726,6 +748,8 @@ export function HomePage({ setPage }: PageProps) {
   const { contents, loading: loadingContent, error: contentError } = usePublicSiteContents();
   const hero = firstContent(contents, PUBLIC_CONTENT_KEYS.homepageHero);
   const identityHeader = firstContent(contents, PUBLIC_CONTENT_KEYS.homepageIdentityHeader);
+  const servicesHeader = firstContent(contents, PUBLIC_CONTENT_KEYS.homepageServicesHeader);
+  const finalCta = firstContent(contents, PUBLIC_CONTENT_KEYS.homepageFinalCta);
   const heroTitle = contentText(hero?.titulo, `${HOME_HERO_CONTENT.title}|${HOME_HERO_CONTENT.highlightedTitle}`);
   const heroBadge = contentText(hero?.subtitulo, HOME_HERO_CONTENT.certification);
   const heroDescription = contentText(hero?.corpo, HOME_HERO_CONTENT.description);
@@ -737,6 +761,15 @@ export function HomePage({ setPage }: PageProps) {
       description: contentText(content?.corpo, card.description),
     };
   });
+  const homeServices = HOME_SERVICES.map((service) => {
+    const content = firstContent(contents, service.key);
+    return {
+      ...service,
+      title: contentText(content?.titulo, service.title),
+      description: contentText(content?.corpo, service.description),
+    };
+  });
+  const finalCtaTitle = contentText(finalCta?.titulo, 'Pronto para Proteger o|Seu Negócio?');
   const navigateTo = (target: Page) => {
     window.scrollTo({ top: 0, behavior: 'auto' });
     setPage(target);
@@ -824,19 +857,16 @@ export function HomePage({ setPage }: PageProps) {
         <section className="home-services" aria-labelledby="home-services-title" data-home-section="services">
           <div className="container-xl">
             <header className="home-section-heading">
-              <p className="home-section-heading__eyebrow">O Que Fazemos</p>
-              <h2 id="home-services-title">Serviços de Cibersegurança Completos</h2>
-              <p>
-                Proteção de ponta a ponta para a sua infraestrutura digital, desde a deteção de ameaças à
-                conformidade regulatória.
-              </p>
+              <p className="home-section-heading__eyebrow">{contentText(servicesHeader?.subtitulo, 'O Que Fazemos')}</p>
+              <h2 id="home-services-title">{contentText(servicesHeader?.titulo, 'Serviços de Cibersegurança Completos')}</h2>
+              <p>{contentText(servicesHeader?.corpo, 'Proteção de ponta a ponta para a sua infraestrutura digital, desde a deteção de ameaças à conformidade regulatória.')}</p>
             </header>
 
             <div className="row g-4">
-              {HOME_SERVICES.map((service) => {
+              {homeServices.map((service) => {
                 const Icon = service.icon;
                 return (
-                  <div className="col-12 col-md-4" key={service.title}>
+                  <div className="col-12 col-md-4" key={service.key}>
                     <article className="home-service-card">
                       <div className={`home-service-card__icon home-service-card__icon--${service.accent}`}>
                         <Icon aria-hidden="true" />
@@ -860,15 +890,9 @@ export function HomePage({ setPage }: PageProps) {
         <section className="home-final-cta" aria-labelledby="home-final-cta-title" data-home-section="final-cta">
           <div className="container-xl">
             <div className="home-final-cta__panel">
-              <p className="home-final-cta__eyebrow">Comece Hoje</p>
-              <h2 id="home-final-cta-title">
-                Pronto para Proteger o
-                <span>Seu Negócio?</span>
-              </h2>
-              <p>
-                Agende uma demonstração gratuita e veja como a nossa tecnologia pode proteger a sua empresa contra as
-                ameaças digitais.
-              </p>
+              <p className="home-final-cta__eyebrow">{contentText(finalCta?.subtitulo, 'Comece Hoje')}</p>
+              <h2 id="home-final-cta-title">{highlightedHeading(finalCtaTitle)}</h2>
+              <p>{contentText(finalCta?.corpo, 'Agende uma demonstração gratuita e veja como a nossa tecnologia pode proteger a sua empresa contra as ameaças digitais.')}</p>
               <button type="button" onClick={() => navigateTo('contact')}>
                 Agendar Serviços
               </button>
@@ -907,7 +931,7 @@ export function AboutPage({ setPage }: PageProps) {
       <div className="mt-16 rounded-3xl bg-slate-900 p-10 text-white sm:p-14">
         <h2 className="font-display text-3xl font-bold">A nossa equipa</h2>
         <p className="mt-3 max-w-2xl text-slate-300">
-          25+ especialistas certificados em cibersegurança, com experiência em setores regulados como banca, saúde, energia e administração pública.
+          Uma equipa dedicada à cibersegurança, com experiência de apoio a organizações de diferentes setores.
         </p>
         <div className="mt-10 grid gap-6 sm:grid-cols-4">
           {[
@@ -1073,7 +1097,7 @@ export function ServicesPage({ setPage }: PageProps) {
                     {highlightedHeading(contentText(hero?.titulo, 'Proteção abrangente para |cada ameaça.'))}
                   </h1>
                   <p className="public-page-lead">
-                    {contentText(hero?.corpo, 'Do SOC 24/7 à conformidade NIS2, a nossa equipa certificada cobre todo o ciclo de vida da cibersegurança empresarial.')}
+                    {contentText(hero?.corpo, 'Da monitorização contínua à conformidade NIS2, a nossa equipa acompanha todo o ciclo de vida da cibersegurança empresarial.')}
                   </p>
                   <div className="public-page-hero__actions">
                     <button
@@ -1130,7 +1154,7 @@ export function ServicesPage({ setPage }: PageProps) {
             <header className="services-section-heading">
               <p className="services-section-heading__eyebrow">{contentText(catalog?.subtitulo, 'Catálogo de Serviços')}</p>
               <h2 id="services-catalog-title">{contentText(catalog?.titulo, 'O que oferecemos')}</h2>
-              <p>{contentText(catalog?.corpo, 'Todos os serviços são prestados pela nossa equipa certificada com SLAs documentados.')}</p>
+              <p>{contentText(catalog?.corpo, 'Todos os serviços são prestados pela nossa equipa com âmbito e condições documentados.')}</p>
             </header>
 
             <div className="row g-4 services-catalog-grid">
@@ -1727,7 +1751,7 @@ export function ContactPage({ setPage }: PageProps) {
                   ))}
                 </section>
 
-                <div className="contact-v97__certifications" aria-label="Certificações e conformidade">
+                <div className="contact-v97__certifications" aria-label="Referenciais e conformidade">
                   {certifications.map((certification) => (
                     <span key={certification.id}>
                       <Award aria-hidden="true" />
