@@ -327,24 +327,29 @@ export async function previewExcelImport(auth, input, file) {
   };
 }
 
-export async function commitExcelImport(auth, input, file) {
+export async function commitExcelImport(auth, input, file, dependencies = {}) {
   assertWritable();
   const type = importType(input.tipo);
   assertExcelImportPermission(auth, type);
-  const clientId = await activeClientForImport(auth, input);
+  const resolveActiveClient = dependencies.activeClientForImport ?? activeClientForImport;
+  const createAsset = dependencies.createAssetFromImport ?? createAssetFromImport;
+  const createIncident = dependencies.createIncidentFromImport ?? createIncidentFromImport;
+  const writeAudit = dependencies.recordAudit ?? recordAudit;
+  const storageAdapter = dependencies.storage ?? storage();
+  const clientId = await resolveActiveClient(auth, input);
   const parsed = await validateWorkbook(file, type, clientId);
   const objectKey = `imports/${clientId}/${randomUUID()}/${parsed.validated.storageName}`;
   let stored = false;
 
   try {
-    const result = await storage().put({ key: objectKey, buffer: parsed.validated.buffer, contentType: parsed.validated.mime });
+    const result = await storageAdapter.put({ key: objectKey, buffer: parsed.validated.buffer, contentType: parsed.validated.mime });
     stored = true;
-    const { ExcelImport, ImportRow, sequelize } = getModels();
+    const { ExcelImport, ImportRow, sequelize } = dependencies.models ?? getModels();
     let created;
     await sequelize.transaction(async (transaction) => {
       created = await ExcelImport.create({
         cliente_id: clientId,
-        tipo,
+        tipo: type,
         nome_ficheiro_original: parsed.validated.originalName,
         caminho_ficheiro: result.key,
         estado: 'FALHADO',
@@ -362,8 +367,8 @@ export async function commitExcelImport(auth, input, file) {
         let error = row.erro;
         if (state === 'IMPORTADA') {
           try {
-            if (type === 'ATIVOS') await createAssetFromImport(auth, row.dados, { transaction, importId: created.id });
-            else await createIncidentFromImport(auth, row.dados, { transaction, importId: created.id });
+            if (type === 'ATIVOS') await createAsset(auth, row.dados, { transaction, importId: created.id });
+            else await createIncident(auth, row.dados, { transaction, importId: created.id });
             imported += 1;
           } catch (cause) {
             if (!cause?.status || cause.status >= 500) throw cause;
@@ -385,15 +390,15 @@ export async function commitExcelImport(auth, input, file) {
       }
       const state = rejected === 0 ? 'PROCESSADO' : imported === 0 ? 'FALHADO' : 'PARCIAL';
       await created.update({ estado: state, linhas_importadas: imported, linhas_rejeitadas: rejected }, { transaction });
-      await recordAudit({
+      await writeAudit({
         userId: Number(auth.sub), action: 'IMPORTAR_EXCEL', entity: 'importacoes_excel', entityId: Number(created.id),
-        details: { cliente_id: clientId, tipo, total_linhas: parsed.rows.length, linhas_importadas: imported, linhas_rejeitadas: rejected },
+        details: { cliente_id: clientId, tipo: type, total_linhas: parsed.rows.length, linhas_importadas: imported, linhas_rejeitadas: rejected },
       }, transaction);
     });
     return serialiseImport(created);
   } catch (error) {
     if (stored) {
-      try { await storage().delete(objectKey); } catch { /* O erro da importação mantém precedência. */ }
+      try { await storageAdapter.delete(objectKey); } catch { /* O erro da importação mantém precedência. */ }
     }
     throw error;
   }

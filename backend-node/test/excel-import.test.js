@@ -9,6 +9,7 @@ import {
   ASSET_IMPORT_TEMPLATE_FILENAME,
   ASSET_IMPORT_TEMPLATE_HEADERS,
   assertExcelImportPermission,
+  commitExcelImport,
   createAssetImportTemplate,
   parseExcelImportForTests,
 } from '../src/services/excel-import.service.js';
@@ -116,6 +117,68 @@ test('o importador rejeita um ficheiro incompatível com XLSX', async () => {
     }),
     (error) => error?.status === 422,
   );
+});
+
+test('a confirmação persiste o tipo normalizado e conclui a transação sem ReferenceError', async () => {
+  const transaction = { id: 'transacao-isolada' };
+  const created = {
+    id: 41,
+    async update(values) { Object.assign(this, values); },
+    get() {
+      return Object.fromEntries(Object.entries(this).filter(([, value]) => typeof value !== 'function'));
+    },
+  };
+  let importPayload;
+  let auditPayload;
+  let assetCreated = false;
+  let blobDeleted = false;
+
+  const result = await commitExcelImport(
+    { role: 'client', sub: '7' },
+    { tipo: 'ATIVOS', cliente_id: 9 },
+    await xlsxFile([{ nome: 'ATIVO-E2E', criticidade: 'MEDIA', numero_inventario: 'E2E-001' }]),
+    {
+      activeClientForImport: async () => 9,
+      storage: {
+        put: async ({ key }) => ({ key }),
+        delete: async () => { blobDeleted = true; },
+      },
+      models: {
+        ExcelImport: {
+          create: async (payload, options) => {
+            assert.equal(options.transaction, transaction);
+            importPayload = payload;
+            Object.assign(created, payload);
+            return created;
+          },
+        },
+        ImportRow: {
+          create: async (_payload, options) => { assert.equal(options.transaction, transaction); },
+        },
+        sequelize: {
+          transaction: async (callback) => callback(transaction),
+        },
+      },
+      createAssetFromImport: async (_auth, _payload, options) => {
+        assert.equal(options.transaction, transaction);
+        assert.equal(options.importId, 41);
+        assetCreated = true;
+      },
+      createIncidentFromImport: async () => assert.fail('A confirmação de ativos não deve criar incidentes.'),
+      recordAudit: async (payload, receivedTransaction) => {
+        assert.equal(receivedTransaction, transaction);
+        auditPayload = payload;
+      },
+    },
+  );
+
+  assert.equal(importPayload.tipo, 'ATIVOS');
+  assert.equal(auditPayload.details.tipo, 'ATIVOS');
+  assert.equal(result.tipo, 'ATIVOS');
+  assert.equal(result.estado, 'PROCESSADO');
+  assert.equal(result.linhas_importadas, 1);
+  assert.equal(assetCreated, true);
+  assert.equal(blobDeleted, false);
 });
 
 function createTemplateTestApp() {
