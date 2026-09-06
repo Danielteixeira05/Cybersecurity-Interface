@@ -1,7 +1,13 @@
 import multer from 'multer';
 import { env } from '../config/env.js';
 import { httpError } from '../middleware/errors.js';
-import { commitExcelImport, listExcelImports, previewExcelImport } from '../services/excel-import.service.js';
+import {
+  ASSET_IMPORT_TEMPLATE_FILENAME,
+  commitExcelImport,
+  createAssetImportTemplate,
+  listExcelImports,
+  previewExcelImport,
+} from '../services/excel-import.service.js';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -25,3 +31,18 @@ function responder(handler, status = 200) {
 export const list = responder((request) => listExcelImports(request.auth, request.query));
 export const preview = responder((request) => previewExcelImport(request.auth, request.body, request.file));
 export const commit = responder((request) => commitExcelImport(request.auth, request.body, request.file), 201);
+
+export async function downloadAssetTemplate(_request, response, next) {
+  try {
+    const buffer = await createAssetImportTemplate();
+    response.set({
+      'Cache-Control': 'private, no-store',
+      'Content-Disposition': `attachment; filename=\"${ASSET_IMPORT_TEMPLATE_FILENAME}\"`,
+      'Content-Length': String(buffer.length),
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    return response.status(200).send(buffer);
+  } catch (error) {
+    return next(error);
+  }
+}

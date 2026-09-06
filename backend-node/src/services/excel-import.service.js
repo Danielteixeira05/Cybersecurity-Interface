@@ -56,6 +56,96 @@ const FIELD_ALIASES = {
   },
 };
 
+export const ASSET_IMPORT_TEMPLATE_FILENAME = 'modelo_importacao_ativos.xlsx';
+export const ASSET_IMPORT_TEMPLATE_HEADERS = Object.freeze(Object.keys(FIELD_ALIASES.ATIVOS));
+
+const REQUIRED_ASSET_IMPORT_HEADERS = new Set(['nome', 'criticidade']);
+const ASSET_CRITICALITIES = Object.freeze(['RESIDUAL', 'BAIXA', 'MEDIA', 'ALTA', 'CRITICA']);
+
+export async function createAssetImportTemplate() {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'CiberBoxSecur';
+  workbook.created = new Date(0);
+  workbook.modified = new Date(0);
+
+  const sheet = workbook.addWorksheet('Importação', {
+    views: [{ state: 'frozen', ySplit: 1 }],
+  });
+  const widths = {
+    nome: 28,
+    criticidade: 16,
+    numero_inventario: 22,
+    tipo_equipamento: 22,
+    sistema_operativo: 24,
+    endereco_ip: 18,
+    endereco_mac: 20,
+    fqdn: 30,
+    fabricante: 20,
+    modelo_versao: 24,
+    numero_serie: 20,
+    localizacao: 24,
+    tipologia: 20,
+    observacoes: 54,
+    comunicado_cncs: 20,
+    programa_gestao_risco: 26,
+  };
+  sheet.columns = ASSET_IMPORT_TEMPLATE_HEADERS.map((header) => ({
+    header,
+    key: header,
+    width: widths[header] ?? 20,
+  }));
+  sheet.autoFilter = { from: 'A1', to: `${sheet.getColumn(ASSET_IMPORT_TEMPLATE_HEADERS.length).letter}1` };
+
+  sheet.getRow(1).eachCell((cell) => {
+    const required = REQUIRED_ASSET_IMPORT_HEADERS.has(String(cell.value));
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: required ? 'FFF59E0B' : 'FF2563EB' } };
+    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+  });
+  sheet.getRow(1).height = 24;
+
+  const example = sheet.addRow({
+    nome: 'EXEMPLO-REMOVER',
+    criticidade: 'MEDIA',
+    numero_inventario: 'DEMO-001',
+    tipo_equipamento: 'Servidor',
+    sistema_operativo: 'Ubuntu Server',
+    endereco_ip: '192.0.2.10',
+    fabricante: 'Dell',
+    modelo_versao: 'PowerEdge R350',
+    localizacao: 'Sala técnica',
+    observacoes: 'Remover ou substituir esta linha antes da importação',
+  });
+  example.font = { italic: true, color: { argb: 'FF475569' } };
+
+  const criticalityColumn = sheet.getColumn('criticidade');
+  for (let row = 2; row <= MAX_ROWS + 1; row += 1) {
+    sheet.getCell(row, criticalityColumn.number).dataValidation = {
+      type: 'list',
+      allowBlank: false,
+      formulae: [`\"${ASSET_CRITICALITIES.join(',')}\"`],
+      showErrorMessage: true,
+      errorTitle: 'Criticidade inválida',
+      error: `Escolha uma das criticidades permitidas: ${ASSET_CRITICALITIES.join(', ')}.`,
+    };
+  }
+
+  const instructions = workbook.addWorksheet('Instruções');
+  instructions.columns = [{ key: 'texto', width: 110 }];
+  [
+    'Modelo de importação de ativos — CiberBoxSecur',
+    'Os campos nome e criticidade são obrigatórios e estão destacados a laranja.',
+    `Criticidades permitidas: ${ASSET_CRITICALITIES.join(', ')}.`,
+    'Substitua ou remova a linha EXEMPLO-REMOVER antes de importar o ficheiro.',
+    `O limite máximo é de ${MAX_ROWS} linhas de dados, sem contar com o cabeçalho.`,
+    'Não altere os nomes dos cabeçalhos da folha Importação.',
+  ].forEach((value) => instructions.addRow({ texto: value }));
+  instructions.getRow(1).font = { bold: true, size: 14, color: { argb: 'FF0F172A' } };
+  instructions.eachRow((row) => { row.alignment = { vertical: 'top', wrapText: true }; });
+
+  return Buffer.from(await workbook.xlsx.writeBuffer());
+}
+
 function text(value) {
   return typeof value === 'string' ? value.trim() : String(value ?? '').trim();
 }

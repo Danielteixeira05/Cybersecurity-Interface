@@ -12,7 +12,7 @@ import type { Page } from '../types';
 import {
   dashboardApi, clientesApi, ativosApi, incidentesApi, documentosApi,
   atualizarPedidoApi, confirmarImportacaoExcelApi, importacoesExcelApi, pedidosApi,
-  previsualizarImportacaoExcelApi, criarPedidoApi, avaliacoesApi, clienteDetalheApi, session,
+  previsualizarImportacaoExcelApi, descarregarModeloImportacaoAtivosApi, criarPedidoApi, avaliacoesApi, clienteDetalheApi, session,
   type ApiDashboardAdmin, type ApiCliente, type ApiAtivo, type ApiIncidente,
   type ApiDocumento, type ApiPedido, type ApiAvaliacao, type ApiImportacaoExcel,
   type ApiPrevisualizacaoExcel,
@@ -1057,6 +1057,7 @@ export function ExcelImportWorkspace({ role = 'manager', onBack }: { role?: 'man
   const [preview, setPreview] = useState<ApiPrevisualizacaoExcel | null>(null);
   const [loading, setLoading] = useState(true);
   const [workingType, setWorkingType] = useState<ApiImportacaoExcel['tipo'] | null>(null);
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -1107,6 +1108,24 @@ export function ExcelImportWorkspace({ role = 'manager', onBack }: { role?: 'man
     }
   }
 
+  async function downloadAssetTemplate() {
+    setErr(null);
+    setDownloadingTemplate(true);
+    try {
+      const { blob, filename } = await descarregarModeloImportacaoAtivosApi();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : 'Não foi possível descarregar o modelo de importação de ativos.');
+    } finally {
+      setDownloadingTemplate(false);
+    }
+  }
+
   const allImportCards: Array<{ titulo: string; descricao: string; icon: string; color: string; tipo: ApiImportacaoExcel['tipo'] | null; modelo: string }> = [
     { titulo: 'Importar Ativos', descricao: 'Modelo XLSX com dados de inventário e criticidade', icon: '💻', color: 'from-blue-500 to-cyan-500', tipo: 'ATIVOS', modelo: 'modelo_importacao_ativos.xlsx' },
     { titulo: 'Importar Incidentes', descricao: 'Histórico XLSX de incidentes ou dados externos', icon: '🚨', color: 'from-rose-500 to-pink-500', tipo: 'INCIDENTES', modelo: 'modelo_importacao_incidentes.xlsx' },
@@ -1134,7 +1153,9 @@ export function ExcelImportWorkspace({ role = 'manager', onBack }: { role?: 'man
             <p className="mt-1 text-sm text-slate-500">{card.descricao}</p>
             <div className="mt-5 space-y-2">
               {card.modelo && (
-                <button type="button" disabled title="O modelo será disponibilizado numa fase posterior." className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-400 disabled:cursor-not-allowed">
+                card.tipo === 'ATIVOS' ? <button type="button" onClick={() => void downloadAssetTemplate()} disabled={downloadingTemplate} aria-label="Descarregar modelo de importação de ativos" className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60">
+                  <span>📥</span> {downloadingTemplate ? 'A descarregar…' : 'Descarregar modelo'}
+                </button> : <button type="button" disabled title="O modelo de incidentes será disponibilizado numa fase posterior." className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-400 disabled:cursor-not-allowed">
                   <span>📥</span> Descarregar modelo
                 </button>
               )}

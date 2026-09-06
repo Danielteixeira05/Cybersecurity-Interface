@@ -1373,6 +1373,29 @@ export async function importacoesExcelApi(clienteId?: number): Promise<ApiImport
   return Array.isArray(result) ? result : (result.items ?? []);
 }
 
+export async function descarregarModeloImportacaoAtivosApi(): Promise<{ blob: Blob; filename: string }> {
+  try {
+    const response = await api.get<Blob>('/api/excel-imports/templates/assets', { responseType: 'blob' });
+    const header = response.headers['content-disposition'];
+    const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header || '')?.[1];
+    const simple = /filename="?([^";]+)"?/i.exec(header || '')?.[1];
+    return {
+      blob: response.data,
+      filename: encoded ? decodeURIComponent(encoded) : (simple || 'modelo_importacao_ativos.xlsx'),
+    };
+  } catch (cause) {
+    if (axios.isAxiosError(cause) && cause.response?.data instanceof Blob) {
+      try {
+        const payload = JSON.parse(await cause.response.data.text()) as { erro?: unknown };
+        if (typeof payload.erro === 'string' && payload.erro.trim()) throw new Error(payload.erro);
+      } catch (error) {
+        if (error instanceof Error && error.name !== 'SyntaxError') throw error;
+      }
+    }
+    throw new Error('Não foi possível descarregar o modelo de importação de ativos.');
+  }
+}
+
 export async function previsualizarImportacaoExcelApi(tipo: ApiImportacaoExcel['tipo'], clienteId: number, file: File): Promise<ApiPrevisualizacaoExcel> {
   await ensureCsrfToken();
   return apiFetch<ApiPrevisualizacaoExcel>('/api/excel-imports/preview', {

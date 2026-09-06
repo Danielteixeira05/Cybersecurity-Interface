@@ -1,9 +1,20 @@
 import { Router } from 'express';
-import { commit, list, preview, receiveExcelFile } from '../controllers/excel-import.controller.js';
+import { commit, downloadAssetTemplate, list, preview, receiveExcelFile } from '../controllers/excel-import.controller.js';
 import { authenticate, requireRoles } from '../middleware/auth.js';
 
-export const excelImportRouter = Router();
-excelImportRouter.use(authenticate, requireRoles('admin', 'manager', 'client'));
-excelImportRouter.get('/', list);
-excelImportRouter.post('/preview', receiveExcelFile, preview);
-excelImportRouter.post('/', receiveExcelFile, commit);
+export function createExcelImportRouter({
+  authenticateMiddleware = authenticate,
+  requireRolesMiddleware = requireRoles,
+  handlers = {},
+} = {}) {
+  const router = Router();
+  const resolved = { commit, downloadAssetTemplate, list, preview, receiveExcelFile, ...handlers };
+  router.use(authenticateMiddleware, requireRolesMiddleware('admin', 'manager', 'client'));
+  router.get('/templates/assets', resolved.downloadAssetTemplate);
+  router.get('/', resolved.list);
+  router.post('/preview', resolved.receiveExcelFile, resolved.preview);
+  router.post('/', resolved.receiveExcelFile, resolved.commit);
+  return router;
+}
+
+export const excelImportRouter = createExcelImportRouter();

@@ -1,7 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import ExcelJS from 'exceljs';
-import { assertExcelImportPermission, parseExcelImportForTests } from '../src/services/excel-import.service.js';
+import express from 'express';
+import { app as application } from '../src/app.js';
+import { createExcelImportRouter } from '../src/routes/excel-import.routes.js';
+import { errorHandler, httpError, notFound } from '../src/middleware/errors.js';
+import {
+  ASSET_IMPORT_TEMPLATE_FILENAME,
+  ASSET_IMPORT_TEMPLATE_HEADERS,
+  assertExcelImportPermission,
+  createAssetImportTemplate,
+  parseExcelImportForTests,
+} from '../src/services/excel-import.service.js';
 
 async function xlsxFile(rows) {
   const book = new ExcelJS.Workbook();
@@ -57,4 +67,106 @@ test('Cliente só pode usar a importação Excel para ativos tecnológicos', () 
     (error) => error?.status === 403,
   );
   assert.doesNotThrow(() => assertExcelImportPermission({ role: 'manager' }, 'INCIDENTES'));
+});
+
+test('o modelo de ativos corresponde ao contrato do parser e a linha fictícia é válida', async () => {
+  const buffer = await createAssetImportTemplate();
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer);
+
+  assert.deepEqual(workbook.worksheets.map((sheet) => sheet.name), ['Importação', 'Instruções']);
+  const sheet = workbook.getWorksheet('Importação');
+  assert.ok(sheet);
+  assert.deepEqual(sheet.getRow(1).values.slice(1), ASSET_IMPORT_TEMPLATE_HEADERS);
+  assert.equal(sheet.views[0].state, 'frozen');
+  assert.equal(sheet.views[0].ySplit, 1);
+  assert.equal(sheet.getCell('A1').fill.fgColor.argb, 'FFF59E0B');
+  assert.equal(sheet.getCell('B1').fill.fgColor.argb, 'FFF59E0B');
+  assert.deepEqual(sheet.getCell('B2').dataValidation.formulae, ['"RESIDUAL,BAIXA,MEDIA,ALTA,CRITICA"']);
+  assert.equal(sheet.getCell('A2').value, 'EXEMPLO-REMOVER');
+
+  const rows = await parseExcelImportForTests({
+    tipo: 'ATIVOS',
+    clienteId: 7,
+    file: {
+      originalname: ASSET_IMPORT_TEMPLATE_FILENAME,
+      mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      size: buffer.length,
+      buffer,
+    },
+  });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].estado, 'IMPORTADA');
+  assert.equal(rows[0].dados.nome, 'EXEMPLO-REMOVER');
+  assert.equal(rows[0].dados.criticidade, 'MEDIA');
+});
+
+test('o importador rejeita um ficheiro incompatível com XLSX', async () => {
+  const buffer = Buffer.from('conteúdo que não é um workbook');
+  await assert.rejects(
+    () => parseExcelImportForTests({
+      tipo: 'ATIVOS',
+      clienteId: 7,
+      file: {
+        originalname: 'ficheiro-incompativel.xlsx',
+        mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        size: buffer.length,
+        buffer,
+      },
+    }),
+    (error) => error?.status === 422,
+  );
+});
+
+function createTemplateTestApp() {
+  const instance = express();
+  const router = createExcelImportRouter({
+    authenticateMiddleware(request, _response, next) {
+      const role = request.get('x-test-role');
+      if (!role) return next(httpError(401, 'Autenticação necessária.'));
+      request.auth = { role, sub: '7' };
+      return next();
+    },
+  });
+  instance.use('/api/excel-imports', router);
+  instance.use(notFound);
+  instance.use(errorHandler);
+  return instance;
+}
+
+async function withServer(instance, callback) {
+  const server = await new Promise((resolve) => {
+    const created = instance.listen(0, '127.0.0.1', () => resolve(created));
+  });
+  try {
+    await callback(`http://127.0.0.1:${server.address().port}`);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+}
+
+test('o endpoint autenticado entrega o modelo XLSX com os headers de download corretos', async () => {
+  await withServer(createTemplateTestApp(), async (baseUrl) => {
+    const anonymous = await fetch(`${baseUrl}/api/excel-imports/templates/assets`);
+    assert.equal(anonymous.status, 401);
+
+    const response = await fetch(`${baseUrl}/api/excel-imports/templates/assets`, {
+      headers: { 'x-test-role': 'manager' },
+    });
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type') || '', /application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet/i);
+    assert.match(response.headers.get('content-disposition') || '', new RegExp(ASSET_IMPORT_TEMPLATE_FILENAME));
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(Buffer.from(await response.arrayBuffer()));
+    assert.ok(workbook.getWorksheet('Importação'));
+    assert.ok(workbook.getWorksheet('Instruções'));
+  });
+});
+
+test('a aplicação Express real recusa o modelo sem autenticação antes de consultar dados', async () => {
+  await withServer(application, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/excel-imports/templates/assets`);
+    assert.equal(response.status, 401);
+  });
 });
