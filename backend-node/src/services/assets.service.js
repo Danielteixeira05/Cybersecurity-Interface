@@ -100,14 +100,14 @@ function serialise(asset) {
   };
 }
 
-async function whereFor(auth, filters = {}) {
+async function whereFor(auth, filters = {}, dependencies = {}) {
   const where = { ativo: true };
   const clientId = idOf(filters.cliente_id ?? filters.clienteId, 'Cliente');
   if (clientId) {
-    await assertClientAccess(auth, clientId);
+    await (dependencies.assertClientAccess ?? assertClientAccess)(auth, clientId);
     where.cliente_id = clientId;
   } else if (auth.role !== 'admin') {
-    const ids = await clientIdsForUser(auth.sub, { principalOnly: auth.role === 'client' });
+    const ids = await (dependencies.clientIdsForUser ?? clientIdsForUser)(auth.sub, { principalOnly: auth.role === 'client' });
     if (ids.length === 0) return null;
     where.cliente_id = ids;
   }
@@ -123,26 +123,26 @@ async function whereFor(auth, filters = {}) {
   return where;
 }
 
-export async function listAssets(auth, filters = {}) {
-  const { Asset, Client } = getModels();
-  const where = await whereFor(auth, filters);
+export async function listAssets(auth, filters = {}, dependencies = {}) {
+  const { Asset, Client } = dependencies.models ?? getModels();
+  const where = await whereFor(auth, filters, dependencies);
   if (!where) return [];
   const rows = await Asset.findAll({
     where,
-    include: [{ model: Client, as: 'cliente', attributes: ['nome'] }],
+    include: [{ model: Client, as: 'cliente', attributes: ['nome'], where: { ativo: true }, required: true }],
     order: [['nome', 'ASC'], ['id', 'ASC']],
   });
   return rows.map(serialise);
 }
 
-export async function getAsset(auth, assetId) {
-  const { Asset, Client } = getModels();
+export async function getAsset(auth, assetId, dependencies = {}) {
+  const { Asset, Client } = dependencies.models ?? getModels();
   const asset = await Asset.findOne({
     where: { id: idOf(assetId, 'Ativo', { required: true }), ativo: true },
-    include: [{ model: Client, as: 'cliente', attributes: ['nome'] }],
+    include: [{ model: Client, as: 'cliente', attributes: ['nome'], where: { ativo: true }, required: true }],
   });
   if (!asset) throw httpError(404, 'Ativo não encontrado.');
-  await assertClientAccess(auth, asset.cliente_id);
+  await (dependencies.assertClientAccess ?? assertClientAccess)(auth, asset.cliente_id);
   return serialise(asset);
 }
 

@@ -19,6 +19,7 @@ import {
 import { Nis2AssessmentForm } from '../components/Nis2AssessmentForm';
 import { AssetsWorkspace, IncidentsWorkspace } from '../components/OperationalResources';
 import { DocumentsWorkspace } from '../components/DocumentsWorkspace';
+import { ExcelImportWorkspace } from './ManagerPages';
 import { INCIDENT_CHANGED_EVENT } from '../realtime';
 import {
   PUBLIC_CONTENT_EDITOR_PRESETS, getPublicContentEditorPreset,
@@ -825,7 +826,9 @@ export function AdminClients({ setPage, openClientDetail }: PageProps & { openCl
 }
 
 export function AdminAssets() {
-  return <AssetsWorkspace role="admin" title="Ativos Tecnológicos" subtitle="Inventário global dos clientes" />;
+  const [showImports, setShowImports] = useState(false);
+  if (showImports) return <ExcelImportWorkspace role="admin" onBack={() => setShowImports(false)} />;
+  return <AssetsWorkspace role="admin" title="Ativos Tecnológicos" subtitle="Inventário global dos clientes" onImportExcel={() => setShowImports(true)} />;
 }
 
 // ========== ADMIN DOCUMENTS ==========

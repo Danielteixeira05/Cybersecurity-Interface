@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import { Readable } from 'node:stream';
 import test from 'node:test';
 import ExcelJS from 'exceljs';
 import express from 'express';
 import { app as application } from '../src/app.js';
+import { createDownloadExcelImportHandler } from '../src/controllers/excel-import.controller.js';
 import { createExcelImportRouter } from '../src/routes/excel-import.routes.js';
 import { errorHandler, httpError, notFound } from '../src/middleware/errors.js';
 import {
@@ -11,6 +13,7 @@ import {
   assertExcelImportPermission,
   commitExcelImport,
   createAssetImportTemplate,
+  downloadExcelImport,
   parseExcelImportForTests,
 } from '../src/services/excel-import.service.js';
 
@@ -231,5 +234,137 @@ test('a aplicação Express real recusa o modelo sem autenticação antes de con
   await withServer(application, async (baseUrl) => {
     const response = await fetch(`${baseUrl}/api/excel-imports/templates/assets`);
     assert.equal(response.status, 401);
+  });
+});
+
+function storedImport(overrides = {}) {
+  return {
+    id: 31,
+    cliente_id: 7,
+    tipo: 'ATIVOS',
+    nome_ficheiro_original: 'ativos-alpha.xlsx',
+    caminho_ficheiro: 'imports/7/private/original.xlsx',
+    estado: 'PROCESSADO',
+    ...overrides,
+  };
+}
+
+function downloadDependencies({ row = storedImport(), allowed = true } = {}) {
+  const calls = { storage: 0, audit: 0 };
+  const dependencies = {
+    models: {
+      Client: { name: 'Client' },
+      ExcelImport: {
+        async findOne(options) {
+          assert.deepEqual(options.where, { id: 31 });
+          assert.equal(options.include[0].where.ativo, true);
+          assert.equal(options.include[0].required, true);
+          return row;
+        },
+      },
+    },
+    async assertClientAccess(_auth, clientId) {
+      assert.equal(clientId, 7);
+      if (!allowed) throw httpError(403, 'Sem permissão para consultar este cliente.');
+    },
+    storage: {
+      async get(key) {
+        calls.storage += 1;
+        assert.equal(key, 'imports/7/private/original.xlsx');
+        return {
+          stream: Readable.from(Buffer.from('xlsx-original')),
+          contentType: 'application/octet-stream',
+          size: 13,
+          privateUrl: 'nunca-expor',
+        };
+      },
+    },
+    async recordAudit(payload) {
+      calls.audit += 1;
+      assert.deepEqual(payload, {
+        userId: 70,
+        action: 'DESCARREGAR_IMPORTACAO_EXCEL',
+        entity: 'importacoes_excel',
+        entityId: 31,
+        details: { cliente_id: 7, tipo: 'ATIVOS' },
+      });
+    },
+  };
+  return { calls, dependencies, row };
+}
+
+test('o download privado reutiliza o mesmo ID para Admin, Gestor associado e Cliente da organização', async () => {
+  for (const role of ['admin', 'manager', 'client']) {
+    const { calls, dependencies, row } = downloadDependencies();
+    const before = structuredClone(row);
+    const result = await downloadExcelImport({ role, sub: '70' }, '31', dependencies);
+    const chunks = [];
+    for await (const chunk of result.stream) chunks.push(Buffer.from(chunk));
+    assert.equal(Buffer.concat(chunks).toString(), 'xlsx-original');
+    assert.equal(result.filename, 'ativos-alpha.xlsx');
+    assert.equal(result.contentType, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    assert.deepEqual(Object.keys(result).sort(), ['contentType', 'filename', 'size', 'stream']);
+    assert.deepEqual(row, before);
+    assert.equal(calls.storage, 1);
+    assert.equal(calls.audit, 1);
+  }
+});
+
+test('o download recusa Gestor/Cliente sem associação antes de consultar o Blob', async () => {
+  for (const role of ['manager', 'client']) {
+    const { calls, dependencies } = downloadDependencies({ allowed: false });
+    await assert.rejects(
+      () => downloadExcelImport({ role, sub: '70' }, '31', dependencies),
+      (error) => error?.status === 403,
+    );
+    assert.equal(calls.storage, 0);
+    assert.equal(calls.audit, 0);
+  }
+});
+
+test('o download rejeita IDs não canónicos e devolve 404 para uma importação inexistente', async () => {
+  for (const invalid of ['0', '-1', '01', '1.0', '1e2', 'texto', ' 31', '31 ']) {
+    await assert.rejects(
+      () => downloadExcelImport({ role: 'admin', sub: '70' }, invalid, {}),
+      (error) => error?.status === 400,
+    );
+  }
+  const { dependencies } = downloadDependencies({ row: null });
+  await assert.rejects(
+    () => downloadExcelImport({ role: 'admin', sub: '70' }, '31', dependencies),
+    (error) => error?.status === 404,
+  );
+});
+
+test('o endpoint de download exige sessão e devolve XLSX com nome seguro', async () => {
+  const handler = createDownloadExcelImportHandler(async () => ({
+    filename: '../ativos\r\nalpha.xlsx',
+    stream: Readable.from(Buffer.from('xlsx-http')),
+    size: 9,
+    contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  }));
+  const instance = express();
+  instance.use('/api/excel-imports', createExcelImportRouter({
+    authenticateMiddleware(request, _response, next) {
+      const role = request.get('x-test-role');
+      if (!role) return next(httpError(401, 'Autenticação necessária.'));
+      request.auth = { role, sub: '70' };
+      return next();
+    },
+    handlers: { download: handler },
+  }));
+  instance.use(notFound);
+  instance.use(errorHandler);
+
+  await withServer(instance, async (baseUrl) => {
+    const anonymous = await fetch(`${baseUrl}/api/excel-imports/31/download`);
+    assert.equal(anonymous.status, 401);
+
+    const response = await fetch(`${baseUrl}/api/excel-imports/31/download`, { headers: { 'x-test-role': 'admin' } });
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type') || '', /application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet/i);
+    assert.match(response.headers.get('content-disposition') || '', /ativos__alpha\.xlsx/i);
+    assert.doesNotMatch(response.headers.get('content-disposition') || '', /\.\.\//);
+    assert.equal(Buffer.from(await response.arrayBuffer()).toString(), 'xlsx-http');
   });
 });

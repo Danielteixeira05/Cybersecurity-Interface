@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, Legend,
@@ -12,7 +13,7 @@ import type { Page } from '../types';
 import {
   dashboardApi, clientesApi, ativosApi, incidentesApi, documentosApi,
   atualizarPedidoApi, confirmarImportacaoExcelApi, importacoesExcelApi, pedidosApi,
-  previsualizarImportacaoExcelApi, descarregarModeloImportacaoAtivosApi, criarPedidoApi, avaliacoesApi, clienteDetalheApi, session,
+  previsualizarImportacaoExcelApi, descarregarImportacaoExcelApi, descarregarModeloImportacaoAtivosApi, criarPedidoApi, avaliacoesApi, clienteDetalheApi, session,
   type ApiDashboardAdmin, type ApiCliente, type ApiAtivo, type ApiIncidente,
   type ApiDocumento, type ApiPedido, type ApiAvaliacao, type ApiImportacaoExcel,
   type ApiPrevisualizacaoExcel,
@@ -570,6 +571,8 @@ export function MgrClients({ setPage }: PageProps) {
 }
 
 export function MgrClientDetail({ setPage, backPage = 'mgr-clients', backLabel = 'Clientes', areaLabel = 'Gestor', role = 'manager', clientId }: DetailProps) {
+  const location = useLocation();
+  const navigate = useNavigate();
   const sess = session.get();
   const cid = clientId ?? (role === 'manager' ? (sess.cliente as any)?.id : undefined);
   const [data, setData] = useState<any>(null);
@@ -585,10 +588,14 @@ export function MgrClientDetail({ setPage, backPage = 'mgr-clients', backLabel =
   ] as const;
   type DetailTab = typeof tabs[number][0];
   const tabFromHash = (): DetailTab => {
-    const hash = typeof window === 'undefined' ? '' : window.location.hash.replace('#', '');
+    const hash = location.hash.replace('#', '');
     return tabs.some(([key]) => key === hash) ? hash as DetailTab : 'overview';
   };
   const [detailTab, setDetailTab] = useState<DetailTab>(tabFromHash);
+
+  useEffect(() => {
+    setDetailTab(tabFromHash());
+  }, [location.hash]);
 
   const refreshDetail = useCallback(async (signal?: AbortSignal) => {
     const currentId = cid;
@@ -641,7 +648,10 @@ export function MgrClientDetail({ setPage, backPage = 'mgr-clients', backLabel =
   const formatDate = (value?: string | null) => value ? new Intl.DateTimeFormat('pt-PT', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value)) : '—';
   const selectTab = (tab: DetailTab) => {
     setDetailTab(tab);
-    if (typeof window !== 'undefined') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${tab}`);
+    const search = new URLSearchParams(location.search);
+    if (tab !== 'assets') search.delete('assetId');
+    const query = search.toString();
+    navigate({ pathname: location.pathname, search: query ? `?${query}` : '', hash: `#${tab}` }, { replace: true });
   };
   const tabEmpty = (title: string, description: string) => <section className="mgr-client-detail-v98__empty"><FolderOpen aria-hidden="true" /><h3>{title}</h3><p>{description}</p></section>;
 
@@ -811,7 +821,9 @@ export function MgrRequests() {
 }
 
 export function MgrAssets() {
-  return <AssetsWorkspace role="manager" title="Ativos Tecnológicos" subtitle="Inventário dos clientes que gere" />;
+  const [showImports, setShowImports] = useState(false);
+  if (showImports) return <ExcelImportWorkspace role="manager" onBack={() => setShowImports(false)} />;
+  return <AssetsWorkspace role="manager" title="Ativos Tecnológicos" subtitle="Inventário dos clientes que gere" onImportExcel={() => setShowImports(true)} />;
 }
 
 export function MgrRisk({ setPage }: PageProps) {
@@ -1048,7 +1060,7 @@ export function MgrEvidence(_props: PageProps) {
   />;
 }
 
-export function ExcelImportWorkspace({ role = 'manager', onBack }: { role?: 'manager' | 'client'; onBack?: () => void }) {
+export function ExcelImportWorkspace({ role = 'manager', onBack }: { role?: 'admin' | 'manager' | 'client'; onBack?: () => void }) {
   const clientOnly = role === 'client';
   const [clients, setClients] = useState<ApiCliente[]>([]);
   const [history, setHistory] = useState<ApiImportacaoExcel[]>([]);
@@ -1058,7 +1070,9 @@ export function ExcelImportWorkspace({ role = 'manager', onBack }: { role?: 'man
   const [loading, setLoading] = useState(true);
   const [workingType, setWorkingType] = useState<ApiImportacaoExcel['tipo'] | null>(null);
   const [downloadingTemplate, setDownloadingTemplate] = useState(false);
+  const [downloadingImportId, setDownloadingImportId] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -1126,6 +1140,24 @@ export function ExcelImportWorkspace({ role = 'manager', onBack }: { role?: 'man
     }
   }
 
+  async function downloadOriginalImport(importId: number) {
+    setHistoryError(null);
+    setDownloadingImportId(importId);
+    try {
+      const { blob, filename } = await descarregarImportacaoExcelApi(importId);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setHistoryError(error instanceof Error ? error.message : 'Não foi possível descarregar o ficheiro original da importação.');
+    } finally {
+      setDownloadingImportId(null);
+    }
+  }
+
   const allImportCards: Array<{ titulo: string; descricao: string; icon: string; color: string; tipo: ApiImportacaoExcel['tipo'] | null; modelo: string }> = [
     { titulo: 'Importar Ativos', descricao: 'Modelo XLSX com dados de inventário e criticidade', icon: '💻', color: 'from-blue-500 to-cyan-500', tipo: 'ATIVOS', modelo: 'modelo_importacao_ativos.xlsx' },
     { titulo: 'Importar Incidentes', descricao: 'Histórico XLSX de incidentes ou dados externos', icon: '🚨', color: 'from-rose-500 to-pink-500', tipo: 'INCIDENTES', modelo: 'modelo_importacao_incidentes.xlsx' },
@@ -1138,11 +1170,11 @@ export function ExcelImportWorkspace({ role = 'manager', onBack }: { role?: 'man
       <PageHeader
         title={clientOnly ? 'Importar Ativos via Excel' : 'Importação via Excel'}
         subtitle={clientOnly ? 'Registe ativos tecnológicos para a sua organização através do modelo XLSX.' : 'Importar em massa ativos e incidentes para organizações associadas'}
-        actions={onBack ? <button type="button" onClick={onBack} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Voltar a Ativos</button> : undefined}
+        actions={onBack ? <button type="button" onClick={onBack} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Voltar aos Ativos</button> : undefined}
       />
       <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         {clientOnly ? <div className="max-w-xl text-sm"><p className="font-medium text-slate-700">Organização da importação</p><p className="mt-1 rounded-xl bg-slate-50 px-3 py-2 text-slate-700">{clients[0] ? `${clients[0].nome}${clients[0].nif ? ` — NIF ${clients[0].nif}` : ''}` : 'Sem organização ativa associada'}</p></div> : <label className="block max-w-xl text-sm font-medium text-slate-700">Organização para a importação<select value={selectedClientId ?? ''} onChange={(event) => { setSelectedClientId(Number(event.target.value) || null); setPreview(null); }} disabled={loading || clients.length === 0} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-slate-900 disabled:cursor-not-allowed disabled:bg-slate-100"><option value="" disabled>{clients.length ? 'Selecionar organização' : 'Sem organizações associadas'}</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.nome}{client.nif ? ` — NIF ${client.nif}` : ''}</option>)}</select></label>}
-        {!loading && clients.length === 0 && <p className="mt-3 text-sm text-amber-800">{clientOnly ? 'Não existe uma organização ativa associada a esta conta para importar ativos.' : 'Não existem organizações associadas a este Gestor para importar dados.'}</p>}
+        {!loading && clients.length === 0 && <p className="mt-3 text-sm text-amber-800">{clientOnly ? 'Não existe uma organização ativa associada a esta conta para importar ativos.' : role === 'admin' ? 'Não existem organizações ativas para importar dados.' : 'Não existem organizações associadas a este Gestor para importar dados.'}</p>}
       </div>
       {err && <div role="alert" className="mb-6"><ErrorCard msg={err} /></div>}
       <div className="grid gap-6 lg:grid-cols-3">
@@ -1176,6 +1208,7 @@ export function ExcelImportWorkspace({ role = 'manager', onBack }: { role?: 'man
 
       <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
         <h3 className="mb-4 font-display text-lg font-semibold text-slate-900">Últimas Importações</h3>
+        {historyError && <div role="alert" className="mb-4"><ErrorCard msg={historyError} /></div>}
         {loading ? <Loader text="A carregar importações..." /> : <DataTable
           data={history}
           emptyText="Ainda não existem importações para as organizações associadas."
@@ -1189,6 +1222,7 @@ export function ExcelImportWorkspace({ role = 'manager', onBack }: { role?: 'man
             { key: 'linhas_importadas', label: 'Sucesso', render: (row) => <span className="font-semibold text-emerald-600">{row.linhas_importadas}</span> },
             { key: 'linhas_rejeitadas', label: 'Erros', render: (row) => <span className={row.linhas_rejeitadas ? 'font-semibold text-rose-600' : ''}>{row.linhas_rejeitadas}</span> },
             { key: 'estado', label: 'Estado', render: (row) => <span className={`badge ${row.estado === 'PROCESSADO' ? 'bg-emerald-100 text-emerald-700' : row.estado === 'PARCIAL' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>{row.estado}</span> },
+            { key: '_download' as keyof ApiImportacaoExcel, label: 'Ficheiro', render: (row) => <button type="button" onClick={() => void downloadOriginalImport(row.id)} disabled={downloadingImportId !== null} aria-label={`Descarregar ficheiro original da importação ${row.id}`} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-wait disabled:opacity-60">{downloadingImportId === row.id ? 'A descarregar…' : 'Download'}</button> },
           ]}
         />}
       </div>

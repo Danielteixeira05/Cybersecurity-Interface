@@ -156,6 +156,15 @@ function asId(value, name) {
   return id;
 }
 
+function canonicalRouteId(value, name) {
+  if (typeof value !== 'string' || !/^[1-9]\d*$/.test(value)) {
+    throw httpError(400, `${name} inválido.`);
+  }
+  const id = Number(value);
+  if (!Number.isSafeInteger(id)) throw httpError(400, `${name} inválido.`);
+  return id;
+}
+
 function importType(value) {
   const type = text(value).toUpperCase();
   if (!IMPORT_TYPES.has(type)) throw httpError(400, 'Tipo de importação inválido.');
@@ -413,11 +422,58 @@ export async function listExcelImports(auth, filters = {}) {
   const rows = await ExcelImport.findAll({
     where,
     include: [
-      { model: Client, as: 'cliente', attributes: ['id', 'nome', 'nif'] },
+      { model: Client, as: 'cliente', attributes: ['id', 'nome', 'nif'], where: { ativo: true }, required: true },
       { model: User, as: 'importadoPor', attributes: ['id', 'nome'] },
     ],
     order: [['importado_em', 'DESC'], ['id', 'DESC']],
     limit: 100,
   });
   return rows.map(serialiseImport);
+}
+
+/**
+ * Resolve o ficheiro privado exclusivamente pelo ID canónico da importação.
+ * A chave Blob permanece interna e nunca integra a resposta HTTP.
+ */
+export async function downloadExcelImport(auth, importId, dependencies = {}) {
+  const id = canonicalRouteId(importId, 'Importação');
+  const { ExcelImport, Client } = dependencies.models ?? getModels();
+  const row = await ExcelImport.findOne({
+    where: { id },
+    include: [{ model: Client, as: 'cliente', attributes: ['id'], where: { ativo: true }, required: true }],
+  });
+  if (!row) throw httpError(404, 'Importação não encontrada.');
+
+  const item = row.get ? row.get({ plain: true }) : row;
+  const checkClientAccess = dependencies.assertClientAccess ?? assertClientAccess;
+  await checkClientAccess(auth, Number(item.cliente_id));
+
+  const objectKey = typeof item.caminho_ficheiro === 'string' ? item.caminho_ficheiro.trim() : '';
+  if (!objectKey) throw httpError(404, 'Ficheiro original da importação não encontrado.');
+  const storageAdapter = dependencies.storage ?? storage();
+  const object = await storageAdapter.get(objectKey);
+
+  const writeAudit = dependencies.recordAudit ?? recordAudit;
+  await writeAudit({
+    userId: Number(auth.sub),
+    action: 'DESCARREGAR_IMPORTACAO_EXCEL',
+    entity: 'importacoes_excel',
+    entityId: id,
+    details: { cliente_id: Number(item.cliente_id), tipo: item.tipo },
+  });
+
+  return {
+    filename: parsedSafeDownloadName(item.nome_ficheiro_original),
+    stream: object.stream,
+    size: object.size,
+    contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  };
+}
+
+function parsedSafeDownloadName(value) {
+  const name = typeof value === 'string' ? value.trim().replace(/[\\/\r\n\0]/g, '_') : '';
+  if (!name) return 'importacao.xlsx';
+  if (/\.xlsx$/i.test(name)) return name.slice(0, 255);
+  const base = name.replace(/\.+$/, '').slice(0, 250);
+  return `${base || 'importacao'}.xlsx`;
 }

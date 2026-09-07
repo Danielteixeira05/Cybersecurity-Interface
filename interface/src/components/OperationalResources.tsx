@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Eye, Pencil, Plus, Power, Search, X } from 'lucide-react';
 import {
   ativosApi, ativoDetalheApi, atualizarAtivoApi, atualizarIncidenteApi, clientesApi,
@@ -66,6 +67,13 @@ function clientOptionLabel(client: ApiCliente) {
   return identification ? `${client.nome} — ${identification}` : client.nome;
 }
 
+export function assetIdFromSearch(search: string): number | undefined {
+  const value = new URLSearchParams(search).get('assetId');
+  if (!value || !/^[1-9]\d*$/.test(value)) return undefined;
+  const id = Number(value);
+  return Number.isSafeInteger(id) ? id : undefined;
+}
+
 type AssetDraft = Required<Pick<CriarAtivoPayload, 'cliente_id' | 'nome' | 'criticidade'>> & Omit<CriarAtivoPayload, 'cliente_id' | 'nome' | 'criticidade'> & { ativo: boolean };
 
 function emptyAsset(clientId?: number): AssetDraft {
@@ -74,6 +82,10 @@ function emptyAsset(clientId?: number): AssetDraft {
 
 export function AssetsWorkspace({ role, clientId, title = 'Ativos Tecnológicos', subtitle, compact = false, onChanged, onImportExcel }: { role: OperationalRole; clientId?: number; title?: string; subtitle?: string; compact?: boolean; onChanged?: () => void; onImportExcel?: () => void }) {
   const canManage = role !== 'client';
+  const location = useLocation();
+  const navigate = useNavigate();
+  const routeAssetValue = new URLSearchParams(location.search).get('assetId');
+  const routeAssetId = assetIdFromSearch(location.search);
   const [items, setItems] = useState<ApiAtivo[]>([]);
   const [clients, setClients] = useState<ApiCliente[]>([]);
   const [filters, setFilters] = useState<FiltrosAtivos>({ cliente_id: clientId, q: '', criticidade: '' });
@@ -82,21 +94,86 @@ export function AssetsWorkspace({ role, clientId, title = 'Ativos Tecnológicos'
   const [success, setSuccess] = useState<string | null>(null);
   const [draft, setDraft] = useState<AssetDraft>(() => emptyAsset(clientId));
   const [editing, setEditing] = useState<ApiAtivo | null>(null);
-  const [selected, setSelected] = useState<ApiAtivo | null>(null);
+  const [selectedState, setSelectedState] = useState<{ assetId: number; asset: ApiAtivo } | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const listRequestVersion = useRef(0);
+  const detailRequestVersion = useRef(0);
+  const listAbortController = useRef<AbortController | null>(null);
+  const selected = selectedState && selectedState.assetId === routeAssetId ? selectedState.asset : null;
 
-  const load = async (next = filters) => {
-    setLoading(true); setError(null);
+  const load = useCallback(async (next: FiltrosAtivos) => {
+    const version = ++listRequestVersion.current;
+    listAbortController.current?.abort();
+    const controller = new AbortController();
+    listAbortController.current = controller;
+    setLoading(true);
+    setItems([]);
+    setError(null);
     try {
-      const [assets, availableClients] = await Promise.all([ativosApi(next), clientesApi()]);
-      setItems(assets); setClients(availableClients);
-      if (!clientId && !draft.cliente_id && availableClients[0]) setDraft((current) => ({ ...current, cliente_id: availableClients[0].id }));
-    } catch (cause: any) { setError(cause?.message || 'Não foi possível carregar os ativos.'); }
-    finally { setLoading(false); }
-  };
+      const [assets, availableClients] = await Promise.all([
+        ativosApi(next, controller.signal),
+        clientesApi(undefined, controller.signal),
+      ]);
+      if (controller.signal.aborted || listRequestVersion.current !== version) return;
+      setItems(assets);
+      setClients(availableClients);
+      if (!clientId && availableClients[0]) {
+        setDraft((current) => current.cliente_id ? current : { ...current, cliente_id: availableClients[0].id });
+      }
+    } catch (cause: any) {
+      if (!controller.signal.aborted && listRequestVersion.current === version) {
+        setError(cause?.message || 'Não foi possível carregar os ativos.');
+      }
+    } finally {
+      if (!controller.signal.aborted && listRequestVersion.current === version) setLoading(false);
+    }
+  }, [clientId]);
 
-  useEffect(() => { void load({ cliente_id: clientId, q: '', criticidade: '' }); }, [clientId]);
+  useEffect(() => {
+    const next = { cliente_id: clientId, q: '', criticidade: '' };
+    setFilters(next);
+    setDraft(emptyAsset(clientId));
+    void load(next);
+    return () => listAbortController.current?.abort();
+  }, [clientId, load]);
+
+  useEffect(() => {
+    const version = ++detailRequestVersion.current;
+    setSelectedState(null);
+    setDetailError(null);
+    if (routeAssetValue === null) {
+      setDetailLoading(false);
+      return;
+    }
+    if (!routeAssetId) {
+      setDetailLoading(false);
+      setDetailError('Identificador de ativo inválido.');
+      return;
+    }
+
+    const controller = new AbortController();
+    setDetailLoading(true);
+    void ativoDetalheApi(routeAssetId, controller.signal)
+      .then((asset) => {
+        if (controller.signal.aborted || detailRequestVersion.current !== version) return;
+        if (asset.id !== routeAssetId) throw new Error('A API devolveu um ativo diferente do solicitado.');
+        if (clientId && asset.cliente_id !== clientId) throw new Error('O ativo não pertence ao cliente selecionado.');
+        setSelectedState({ assetId: routeAssetId, asset });
+      })
+      .catch((cause: any) => {
+        const cancelled = controller.signal.aborted || cause?.code === 'ERR_CANCELED' || cause?.name === 'CanceledError';
+        if (!cancelled && detailRequestVersion.current === version) {
+          setDetailError(cause?.message || 'Não foi possível abrir o ativo.');
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted && detailRequestVersion.current === version) setDetailLoading(false);
+      });
+    return () => controller.abort();
+  }, [clientId, routeAssetId, routeAssetValue]);
 
   const openCreate = () => { setEditing(null); setDraft(emptyAsset(clientId || clients[0]?.id)); setError(null); setSuccess(null); setFormOpen(true); };
   const openEdit = (asset: ApiAtivo) => {
@@ -111,34 +188,45 @@ export function AssetsWorkspace({ role, clientId, title = 'Ativos Tecnológicos'
       if (editing) await atualizarAtivoApi(editing.id, payload);
       else await criarAtivoApi(payload);
       setFormOpen(false); setSuccess(editing ? 'Ativo atualizado com sucesso.' : 'Ativo criado com sucesso.');
-      await load(); onChanged?.();
+      await load(filters); onChanged?.();
     } catch (cause: any) { setError(cause?.message || 'Não foi possível guardar o ativo.'); }
     finally { setSaving(false); }
   };
   const deactivate = async (asset: ApiAtivo) => {
     setError(null); setSuccess(null);
-    try { await atualizarAtivoApi(asset.id, { ativo: false }); setSuccess('Ativo desativado com sucesso.'); await load(); onChanged?.(); }
+    try { await atualizarAtivoApi(asset.id, { ativo: false }); setSuccess('Ativo desativado com sucesso.'); await load(filters); onChanged?.(); }
     catch (cause: any) { setError(cause?.message || 'Não foi possível desativar o ativo.'); }
   };
-  const inspect = async (asset: ApiAtivo) => {
-    setError(null);
-    try { setSelected(await ativoDetalheApi(asset.id)); } catch (cause: any) { setError(cause?.message || 'Não foi possível abrir o ativo.'); }
+  const inspect = (asset: ApiAtivo) => {
+    if (clientId && asset.cliente_id !== clientId) {
+      setError('O ativo não pertence ao cliente selecionado.');
+      return;
+    }
+    const search = new URLSearchParams(location.search);
+    search.set('assetId', String(asset.id));
+    navigate({ pathname: location.pathname, search: `?${search.toString()}`, hash: compact ? '#assets' : location.hash });
+  };
+  const closeDetail = () => {
+    const search = new URLSearchParams(location.search);
+    search.delete('assetId');
+    const nextSearch = search.toString();
+    navigate({ pathname: location.pathname, search: nextSearch ? `?${nextSearch}` : '', hash: compact ? '#assets' : location.hash }, { replace: true });
   };
 
   return <section className={compact ? '' : 'space-y-5'}>
-    <div className={`flex flex-wrap items-end justify-between gap-4 ${compact ? 'mb-4' : ''}`}><div>{compact ? <h2 className="font-display text-lg font-semibold text-slate-950">{title}</h2> : <h1 className="font-display text-2xl font-semibold text-slate-950">{title}</h1>}<p className="mt-1 text-sm text-slate-500">{subtitle ?? `${items.length} ativos tecnológicos disponíveis`}</p></div><div className="flex flex-wrap gap-2">{role === 'client' && onImportExcel && <button type="button" onClick={onImportExcel} className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50">Importar ativos por Excel</button>}{canManage && <button onClick={openCreate} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"><Plus size={16} />Novo Ativo</button>}</div></div>
+    <div className={`flex flex-wrap items-end justify-between gap-4 ${compact ? 'mb-4' : ''}`}><div>{compact ? <h2 className="font-display text-lg font-semibold text-slate-950">{title}</h2> : <h1 className="font-display text-2xl font-semibold text-slate-950">{title}</h1>}<p className="mt-1 text-sm text-slate-500">{subtitle ?? `${items.length} ativos tecnológicos disponíveis`}</p></div><div className="flex flex-wrap gap-2">{onImportExcel && <button type="button" onClick={onImportExcel} className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50">{role === 'client' ? 'Importar ativos por Excel' : 'Ver importações Excel'}</button>}{canManage && <button onClick={openCreate} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"><Plus size={16} />Novo Ativo</button>}</div></div>
     <Notice value={error} /> <Notice value={success} tone="success" />
     <Panel>
       <div className="grid gap-3 border-b border-slate-100 p-4 md:grid-cols-[minmax(0,1fr)_180px_180px_auto]">
-        <label className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-500"><Search size={16} /><input value={filters.q || ''} onChange={(event) => setFilters({ ...filters, q: event.target.value })} onKeyDown={(event) => { if (event.key === 'Enter') void load(); }} placeholder="Pesquisar ativos..." className="w-full bg-transparent outline-none" /></label>
+        <label className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-500"><Search size={16} /><input value={filters.q || ''} onChange={(event) => setFilters({ ...filters, q: event.target.value })} onKeyDown={(event) => { if (event.key === 'Enter') void load(filters); }} placeholder="Pesquisar ativos..." className="w-full bg-transparent outline-none" /></label>
         {!clientId && role !== 'client' && <Select label="Cliente" value={filters.cliente_id || ''} onChange={(value) => setFilters({ ...filters, cliente_id: value ? Number(value) : undefined })}><option value="">Todos os clientes</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.nome}</option>)}</Select>}
         <Select label="Criticidade" value={filters.criticidade || ''} onChange={(value) => setFilters({ ...filters, criticidade: value || undefined })}><option value="">Todas</option>{CRITICALITIES.map((value) => <option key={value} value={value}>{label(value)}</option>)}</Select>
-        <button onClick={() => void load()} className="self-end rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Filtrar</button>
+        <button onClick={() => void load(filters)} className="self-end rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Filtrar</button>
       </div>
-      {loading ? <Empty text="A carregar ativos..." /> : items.length === 0 ? <Empty text="Sem ativos tecnológicos disponíveis." /> : <div className="overflow-x-auto"><table className="min-w-full divide-y divide-slate-100 text-sm"><thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Ativo</th><th className="px-4 py-3">Cliente</th><th className="px-4 py-3">Tipo / Plataforma</th><th className="px-4 py-3">IP / Identificador</th><th className="px-4 py-3">Criticidade</th><th className="px-4 py-3">Atualizado</th><th className="px-4 py-3"><span className="sr-only">Ações</span></th></tr></thead><tbody className="divide-y divide-slate-100">{items.map((asset) => <tr key={asset.id} className="hover:bg-slate-50"><td className="px-4 py-3 font-medium text-slate-900">{asset.nome}</td><td className="px-4 py-3 text-slate-600">{asset.cliente_nome || '—'}</td><td className="px-4 py-3 text-slate-600"><div>{asset.tipo_equipamento || asset.tipo || '—'}</div><div className="text-xs text-slate-400">{asset.sistema_operativo || '—'}</div></td><td className="px-4 py-3 font-mono text-xs text-slate-600"><div>{asset.endereco_ip || '—'}</div><div className="text-slate-400">{asset.numero_inventario || asset.fqdn || '—'}</div></td><td className="px-4 py-3"><span className={`badge ${badgeClass(asset.criticidade || asset.criticalidade)}`}>{label(asset.criticidade || asset.criticalidade)}</span></td><td className="px-4 py-3 text-xs text-slate-500">{formatDate(asset.atualizado_em || asset.criado_em)}</td><td className="px-4 py-3"><div className="flex justify-end gap-1"><button title="Ver detalhe" aria-label={`Ver detalhe de ${asset.nome}`} onClick={() => void inspect(asset)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-blue-700"><Eye size={16} /></button>{canManage && <><button title="Editar" aria-label={`Editar ${asset.nome}`} onClick={() => openEdit(asset)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-blue-700"><Pencil size={16} /></button><button title="Desativar" aria-label={`Desativar ${asset.nome}`} onClick={() => void deactivate(asset)} className="rounded-lg p-2 text-slate-500 hover:bg-rose-50 hover:text-rose-700"><Power size={16} /></button></>}</div></td></tr>)}</tbody></table></div>}
+      {loading ? <Empty text="A carregar ativos..." /> : items.length === 0 ? <Empty text="Sem ativos tecnológicos disponíveis." /> : <div className="overflow-x-auto"><table className="min-w-full divide-y divide-slate-100 text-sm"><thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Ativo</th><th className="px-4 py-3">Cliente</th><th className="px-4 py-3">Tipo / Plataforma</th><th className="px-4 py-3">IP / Identificador</th><th className="px-4 py-3">Criticidade</th><th className="px-4 py-3">Atualizado</th><th className="px-4 py-3"><span className="sr-only">Ações</span></th></tr></thead><tbody className="divide-y divide-slate-100">{items.map((asset) => <tr key={asset.id} className="hover:bg-slate-50"><td className="px-4 py-3 font-medium text-slate-900">{asset.nome}</td><td className="px-4 py-3 text-slate-600">{asset.cliente_nome || '—'}</td><td className="px-4 py-3 text-slate-600"><div>{asset.tipo_equipamento || asset.tipo || '—'}</div><div className="text-xs text-slate-400">{asset.sistema_operativo || '—'}</div></td><td className="px-4 py-3 font-mono text-xs text-slate-600"><div>{asset.endereco_ip || '—'}</div><div className="text-slate-400">{asset.numero_inventario || asset.fqdn || '—'}</div></td><td className="px-4 py-3"><span className={`badge ${badgeClass(asset.criticidade || asset.criticalidade)}`}>{label(asset.criticidade || asset.criticalidade)}</span></td><td className="px-4 py-3 text-xs text-slate-500">{formatDate(asset.atualizado_em || asset.criado_em)}</td><td className="px-4 py-3"><div className="flex justify-end gap-1"><button title="Ver detalhe" aria-label={`Ver detalhe de ${asset.nome}`} onClick={() => inspect(asset)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-blue-700"><Eye size={16} /></button>{canManage && <><button title="Editar" aria-label={`Editar ${asset.nome}`} onClick={() => openEdit(asset)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-blue-700"><Pencil size={16} /></button><button title="Desativar" aria-label={`Desativar ${asset.nome}`} onClick={() => void deactivate(asset)} className="rounded-lg p-2 text-slate-500 hover:bg-rose-50 hover:text-rose-700"><Power size={16} /></button></>}</div></td></tr>)}</tbody></table></div>}
     </Panel>
     {formOpen && <div role="dialog" aria-modal="true" aria-label={editing ? 'Editar ativo' : 'Novo ativo'} className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/40 p-4"><form onSubmit={submit} className="mx-auto my-8 max-w-3xl rounded-2xl bg-white p-6 shadow-2xl"><div className="mb-5 flex items-center justify-between"><div><h2 className="font-display text-xl font-semibold text-slate-950">{editing ? 'Editar Ativo' : 'Novo Ativo'}</h2><p className="mt-1 text-sm text-slate-500">Os campos marcados são obrigatórios.</p></div><button type="button" onClick={() => setFormOpen(false)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X size={18} /></button></div><div className="grid gap-4 md:grid-cols-2"><Select label="Cliente" value={draft.cliente_id || ''} disabled={!!clientId} onChange={(value) => setDraft({ ...draft, cliente_id: Number(value) })}><option value="">Selecione</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.nome}</option>)}</Select><Input label="Nome" required value={draft.nome} onChange={(value) => setDraft({ ...draft, nome: value })} /><Input label="Tipo de equipamento" value={draft.tipo_equipamento || ''} onChange={(value) => setDraft({ ...draft, tipo_equipamento: value })} /><Input label="Número de inventário" value={draft.numero_inventario || ''} onChange={(value) => setDraft({ ...draft, numero_inventario: value })} /><Input label="Endereço IP" value={draft.endereco_ip || ''} onChange={(value) => setDraft({ ...draft, endereco_ip: value })} placeholder="192.0.2.10" /><Input label="Sistema / plataforma" value={draft.sistema_operativo || ''} onChange={(value) => setDraft({ ...draft, sistema_operativo: value })} /><Select label="Criticidade" value={draft.criticidade} onChange={(value) => setDraft({ ...draft, criticidade: value })}>{CRITICALITIES.map((value) => <option key={value} value={value}>{label(value)}</option>)}</Select><Input label="FQDN" value={draft.fqdn || ''} onChange={(value) => setDraft({ ...draft, fqdn: value })} /><Input label="Fabricante" value={draft.fabricante || ''} onChange={(value) => setDraft({ ...draft, fabricante: value })} /><Input label="Modelo / versão" value={draft.modelo_versao || ''} onChange={(value) => setDraft({ ...draft, modelo_versao: value })} /></div><label className="mt-4 block text-sm font-medium text-slate-700">Observações<textarea value={draft.observacoes || ''} onChange={(event) => setDraft({ ...draft, observacoes: event.target.value })} className="mt-1 min-h-24 w-full rounded-xl border border-slate-200 px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" /></label><div className="mt-4 flex flex-wrap gap-4 text-sm text-slate-700"><label className="inline-flex items-center gap-2"><input type="checkbox" checked={draft.comunicado_cncs || false} onChange={(event) => setDraft({ ...draft, comunicado_cncs: event.target.checked })} />Comunicado CNCS</label><label className="inline-flex items-center gap-2"><input type="checkbox" checked={draft.programa_gestao_risco || false} onChange={(event) => setDraft({ ...draft, programa_gestao_risco: event.target.checked })} />Programa de gestão de risco</label>{editing && <label className="inline-flex items-center gap-2"><input type="checkbox" checked={draft.ativo} onChange={(event) => setDraft({ ...draft, ativo: event.target.checked })} />Ativo</label>}</div><div className="mt-6 flex justify-end gap-3"><button type="button" onClick={() => setFormOpen(false)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700">Cancelar</button><button disabled={saving || !draft.cliente_id} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'A guardar...' : 'Guardar'}</button></div></form></div>}
-    {selected && <div role="dialog" aria-modal="true" aria-label="Detalhe do ativo" className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/40 p-4"><div className="mx-auto my-12 max-w-2xl rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><h2 className="font-display text-xl font-semibold text-slate-950">{selected.nome}</h2><p className="mt-1 text-sm text-slate-500">{selected.cliente_nome || '—'}</p></div><button onClick={() => setSelected(null)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X size={18} /></button></div><dl className="mt-6 grid gap-4 text-sm sm:grid-cols-2"><div><dt className="text-slate-500">Tipo</dt><dd className="mt-1 font-medium text-slate-900">{selected.tipo_equipamento || selected.tipo || '—'}</dd></div><div><dt className="text-slate-500">Criticidade</dt><dd className="mt-1"><span className={`badge ${badgeClass(selected.criticidade || selected.criticalidade)}`}>{label(selected.criticidade || selected.criticalidade)}</span></dd></div><div><dt className="text-slate-500">IP / FQDN</dt><dd className="mt-1 font-mono text-slate-900">{selected.endereco_ip || selected.fqdn || '—'}</dd></div><div><dt className="text-slate-500">Inventário</dt><dd className="mt-1 font-medium text-slate-900">{selected.numero_inventario || '—'}</dd></div><div><dt className="text-slate-500">Sistema</dt><dd className="mt-1 font-medium text-slate-900">{selected.sistema_operativo || '—'}</dd></div><div><dt className="text-slate-500">Atualizado</dt><dd className="mt-1 font-medium text-slate-900">{formatDate(selected.atualizado_em || selected.criado_em)}</dd></div></dl>{selected.observacoes && <div className="mt-5 border-t border-slate-100 pt-4 text-sm text-slate-700"><p className="font-medium text-slate-900">Observações</p><p className="mt-1 whitespace-pre-wrap">{selected.observacoes}</p></div>}</div></div>}
+    {routeAssetValue !== null && <div role="dialog" aria-modal="true" aria-label="Detalhe do ativo" className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/40 p-4"><div className="mx-auto my-12 max-w-2xl rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><h2 className="font-display text-xl font-semibold text-slate-950">{selected?.nome || 'Detalhe do ativo'}</h2>{selected && <p className="mt-1 text-sm text-slate-500">{selected.cliente_nome || '—'}</p>}</div><button type="button" aria-label="Fechar detalhe do ativo" onClick={closeDetail} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X size={18} /></button></div>{detailLoading ? <Empty text="A carregar o ativo..." /> : detailError ? <div className="mt-5"><Notice value={detailError} /></div> : selected ? <><dl className="mt-6 grid gap-4 text-sm sm:grid-cols-2"><div><dt className="text-slate-500">Tipo</dt><dd className="mt-1 font-medium text-slate-900">{selected.tipo_equipamento || selected.tipo || '—'}</dd></div><div><dt className="text-slate-500">Criticidade</dt><dd className="mt-1"><span className={`badge ${badgeClass(selected.criticidade || selected.criticalidade)}`}>{label(selected.criticidade || selected.criticalidade)}</span></dd></div><div><dt className="text-slate-500">IP / FQDN</dt><dd className="mt-1 font-mono text-slate-900">{selected.endereco_ip || selected.fqdn || '—'}</dd></div><div><dt className="text-slate-500">Inventário</dt><dd className="mt-1 font-medium text-slate-900">{selected.numero_inventario || '—'}</dd></div><div><dt className="text-slate-500">Sistema</dt><dd className="mt-1 font-medium text-slate-900">{selected.sistema_operativo || '—'}</dd></div><div><dt className="text-slate-500">Atualizado</dt><dd className="mt-1 font-medium text-slate-900">{formatDate(selected.atualizado_em || selected.criado_em)}</dd></div></dl>{selected.observacoes && <div className="mt-5 border-t border-slate-100 pt-4 text-sm text-slate-700"><p className="font-medium text-slate-900">Observações</p><p className="mt-1 whitespace-pre-wrap">{selected.observacoes}</p></div>}</> : null}<div className="mt-6 flex justify-end"><button type="button" onClick={closeDetail} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Voltar aos Ativos</button></div></div></div>}
   </section>;
 }
 

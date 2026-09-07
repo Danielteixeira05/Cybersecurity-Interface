@@ -2,6 +2,7 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { MgrClientDetail, MgrNIS2 } from './ManagerPages';
 
 const { avaliacoesApi, clienteDetalheApi, clientesApi, criarAvaliacaoApi, estadosConformidadeApi } = vi.hoisted(() => ({
@@ -93,10 +94,10 @@ describe('MgrClientDetail no contexto administrativo', () => {
       return id === 7 ? pendingA : pendingB;
     });
 
-    const { rerender } = render(<MgrClientDetail setPage={vi.fn()} role="admin" areaLabel="Administrador" clientId={7} />);
+    const { rerender } = render(<MemoryRouter><MgrClientDetail setPage={vi.fn()} role="admin" areaLabel="Administrador" clientId={7} /></MemoryRouter>);
     await waitFor(() => expect(clienteDetalheApi).toHaveBeenCalledWith(7, expect.anything()));
 
-    rerender(<MgrClientDetail setPage={vi.fn()} role="admin" areaLabel="Administrador" clientId={8} />);
+    rerender(<MemoryRouter><MgrClientDetail setPage={vi.fn()} role="admin" areaLabel="Administrador" clientId={8} /></MemoryRouter>);
     expect(signals.get(7)?.aborted).toBe(true);
     expect(screen.getByText('A carregar...')).toBeVisible();
 

@@ -988,9 +988,9 @@ function normaliseDashboard(value: unknown): ApiDashboard {
 export async function dashboardApi(): Promise<ApiDashboard> {
   return normaliseDashboard(await apiFetch('/api/dashboard/'));
 }
-export async function clientesApi(q?: string): Promise<ApiCliente[]> {
+export async function clientesApi(q?: string, signal?: AbortSignal): Promise<ApiCliente[]> {
   const qs = q ? `?q=${encodeURIComponent(q)}` : '';
-  const result = await apiFetch<unknown>(`/api/clients/${qs}`);
+  const result = await apiFetch<unknown>(`/api/clients/${qs}`, { signal });
   const rows = Array.isArray(result) ? result : (asRecord(result).items as unknown);
   return Array.isArray(rows) ? rows.map(normaliseCliente) : [];
 }
@@ -1157,15 +1157,15 @@ function queryString(filters: object) {
   return query ? `?${query}` : '';
 }
 
-export async function ativosApi(filters: FiltrosAtivos | number = {}): Promise<ApiAtivo[]> {
+export async function ativosApi(filters: FiltrosAtivos | number = {}, signal?: AbortSignal): Promise<ApiAtivo[]> {
   const resolved = typeof filters === 'number' ? { cliente_id: filters } : filters;
-  const result = await apiFetch<unknown>(`/api/assets/${queryString(resolved)}`);
+  const result = await apiFetch<unknown>(`/api/assets/${queryString(resolved)}`, { signal });
   const rows = Array.isArray(result) ? result : (asRecord(result).items as unknown);
   return Array.isArray(rows) ? rows.map(normaliseAtivo) : [];
 }
 
-export async function ativoDetalheApi(id: number): Promise<ApiAtivo> {
-  return normaliseAtivo(await apiFetch(`/api/assets/${id}`));
+export async function ativoDetalheApi(id: number, signal?: AbortSignal): Promise<ApiAtivo> {
+  return normaliseAtivo(await apiFetch(`/api/assets/${id}`, { signal }));
 }
 
 export async function criarAtivoApi(payload: CriarAtivoPayload): Promise<ApiAtivo> {
@@ -1393,6 +1393,30 @@ export async function descarregarModeloImportacaoAtivosApi(): Promise<{ blob: Bl
       }
     }
     throw new Error('Não foi possível descarregar o modelo de importação de ativos.');
+  }
+}
+
+export async function descarregarImportacaoExcelApi(importId: number): Promise<{ blob: Blob; filename: string }> {
+  if (!Number.isSafeInteger(importId) || importId < 1) throw new Error('Identificador de importação inválido.');
+  try {
+    const response = await api.get<Blob>(`/api/excel-imports/${importId}/download`, { responseType: 'blob' });
+    const header = response.headers['content-disposition'];
+    const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header || '')?.[1];
+    const simple = /filename="?([^";]+)"?/i.exec(header || '')?.[1];
+    return {
+      blob: response.data,
+      filename: encoded ? decodeURIComponent(encoded) : (simple || 'importacao.xlsx'),
+    };
+  } catch (cause) {
+    if (axios.isAxiosError(cause) && cause.response?.data instanceof Blob) {
+      try {
+        const payload = JSON.parse(await cause.response.data.text()) as { erro?: unknown };
+        if (typeof payload.erro === 'string' && payload.erro.trim()) throw new Error(payload.erro);
+      } catch (error) {
+        if (error instanceof Error && error.name !== 'SyntaxError') throw error;
+      }
+    }
+    throw new Error('Não foi possível descarregar o ficheiro original da importação.');
   }
 }
 
