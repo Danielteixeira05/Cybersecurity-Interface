@@ -15,6 +15,7 @@ import {
   createAssetImportTemplate,
   downloadExcelImport,
   getExcelImportResult,
+  listExcelImports,
   parseExcelImportForTests,
   previewExcelImport,
 } from '../src/services/excel-import.service.js';
@@ -297,6 +298,33 @@ test('o resultado da importação expõe apenas linha, estado, nome e erro depoi
   assert.deepEqual(result.linhas, [{ numero_linha: 2, estado: 'REJEITADA', nome: 'ATIVO-E2E', erro: 'Número de inventário repetido.' }]);
   assert.equal('caminho_ficheiro' in result, false);
   assert.doesNotMatch(JSON.stringify(result), /token|segredo|imports\//i);
+});
+
+test('a listagem serializa várias importações sem interpretar o índice do array como linhas', async () => {
+  const imports = [31, 32].map((id) => ({
+    id,
+    cliente_id: 7,
+    tipo: 'ATIVOS',
+    nome_ficheiro_original: `ativos-${id}.xlsx`,
+    estado: 'PROCESSADO',
+    total_linhas: 1,
+    linhas_importadas: 1,
+    linhas_rejeitadas: 0,
+    importado_por: 70,
+    importado_em: new Date('2026-09-08T00:00:00Z'),
+    cliente: { nome: 'Organização de teste' },
+    importadoPor: { nome: 'Utilizador de teste' },
+  }));
+  const result = await listExcelImports({ role: 'admin', sub: '1' }, {}, {
+    models: {
+      Client: { name: 'Client' },
+      User: { name: 'User' },
+      ExcelImport: { findAll: async () => imports },
+    },
+  });
+
+  assert.deepEqual(result.map((item) => item.id), [31, 32]);
+  assert.equal(result.every((item) => !('linhas' in item)), true);
 });
 
 function createTemplateTestApp() {

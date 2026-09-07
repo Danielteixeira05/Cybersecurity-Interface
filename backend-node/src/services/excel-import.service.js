@@ -450,12 +450,12 @@ export async function commitExcelImport(auth, input, file, dependencies = {}) {
   }
 }
 
-export async function listExcelImports(auth, filters = {}) {
+export async function listExcelImports(auth, filters = {}, dependencies = {}) {
   const rawClientId = filters.cliente_id ?? filters.clienteId;
   const clientId = rawClientId === undefined || rawClientId === '' ? undefined : asId(rawClientId, 'Cliente');
   const where = await whereFor(auth, clientId);
   if (!where) return [];
-  const { ExcelImport, Client, User } = getModels();
+  const { ExcelImport, Client, User } = dependencies.models ?? getModels();
   const rows = await ExcelImport.findAll({
     where,
     include: [
@@ -465,7 +465,7 @@ export async function listExcelImports(auth, filters = {}) {
     order: [['importado_em', 'DESC'], ['id', 'DESC']],
     limit: 100,
   });
-  return rows.map(serialiseImport);
+  return rows.map((row) => serialiseImport(row));
 }
 
 export async function getExcelImportResult(auth, importId, dependencies = {}) {
