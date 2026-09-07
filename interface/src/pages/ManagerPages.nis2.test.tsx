@@ -5,12 +5,13 @@ import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { MgrClientDetail, MgrNIS2 } from './ManagerPages';
 
-const { avaliacoesApi, clienteDetalheApi, clientesApi, criarAvaliacaoApi, estadosConformidadeApi } = vi.hoisted(() => ({
+const { avaliacoesApi, clienteDetalheApi, clientesApi, criarAvaliacaoApi, estadosConformidadeApi, importacoesExcelApi } = vi.hoisted(() => ({
   avaliacoesApi: vi.fn(),
   clienteDetalheApi: vi.fn(),
   clientesApi: vi.fn(),
   criarAvaliacaoApi: vi.fn(),
   estadosConformidadeApi: vi.fn(),
+  importacoesExcelApi: vi.fn(),
 }));
 
 vi.mock('../apiClient', async (importOriginal) => ({
@@ -20,6 +21,7 @@ vi.mock('../apiClient', async (importOriginal) => ({
   clienteDetalheApi,
   criarAvaliacaoApi,
   estadosConformidadeApi,
+  importacoesExcelApi,
 }));
 
 vi.mock('../components/OperationalResources', () => ({
@@ -47,10 +49,12 @@ describe('MgrNIS2', () => {
     avaliacoesApi.mockReset();
     criarAvaliacaoApi.mockReset();
     estadosConformidadeApi.mockReset();
+    importacoesExcelApi.mockReset();
     clientesApi.mockResolvedValue(client ? [client] : []);
     avaliacoesApi.mockResolvedValueOnce([]).mockResolvedValue([created]);
     estadosConformidadeApi.mockResolvedValue([{ id: 2, codigo: 'EM_REVISAO', nome: 'Em revisão' }]);
     criarAvaliacaoApi.mockResolvedValue(created);
+    importacoesExcelApi.mockResolvedValue([]);
   });
 
   it('permite ao Gestor escolher apenas clientes carregados e atualiza histórico/indicadores após sucesso', async () => {
@@ -114,6 +118,7 @@ describe('MgrClientDetail no contexto administrativo', () => {
     expect(await screen.findByRole('heading', { name: 'Cliente B' })).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Ativos' }));
     expect(screen.getByText('assets:admin:8')).toBeVisible();
+    await waitFor(() => expect(importacoesExcelApi).toHaveBeenCalledWith(8, expect.any(AbortSignal)));
     await user.click(screen.getByRole('button', { name: 'Incidentes' }));
     expect(screen.getByText('incidents:admin:8')).toBeVisible();
     expect(screen.getByText('Administrador')).toBeVisible();

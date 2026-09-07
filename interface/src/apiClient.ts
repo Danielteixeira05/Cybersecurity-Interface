@@ -1367,9 +1367,9 @@ function excelImportFormData(tipo: ApiImportacaoExcel['tipo'], clienteId: number
   return form;
 }
 
-export async function importacoesExcelApi(clienteId?: number): Promise<ApiImportacaoExcel[]> {
+export async function importacoesExcelApi(clienteId?: number, signal?: AbortSignal): Promise<ApiImportacaoExcel[]> {
   const qs = clienteId ? `?cliente_id=${clienteId}` : '';
-  const result = await apiFetch<{ items?: ApiImportacaoExcel[] } | ApiImportacaoExcel[]>(`/api/excel-imports/${qs}`);
+  const result = await apiFetch<{ items?: ApiImportacaoExcel[] } | ApiImportacaoExcel[]>(`/api/excel-imports/${qs}`, { signal });
   return Array.isArray(result) ? result : (result.items ?? []);
 }
 

@@ -13,6 +13,20 @@ const asset = {
   criticidade: 'MEDIA',
   ativo: true,
 };
+const excelImport = {
+  id: 31,
+  cliente_id: client.id,
+  cliente_nome: client.nome,
+  tipo: 'ATIVOS',
+  nome_ficheiro_original: 'ativos-alpha-e2e.xlsx',
+  estado: 'PROCESSADO',
+  total_linhas: 3,
+  linhas_importadas: 3,
+  linhas_rejeitadas: 0,
+  importado_por: 103,
+  importado_por_nome: 'Utilizador E2E',
+  importado_em: '2026-09-07T10:00:00Z',
+};
 
 type ProfileCase = {
   label: string;
@@ -73,6 +87,11 @@ async function mockAssetSession(page: Page, profile: ProfileCase, detailRequests
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [asset] }) });
       return;
     }
+    if (pathname === '/api/excel-imports' || pathname === '/api/excel-imports/') {
+      if (profile.perfil !== 'CLIENTE') expect(url.searchParams.get('cliente_id')).toBe(String(client.id));
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [excelImport] }) });
+      return;
+    }
     const assetMatch = /^\/api\/assets\/(\d+)$/.exec(pathname);
     if (assetMatch) {
       detailRequests.push(Number(assetMatch[1]));
@@ -91,6 +110,31 @@ async function mockAssetSession(page: Page, profile: ProfileCase, detailRequests
   });
 }
 
+async function expectResponsiveAssetLayout(page: Page) {
+  const layout = await page.evaluate(() => {
+    const main = document.querySelector('main');
+    const tableRegions = Array.from(document.querySelectorAll<HTMLElement>('.overflow-x-auto'))
+      .filter((element) => element.querySelector('table'));
+    const isContained = (element: Element | null) => {
+      if (!element) return false;
+      const rect = element.getBoundingClientRect();
+      return rect.left >= -1 && rect.right <= window.innerWidth + 1;
+    };
+    return {
+      htmlOverflowX: getComputedStyle(document.documentElement).overflowX,
+      bodyOverflowX: getComputedStyle(document.body).overflowX,
+      mainContained: isContained(main),
+      tablesContained: tableRegions.length >= 2 && tableRegions.every(isContained),
+    };
+  });
+  expect(layout).toEqual({
+    htmlOverflowX: 'hidden',
+    bodyOverflowX: 'hidden',
+    mainContained: true,
+    tablesContained: true,
+  });
+}
+
 for (const profile of profiles) {
   test(`${profile.label}: detalhe e Voltar aos Ativos preservam o ativo, perfil e cliente`, async ({ page }) => {
     const detailRequests: number[] = [];
@@ -98,6 +142,8 @@ for (const profile of profiles) {
     await page.goto(profile.initialUrl);
 
     await expect(page.getByText(asset.nome, { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Histórico de importações' })).toBeVisible();
+    await expect(page.getByRole('button', { name: `Descarregar ficheiro original da importação ${excelImport.id}` })).toBeVisible();
     await page.getByRole('button', { name: `Ver detalhe de ${asset.nome}` }).click();
     await expect(page).toHaveURL(profile.detailUrl);
     await expect(page.getByRole('dialog', { name: 'Detalhe do ativo' })).toContainText(asset.numero_inventario);
@@ -112,4 +158,35 @@ for (const profile of profiles) {
     await expect(page).toHaveURL(new RegExp(`${profile.initialUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
     await expect(page.getByText(asset.nome, { exact: true }).first()).toBeVisible();
   });
+
+  test(`${profile.label}: inventário, histórico e detalhe permanecem utilizáveis em mobile`, async ({ page }) => {
+    const detailRequests: number[] = [];
+    await page.setViewportSize({ width: 390, height: 844 });
+    await mockAssetSession(page, profile, detailRequests);
+    await page.goto(profile.initialUrl);
+
+    await expect(page.getByText(asset.nome, { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Histórico de importações' })).toBeVisible();
+    await expectResponsiveAssetLayout(page);
+
+    await page.getByRole('button', { name: `Ver detalhe de ${asset.nome}` }).click();
+    await expect(page.getByRole('dialog', { name: 'Detalhe do ativo' })).toContainText(asset.numero_inventario);
+    await expectResponsiveAssetLayout(page);
+    await page.getByRole('button', { name: 'Voltar aos Ativos' }).click();
+    await expect(page.getByText(asset.nome, { exact: true }).first()).toBeVisible();
+  });
 }
+
+test('Cliente mantém o histórico em Meus Ativos e a página de importação dedicada não o duplica', async ({ page }) => {
+  const detailRequests: number[] = [];
+  await mockAssetSession(page, profiles[0], detailRequests);
+  await page.goto('/cliente/ativos');
+
+  await expect(page.getByRole('heading', { name: 'Histórico de importações' })).toBeVisible();
+  await page.getByRole('button', { name: 'Importar ativos por Excel' }).click();
+  await expect(page.getByRole('heading', { name: 'Importar Ativos via Excel' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Histórico de importações' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Voltar aos Ativos' }).click();
+  await expect(page).toHaveURL(/\/cliente\/ativos$/);
+  await expect(page.getByRole('heading', { name: 'Histórico de importações' })).toBeVisible();
+});

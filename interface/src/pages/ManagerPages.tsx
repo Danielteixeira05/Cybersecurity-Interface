@@ -687,7 +687,7 @@ export function MgrClientDetail({ setPage, backPage = 'mgr-clients', backLabel =
         {assessmentFormOpen && canManageNis2 && <Nis2AssessmentForm role={role} clients={[c as ApiCliente]} fixedClient={c as ApiCliente} onCancel={() => setAssessmentFormOpen(false)} onCreated={async () => { setAssessmentFormOpen(false); setAssessmentNotice('Avaliação NIS2 registada com sucesso.'); await refreshDetail(); }} />}
         <DataTable data={evaluations} emptyText="Sem avaliações NIS2 disponíveis." columns={[{ key: 'data_avaliacao', label: 'Data', render: (item) => formatDate(item.data_avaliacao) }, { key: 'estado_conformidade_nome', label: 'Estado', render: (item) => <span className={`badge ${conformidadeColor(item.estado_conformidade_nome)}`}>{item.estado_conformidade_nome || '—'}</span> }, { key: 'score', label: 'Pontuação', render: (item) => item.score ?? item.pontuacao ?? '—' }, { key: 'nivel_risco', label: 'Risco', render: (item) => item.nivel_risco || '—' }]} />
       </section>}
-      {detailTab === 'assets' && <AssetsWorkspace role={role} clientId={cid} compact title="Ativos Tecnológicos" subtitle="Inventário associado a este cliente" onChanged={() => void refreshDetail()} />}
+      {detailTab === 'assets' && <div><AssetsWorkspace role={role} clientId={cid} compact title="Ativos Tecnológicos" subtitle="Inventário associado a este cliente" onChanged={() => void refreshDetail()} /><ExcelImportHistory clientId={cid} /></div>}
       {detailTab === 'incidents' && <IncidentsWorkspace role={role} clientId={cid} compact title="Incidentes de Segurança" subtitle="Incidentes associados a este cliente" onChanged={() => void refreshDetail()} />}
       {detailTab === 'documents' && <section className="mgr-client-detail-v98__panel"><h2>Documentos</h2><DocumentsWorkspace role={role} clientId={cid} compact emptyTitle="Sem documentos disponíveis para este cliente." emptyDescription="Os documentos privados autorizados deste cliente aparecerão aqui." /></section>}
       {detailTab === 'reports' && <section className="mgr-client-detail-v98__panel"><h2>Relatórios</h2><DocumentsWorkspace role={role} clientId={cid} compact categoryScope={['RELATORIO', 'RELATORIO_CNCS']} emptyTitle="Sem relatórios disponíveis para este cliente." emptyDescription="Os relatórios privados deste cliente aparecerão aqui depois de submetidos." /></section>}
@@ -1060,27 +1060,96 @@ export function MgrEvidence(_props: PageProps) {
   />;
 }
 
-export function ExcelImportWorkspace({ role = 'manager', onBack }: { role?: 'admin' | 'manager' | 'client'; onBack?: () => void }) {
+export function ExcelImportHistory({ clientId, refreshKey = 0 }: { clientId?: number; refreshKey?: number }) {
+  const [history, setHistory] = useState<ApiImportacaoExcel[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [downloadingImportId, setDownloadingImportId] = useState<number | null>(null);
+  const requestVersion = useRef(0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const version = ++requestVersion.current;
+    setHistory([]);
+    setHistoryError(null);
+    setLoading(true);
+    importacoesExcelApi(clientId, controller.signal)
+      .then((items) => {
+        if (requestVersion.current === version && !controller.signal.aborted) setHistory(items);
+      })
+      .catch((error) => {
+        const cancelled = controller.signal.aborted || error?.code === 'ERR_CANCELED' || error?.name === 'AbortError' || error?.name === 'CanceledError';
+        if (requestVersion.current === version && !cancelled) {
+          setHistoryError(error instanceof Error ? error.message : 'Não foi possível carregar o histórico de importações.');
+        }
+      })
+      .finally(() => {
+        if (requestVersion.current === version && !controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [clientId, refreshKey]);
+
+  async function downloadOriginalImport(importId: number) {
+    setHistoryError(null);
+    setDownloadingImportId(importId);
+    try {
+      const { blob, filename } = await descarregarImportacaoExcelApi(importId);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setHistoryError(error instanceof Error ? error.message : 'Não foi possível descarregar o ficheiro original da importação.');
+    } finally {
+      setDownloadingImportId(null);
+    }
+  }
+
+  return (
+    <section data-testid="excel-import-history" className="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
+      <h2 className="mb-1 font-display text-lg font-semibold text-slate-900">Histórico de importações</h2>
+      <p className="mb-4 text-sm text-slate-500">Ficheiros processados e respetivo resultado.</p>
+      {historyError && <div role="alert" className="mb-4"><ErrorCard msg={historyError} /></div>}
+      {loading ? <Loader text="A carregar histórico de importações..." /> : <DataTable
+        data={history}
+        emptyText="Ainda não existem importações para esta organização."
+        columns={[
+          { key: 'id', label: 'ID', width: '50px', render: (row) => <span className="font-mono text-xs">#{row.id}</span> },
+          { key: 'tipo', label: 'Tipo', render: (row) => <span className="badge bg-blue-50 text-blue-700">{row.tipo}</span> },
+          { key: 'cliente_nome', label: 'Organização', render: (row) => row.cliente_nome || '—' },
+          { key: 'importado_em', label: 'Data & Hora', render: (row) => row.importado_em ? new Date(row.importado_em).toLocaleString('pt-PT') : '—' },
+          { key: 'importado_por_nome', label: 'Utilizador', render: (row) => row.importado_por_nome || '—' },
+          { key: 'total_linhas', label: 'Linhas', render: (row) => row.total_linhas },
+          { key: 'linhas_importadas', label: 'Sucesso', render: (row) => <span className="font-semibold text-emerald-600">{row.linhas_importadas}</span> },
+          { key: 'linhas_rejeitadas', label: 'Erros', render: (row) => <span className={row.linhas_rejeitadas ? 'font-semibold text-rose-600' : ''}>{row.linhas_rejeitadas}</span> },
+          { key: 'estado', label: 'Estado', render: (row) => <span className={`badge ${row.estado === 'PROCESSADO' ? 'bg-emerald-100 text-emerald-700' : row.estado === 'PARCIAL' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>{row.estado}</span> },
+          { key: '_download' as keyof ApiImportacaoExcel, label: 'Ficheiro', render: (row) => <button type="button" onClick={() => void downloadOriginalImport(row.id)} disabled={downloadingImportId !== null} aria-label={`Descarregar ficheiro original da importação ${row.id}`} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-wait disabled:opacity-60">{downloadingImportId === row.id ? 'A descarregar…' : 'Download'}</button> },
+        ]}
+      />}
+    </section>
+  );
+}
+
+export function ExcelImportWorkspace({ role = 'manager', onBack, onCompleted }: { role?: 'admin' | 'manager' | 'client'; onBack?: () => void; onCompleted?: (value: ApiImportacaoExcel) => void }) {
   const clientOnly = role === 'client';
   const [clients, setClients] = useState<ApiCliente[]>([]);
-  const [history, setHistory] = useState<ApiImportacaoExcel[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
   const [files, setFiles] = useState<Partial<Record<ApiImportacaoExcel['tipo'], File>>>({});
   const [preview, setPreview] = useState<ApiPrevisualizacaoExcel | null>(null);
   const [loading, setLoading] = useState(true);
   const [workingType, setWorkingType] = useState<ApiImportacaoExcel['tipo'] | null>(null);
   const [downloadingTemplate, setDownloadingTemplate] = useState(false);
-  const [downloadingImportId, setDownloadingImportId] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
-    Promise.all([clientesApi(), importacoesExcelApi()])
-      .then(([associatedClients, previousImports]) => {
+    clientesApi()
+      .then((associatedClients) => {
         if (!active) return;
         setClients(associatedClients);
-        setHistory(previousImports);
         setSelectedClientId(associatedClients[0]?.id ?? null);
       })
       .catch((error) => active && setErr(error instanceof Error ? error.message : 'Não foi possível carregar as importações.'))
@@ -1093,6 +1162,7 @@ export function ExcelImportWorkspace({ role = 'manager', onBack }: { role?: 'adm
     if (!selectedClientId) { setErr('Selecione uma organização associada.'); return; }
     if (!file) { setErr('Selecione um ficheiro XLSX antes de continuar.'); return; }
     setErr(null);
+    setSuccess(null);
     setWorkingType(tipo);
     try {
       setPreview(await previsualizarImportacaoExcelApi(tipo, selectedClientId, file));
@@ -1106,15 +1176,17 @@ export function ExcelImportWorkspace({ role = 'manager', onBack }: { role?: 'adm
 
   async function confirmImport() {
     if (!preview || !selectedClientId) return;
+    if (preview.linhas_validas < 1) { setErr('Adicione pelo menos uma linha válida antes de confirmar a importação.'); return; }
     const file = files[preview.tipo];
     if (!file) { setErr('O ficheiro selecionado já não está disponível. Faça novamente a pré-visualização.'); return; }
     setErr(null);
     setWorkingType(preview.tipo);
     try {
       const created = await confirmarImportacaoExcelApi(preview.tipo, selectedClientId, file);
-      setHistory((current) => [created, ...current]);
       setPreview(null);
       setFiles((current) => ({ ...current, [created.tipo]: undefined }));
+      if (onCompleted) onCompleted(created);
+      else setSuccess(`Importação #${created.id} concluída. O inventário e o histórico foram atualizados.`);
     } catch (error) {
       setErr(error instanceof Error ? error.message : 'Não foi possível concluir a importação.');
     } finally {
@@ -1140,24 +1212,6 @@ export function ExcelImportWorkspace({ role = 'manager', onBack }: { role?: 'adm
     }
   }
 
-  async function downloadOriginalImport(importId: number) {
-    setHistoryError(null);
-    setDownloadingImportId(importId);
-    try {
-      const { blob, filename } = await descarregarImportacaoExcelApi(importId);
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = filename;
-      anchor.click();
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      setHistoryError(error instanceof Error ? error.message : 'Não foi possível descarregar o ficheiro original da importação.');
-    } finally {
-      setDownloadingImportId(null);
-    }
-  }
-
   const allImportCards: Array<{ titulo: string; descricao: string; icon: string; color: string; tipo: ApiImportacaoExcel['tipo'] | null; modelo: string }> = [
     { titulo: 'Importar Ativos', descricao: 'Modelo XLSX com dados de inventário e criticidade', icon: '💻', color: 'from-blue-500 to-cyan-500', tipo: 'ATIVOS', modelo: 'modelo_importacao_ativos.xlsx' },
     { titulo: 'Importar Incidentes', descricao: 'Histórico XLSX de incidentes ou dados externos', icon: '🚨', color: 'from-rose-500 to-pink-500', tipo: 'INCIDENTES', modelo: 'modelo_importacao_incidentes.xlsx' },
@@ -1177,6 +1231,7 @@ export function ExcelImportWorkspace({ role = 'manager', onBack }: { role?: 'adm
         {!loading && clients.length === 0 && <p className="mt-3 text-sm text-amber-800">{clientOnly ? 'Não existe uma organização ativa associada a esta conta para importar ativos.' : role === 'admin' ? 'Não existem organizações ativas para importar dados.' : 'Não existem organizações associadas a este Gestor para importar dados.'}</p>}
       </div>
       {err && <div role="alert" className="mb-6"><ErrorCard msg={err} /></div>}
+      {success && <p role="status" className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{success}</p>}
       <div className="grid gap-6 lg:grid-cols-3">
         {importCards.map((card) => (
           <div key={card.titulo} className="rounded-2xl border border-slate-200 bg-white p-6">
@@ -1204,28 +1259,7 @@ export function ExcelImportWorkspace({ role = 'manager', onBack }: { role?: 'adm
         ))}
       </div>
 
-      {preview && <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-4"><div><h3 className="font-display text-lg font-semibold text-slate-900">Pré-visualização: {preview.nome_ficheiro_original}</h3><p className="mt-1 text-sm text-slate-500">{preview.total_linhas} linhas · <span className="font-medium text-emerald-700">{preview.linhas_validas} válidas</span> · <span className="font-medium text-rose-700">{preview.linhas_rejeitadas} rejeitadas</span></p></div><button type="button" onClick={() => void confirmImport()} disabled={workingType !== null} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">{workingType === preview.tipo ? 'A importar…' : 'Confirmar importação'}</button></div>{preview.linhas_rejeitadas > 0 && <ul className="mt-4 divide-y divide-slate-100 rounded-xl border border-slate-200">{preview.linhas.filter((row) => row.estado === 'REJEITADA').slice(0, 10).map((row) => <li key={row.numero_linha} className="px-4 py-3 text-sm text-rose-700">Linha {row.numero_linha}: {row.erro || 'Dados inválidos.'}</li>)}</ul>}</section>}
-
-      <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
-        <h3 className="mb-4 font-display text-lg font-semibold text-slate-900">Últimas Importações</h3>
-        {historyError && <div role="alert" className="mb-4"><ErrorCard msg={historyError} /></div>}
-        {loading ? <Loader text="A carregar importações..." /> : <DataTable
-          data={history}
-          emptyText="Ainda não existem importações para as organizações associadas."
-          columns={[
-            { key: 'id', label: 'ID', width: '50px', render: (row) => <span className="font-mono text-xs">#{row.id}</span> },
-            { key: 'tipo', label: 'Tipo', render: (row) => <span className="badge bg-blue-50 text-blue-700">{row.tipo}</span> },
-            { key: 'cliente_nome', label: 'Organização', render: (row) => row.cliente_nome || '—' },
-            { key: 'importado_em', label: 'Data & Hora', render: (row) => row.importado_em ? new Date(row.importado_em).toLocaleString('pt-PT') : '—' },
-            { key: 'importado_por_nome', label: 'Utilizador', render: (row) => row.importado_por_nome || '—' },
-            { key: 'total_linhas', label: 'Linhas', render: (row) => row.total_linhas },
-            { key: 'linhas_importadas', label: 'Sucesso', render: (row) => <span className="font-semibold text-emerald-600">{row.linhas_importadas}</span> },
-            { key: 'linhas_rejeitadas', label: 'Erros', render: (row) => <span className={row.linhas_rejeitadas ? 'font-semibold text-rose-600' : ''}>{row.linhas_rejeitadas}</span> },
-            { key: 'estado', label: 'Estado', render: (row) => <span className={`badge ${row.estado === 'PROCESSADO' ? 'bg-emerald-100 text-emerald-700' : row.estado === 'PARCIAL' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>{row.estado}</span> },
-            { key: '_download' as keyof ApiImportacaoExcel, label: 'Ficheiro', render: (row) => <button type="button" onClick={() => void downloadOriginalImport(row.id)} disabled={downloadingImportId !== null} aria-label={`Descarregar ficheiro original da importação ${row.id}`} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-wait disabled:opacity-60">{downloadingImportId === row.id ? 'A descarregar…' : 'Download'}</button> },
-          ]}
-        />}
-      </div>
+      {preview && <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-4"><div><h3 className="font-display text-lg font-semibold text-slate-900">Pré-visualização: {preview.nome_ficheiro_original}</h3><p className="mt-1 text-sm text-slate-500">{preview.total_linhas} linhas · <span className="font-medium text-emerald-700">{preview.linhas_validas} válidas</span> · <span className="font-medium text-rose-700">{preview.linhas_rejeitadas} rejeitadas</span></p></div><button type="button" onClick={() => void confirmImport()} disabled={workingType !== null || preview.linhas_validas < 1} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">{workingType === preview.tipo ? 'A importar…' : preview.linhas_validas < 1 ? 'Sem linhas para importar' : 'Confirmar importação'}</button></div>{preview.total_linhas === 0 && <p className="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">O modelo está vazio. Preencha a folha Importação a partir da linha 2 e valide novamente.</p>}{preview.linhas_rejeitadas > 0 && <ul className="mt-4 divide-y divide-slate-100 rounded-xl border border-slate-200">{preview.linhas.filter((row) => row.estado === 'REJEITADA').slice(0, 10).map((row) => <li key={row.numero_linha} className="px-4 py-3 text-sm text-rose-700">Linha {row.numero_linha}: {row.erro || 'Dados inválidos.'}</li>)}</ul>}</section>}
     </div>
   );
 }

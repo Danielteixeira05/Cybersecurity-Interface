@@ -15,6 +15,7 @@ import {
   createAssetImportTemplate,
   downloadExcelImport,
   parseExcelImportForTests,
+  previewExcelImport,
 } from '../src/services/excel-import.service.js';
 
 async function xlsxFile(rows) {
@@ -73,7 +74,7 @@ test('Cliente só pode usar a importação Excel para ativos tecnológicos', () 
   assert.doesNotThrow(() => assertExcelImportPermission({ role: 'manager' }, 'INCIDENTES'));
 });
 
-test('o modelo de ativos corresponde ao contrato do parser e a linha fictícia é válida', async () => {
+test('o modelo de ativos corresponde ao contrato do parser e não contém linhas importáveis', async () => {
   const buffer = await createAssetImportTemplate();
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
@@ -87,7 +88,9 @@ test('o modelo de ativos corresponde ao contrato do parser e a linha fictícia �
   assert.equal(sheet.getCell('A1').fill.fgColor.argb, 'FFF59E0B');
   assert.equal(sheet.getCell('B1').fill.fgColor.argb, 'FFF59E0B');
   assert.deepEqual(sheet.getCell('B2').dataValidation.formulae, ['"RESIDUAL,BAIXA,MEDIA,ALTA,CRITICA"']);
-  assert.equal(sheet.getCell('A2').value, 'EXEMPLO-REMOVER');
+  assert.equal(sheet.getCell('A2').value, null);
+  const instructionText = workbook.getWorksheet('Instruções').getColumn(1).values.join(' ');
+  assert.match(instructionText, /EXEMPLO-REMOVER/);
 
   const rows = await parseExcelImportForTests({
     tipo: 'ATIVOS',
@@ -99,10 +102,53 @@ test('o modelo de ativos corresponde ao contrato do parser e a linha fictícia �
       buffer,
     },
   });
-  assert.equal(rows.length, 1);
-  assert.equal(rows[0].estado, 'IMPORTADA');
-  assert.equal(rows[0].dados.nome, 'EXEMPLO-REMOVER');
-  assert.equal(rows[0].dados.criticidade, 'MEDIA');
+  assert.deepEqual(rows, []);
+
+  const preview = await previewExcelImport(
+    { role: 'client', sub: '7' },
+    { tipo: 'ATIVOS', cliente_id: 7 },
+    {
+      originalname: ASSET_IMPORT_TEMPLATE_FILENAME,
+      mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      size: buffer.length,
+      buffer,
+    },
+    { activeClientForImport: async () => 7 },
+  );
+  assert.equal(preview.total_linhas, 0);
+  assert.equal(preview.linhas_validas, 0);
+  assert.equal(preview.linhas_rejeitadas, 0);
+  assert.deepEqual(preview.linhas, []);
+});
+
+test('a confirmação de um modelo vazio não cria importação, ativos ou objetos no storage', async () => {
+  const buffer = await createAssetImportTemplate();
+  let storageWrites = 0;
+  let importWrites = 0;
+  let assetWrites = 0;
+
+  await assert.rejects(
+    () => commitExcelImport(
+      { role: 'client', sub: '7' },
+      { tipo: 'ATIVOS', cliente_id: 7 },
+      {
+        originalname: ASSET_IMPORT_TEMPLATE_FILENAME,
+        mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        size: buffer.length,
+        buffer,
+      },
+      {
+        activeClientForImport: async () => 7,
+        storage: { put: async () => { storageWrites += 1; } },
+        models: { ExcelImport: { create: async () => { importWrites += 1; } } },
+        createAssetFromImport: async () => { assetWrites += 1; },
+      },
+    ),
+    (error) => error?.status === 422,
+  );
+  assert.equal(storageWrites, 0);
+  assert.equal(importWrites, 0);
+  assert.equal(assetWrites, 0);
 });
 
 test('o importador rejeita um ficheiro incompatível com XLSX', async () => {

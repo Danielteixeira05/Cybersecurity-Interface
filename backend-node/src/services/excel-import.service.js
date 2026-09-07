@@ -104,20 +104,6 @@ export async function createAssetImportTemplate() {
   });
   sheet.getRow(1).height = 24;
 
-  const example = sheet.addRow({
-    nome: 'EXEMPLO-REMOVER',
-    criticidade: 'MEDIA',
-    numero_inventario: 'DEMO-001',
-    tipo_equipamento: 'Servidor',
-    sistema_operativo: 'Ubuntu Server',
-    endereco_ip: '192.0.2.10',
-    fabricante: 'Dell',
-    modelo_versao: 'PowerEdge R350',
-    localizacao: 'Sala técnica',
-    observacoes: 'Remover ou substituir esta linha antes da importação',
-  });
-  example.font = { italic: true, color: { argb: 'FF475569' } };
-
   const criticalityColumn = sheet.getColumn('criticidade');
   for (let row = 2; row <= MAX_ROWS + 1; row += 1) {
     sheet.getCell(row, criticalityColumn.number).dataValidation = {
@@ -136,7 +122,9 @@ export async function createAssetImportTemplate() {
     'Modelo de importação de ativos — CiberBoxSecur',
     'Os campos nome e criticidade são obrigatórios e estão destacados a laranja.',
     `Criticidades permitidas: ${ASSET_CRITICALITIES.join(', ')}.`,
-    'Substitua ou remova a linha EXEMPLO-REMOVER antes de importar o ficheiro.',
+    'A folha Importação contém apenas cabeçalhos. Adicione os ativos a partir da linha 2.',
+    'Exemplo meramente explicativo: nome EXEMPLO-REMOVER; criticidade MEDIA; número de inventário DEMO-001.',
+    'Não copie o exemplo sem o substituir pelos dados que pretende importar.',
     `O limite máximo é de ${MAX_ROWS} linhas de dados, sem contar com o cabeçalho.`,
     'Não altere os nomes dos cabeçalhos da folha Importação.',
   ].forEach((value) => instructions.addRow({ texto: value }));
@@ -221,7 +209,7 @@ function validationError(error) {
   return error?.status && error.status < 500 ? error.message : 'Linha inválida para importação.';
 }
 
-async function validateWorkbook(file, type, clientId) {
+async function validateWorkbook(file, type, clientId, { allowEmpty = false } = {}) {
   const validated = await validateDocumentFile(file, env.documentUploadSafetyMaxMb * 1024 * 1024);
   if (validated.extension !== 'xlsx') throw httpError(422, 'A importação aceita apenas ficheiros XLSX.');
 
@@ -246,7 +234,7 @@ async function validateWorkbook(file, type, clientId) {
     for (const [column, header] of headers) source[header] = row.getCell(column).text;
     if (Object.values(source).some((value) => text(value) !== '')) rows.push({ source, numero_linha: rowNumber });
   });
-  if (!rows.length) throw httpError(422, 'O ficheiro XLSX não contém linhas para importar.');
+  if (!rows.length && !allowEmpty) throw httpError(422, 'O ficheiro XLSX não contém linhas para importar.');
   if (rows.length > MAX_ROWS) throw httpError(413, `A importação excede o máximo de ${MAX_ROWS} linhas.`);
 
   const seen = new Set();
@@ -275,7 +263,7 @@ async function validateWorkbook(file, type, clientId) {
 export async function parseExcelImportForTests({ file, tipo, clienteId }) {
   const type = importType(tipo);
   const clientId = asId(clienteId, 'Cliente');
-  const parsed = await validateWorkbook(file, type, clientId);
+  const parsed = await validateWorkbook(file, type, clientId, { allowEmpty: true });
   return parsed.rows;
 }
 
@@ -319,11 +307,12 @@ async function whereFor(auth, clientId) {
   return ids.length ? { cliente_id: ids } : null;
 }
 
-export async function previewExcelImport(auth, input, file) {
+export async function previewExcelImport(auth, input, file, dependencies = {}) {
   const type = importType(input.tipo);
   assertExcelImportPermission(auth, type);
-  const clientId = await activeClientForImport(auth, input);
-  const parsed = await validateWorkbook(file, type, clientId);
+  const resolveActiveClient = dependencies.activeClientForImport ?? activeClientForImport;
+  const clientId = await resolveActiveClient(auth, input);
+  const parsed = await validateWorkbook(file, type, clientId, { allowEmpty: true });
   const accepted = parsed.rows.filter((row) => row.estado === 'IMPORTADA').length;
   return {
     tipo: type,

@@ -12,7 +12,7 @@ import {
   type ApiPedido, type ApiAvaliacao, type ApiClienteDetalhe, type ApiNotificacao,
 } from '../apiClient';
 import { AssetsWorkspace, IncidentsWorkspace } from '../components/OperationalResources';
-import { ExcelImportWorkspace } from './ManagerPages';
+import { ExcelImportHistory, ExcelImportWorkspace } from './ManagerPages';
 import { DocumentsWorkspace } from '../components/DocumentsWorkspace';
 import { INCIDENT_CHANGED_EVENT } from '../realtime';
 
@@ -399,8 +399,9 @@ export function ClientWorkspace({ setPage }: PageProps) {
 
 export function ClientAssets() {
   const [importing, setImporting] = useState(false);
-  if (importing) return <ExcelImportWorkspace role="client" onBack={() => setImporting(false)} />;
-  return <AssetsWorkspace role="client" title="Meus Ativos" subtitle="Inventário associado à sua organização" onImportExcel={() => setImporting(true)} />;
+  const [success, setSuccess] = useState<string | null>(null);
+  if (importing) return <ExcelImportWorkspace role="client" onBack={() => setImporting(false)} onCompleted={() => { setImporting(false); setSuccess('Importação concluída com sucesso. O inventário e o histórico foram atualizados.'); }} />;
+  return <div>{success && <p role="status" className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{success}</p>}<AssetsWorkspace role="client" title="Meus Ativos" subtitle="Inventário associado à sua organização" onImportExcel={() => { setSuccess(null); setImporting(true); }} /><ExcelImportHistory /></div>;
 }
 
 export function ClientIncidents() {
