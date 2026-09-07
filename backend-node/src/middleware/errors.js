@@ -4,10 +4,11 @@ export function notFound(_request, response) {
 
 export function errorHandler(error, _request, response, _next) {
   if (error?.code === 'DATABASE_NOT_CONFIGURED') {
-    return response.status(503).json({ erro: 'Base de dados de testes não configurada.' });
+    return response.status(503).json({ erro: 'Base de dados não configurada.' });
   }
   if (error?.name === 'SequelizeConnectionError') {
-    return response.status(503).json({ erro: 'Não foi possível ligar à base de dados de testes.' });
+    console.error('Falha de ligação à base de dados:', { name: error.name, code: error.parent?.code ?? error.original?.code ?? null });
+    return response.status(503).json({ erro: 'Não foi possível ligar à base de dados.' });
   }
   if (error?.name === 'SequelizeUniqueConstraintError') {
     return response.status(409).json({ erro: 'Já existe um registo com estes dados.' });

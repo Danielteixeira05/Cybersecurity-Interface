@@ -6,6 +6,7 @@ import {
   commitExcelImport,
   createAssetImportTemplate,
   downloadExcelImport,
+  getExcelImportResult,
   listExcelImports,
   previewExcelImport,
 } from '../services/excel-import.service.js';
@@ -30,6 +31,7 @@ function responder(handler, status = 200) {
 }
 
 export const list = responder((request) => listExcelImports(request.auth, request.query));
+export const result = responder((request) => getExcelImportResult(request.auth, request.params.importId));
 export const preview = responder((request) => previewExcelImport(request.auth, request.body, request.file));
 export const commit = responder((request) => commitExcelImport(request.auth, request.body, request.file), 201);
 

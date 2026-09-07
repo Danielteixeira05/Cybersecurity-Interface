@@ -399,9 +399,9 @@ export function ClientWorkspace({ setPage }: PageProps) {
 
 export function ClientAssets() {
   const [importing, setImporting] = useState(false);
-  const [success, setSuccess] = useState<string | null>(null);
-  if (importing) return <ExcelImportWorkspace role="client" onBack={() => setImporting(false)} onCompleted={() => { setImporting(false); setSuccess('Importação concluída com sucesso. O inventário e o histórico foram atualizados.'); }} />;
-  return <div>{success && <p role="status" className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{success}</p>}<AssetsWorkspace role="client" title="Meus Ativos" subtitle="Inventário associado à sua organização" onImportExcel={() => { setSuccess(null); setImporting(true); }} /><ExcelImportHistory /></div>;
+  const [feedback, setFeedback] = useState<{ message: string; warning: boolean } | null>(null);
+  if (importing) return <ExcelImportWorkspace role="client" onBack={() => setImporting(false)} onCompleted={(result) => { setImporting(false); setFeedback(result.linhas_rejeitadas > 0 ? { message: `Importação parcial: ${result.linhas_importadas} ativo(s) importado(s) e ${result.linhas_rejeitadas} rejeitado(s).`, warning: true } : { message: `Importação concluída com sucesso: ${result.linhas_importadas} ativo(s) importado(s).`, warning: false }); }} />;
+  return <div>{feedback && <p role="status" className={`mb-4 rounded-xl border px-4 py-3 text-sm ${feedback.warning ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>{feedback.message}</p>}<AssetsWorkspace role="client" title="Meus Ativos" subtitle="Inventário associado à sua organização" onImportExcel={() => { setFeedback(null); setImporting(true); }} /><ExcelImportHistory /></div>;
 }
 
 export function ClientIncidents() {

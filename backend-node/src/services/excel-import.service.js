@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import ExcelJS from 'exceljs';
+import { Op } from 'sequelize';
 import { env } from '../config/env.js';
 import { getModels } from '../models/index.js';
 import { httpError } from '../middleware/errors.js';
@@ -282,19 +283,62 @@ async function activeClientForImport(auth, input) {
   return clientId;
 }
 
-function serialiseImport(value) {
+function serialiseImportLine(value) {
+  const item = value?.get ? value.get({ plain: true }) : value;
+  const data = item?.dados;
+  return {
+    numero_linha: Number(item?.numero_linha),
+    estado: item?.estado === 'IMPORTADA' ? 'IMPORTADA' : 'REJEITADA',
+    nome: data && typeof data === 'object' && !Array.isArray(data) && typeof data.nome === 'string'
+      ? data.nome.trim().slice(0, 160) || null
+      : null,
+    erro: typeof item?.erro === 'string' ? item.erro.trim().slice(0, 500) || null : null,
+  };
+}
+
+function serialiseImport(value, lines = undefined) {
   const item = value.get ? value.get({ plain: true }) : value;
   return {
-    ...item,
     id: Number(item.id),
     cliente_id: Number(item.cliente_id),
+    tipo: item.tipo,
+    nome_ficheiro_original: item.nome_ficheiro_original,
+    estado: item.estado,
+    total_linhas: Number(item.total_linhas),
+    linhas_importadas: Number(item.linhas_importadas),
+    linhas_rejeitadas: Number(item.linhas_rejeitadas),
     importado_por: item.importado_por === null || item.importado_por === undefined ? null : Number(item.importado_por),
+    importado_em: item.importado_em,
     cliente_nome: item.cliente?.nome ?? item.cliente_nome ?? null,
     importado_por_nome: item.importadoPor?.nome ?? item.importado_por_nome ?? null,
-    caminho_ficheiro: undefined,
-    cliente: undefined,
-    importadoPor: undefined,
+    ...(lines ? { linhas: lines.map(serialiseImportLine) } : {}),
   };
+}
+
+async function rejectExistingIdentifiers(type, clientId, rows, dependencies = {}, transaction) {
+  const field = type === 'ATIVOS' ? 'numero_inventario' : 'codigo';
+  const modelName = type === 'ATIVOS' ? 'Asset' : 'Incident';
+  const values = [...new Set(rows
+    .filter((row) => row.estado === 'IMPORTADA' && row.dados[field])
+    .map((row) => String(row.dados[field])))];
+  if (!values.length) return rows;
+
+  const Model = dependencies.models?.[modelName] ?? getModels()[modelName];
+  const existing = await Model.findAll({
+    where: { cliente_id: clientId, [field]: { [Op.in]: values } },
+    attributes: [field],
+    transaction,
+  });
+  const existingValues = new Set(existing.map((row) => String(row.get ? row.get(field) : row[field])));
+  if (!existingValues.size) return rows;
+
+  const message = type === 'ATIVOS'
+    ? 'Já existe um ativo com este número de inventário para o cliente.'
+    : 'Já existe um incidente com este código para o cliente.';
+  return rows.map((row) => row.estado === 'IMPORTADA' && row.dados[field]
+    && existingValues.has(String(row.dados[field]))
+    ? { ...row, estado: 'REJEITADA', erro: message }
+    : row);
 }
 
 async function whereFor(auth, clientId) {
@@ -313,15 +357,16 @@ export async function previewExcelImport(auth, input, file, dependencies = {}) {
   const resolveActiveClient = dependencies.activeClientForImport ?? activeClientForImport;
   const clientId = await resolveActiveClient(auth, input);
   const parsed = await validateWorkbook(file, type, clientId, { allowEmpty: true });
-  const accepted = parsed.rows.filter((row) => row.estado === 'IMPORTADA').length;
+  const rows = await rejectExistingIdentifiers(type, clientId, parsed.rows, dependencies);
+  const accepted = rows.filter((row) => row.estado === 'IMPORTADA').length;
   return {
     tipo: type,
     cliente_id: clientId,
     nome_ficheiro_original: parsed.validated.originalName,
-    total_linhas: parsed.rows.length,
+    total_linhas: rows.length,
     linhas_validas: accepted,
-    linhas_rejeitadas: parsed.rows.length - accepted,
-    linhas: parsed.rows,
+    linhas_rejeitadas: rows.length - accepted,
+    linhas: rows,
   };
 }
 
@@ -336,6 +381,7 @@ export async function commitExcelImport(auth, input, file, dependencies = {}) {
   const storageAdapter = dependencies.storage ?? storage();
   const clientId = await resolveActiveClient(auth, input);
   const parsed = await validateWorkbook(file, type, clientId);
+  parsed.rows = await rejectExistingIdentifiers(type, clientId, parsed.rows, dependencies);
   const objectKey = `imports/${clientId}/${randomUUID()}/${parsed.validated.storageName}`;
   let stored = false;
 
@@ -344,6 +390,7 @@ export async function commitExcelImport(auth, input, file, dependencies = {}) {
     stored = true;
     const { ExcelImport, ImportRow, sequelize } = dependencies.models ?? getModels();
     let created;
+    const lineResults = [];
     await sequelize.transaction(async (transaction) => {
       created = await ExcelImport.create({
         cliente_id: clientId,
@@ -385,6 +432,7 @@ export async function commitExcelImport(auth, input, file, dependencies = {}) {
           dados: row.dados,
           criado_em: new Date(),
         }, { transaction });
+        lineResults.push({ numero_linha: row.numero_linha, estado: state, erro: error, dados: row.dados });
       }
       const state = rejected === 0 ? 'PROCESSADO' : imported === 0 ? 'FALHADO' : 'PARCIAL';
       await created.update({ estado: state, linhas_importadas: imported, linhas_rejeitadas: rejected }, { transaction });
@@ -393,7 +441,7 @@ export async function commitExcelImport(auth, input, file, dependencies = {}) {
         details: { cliente_id: clientId, tipo: type, total_linhas: parsed.rows.length, linhas_importadas: imported, linhas_rejeitadas: rejected },
       }, transaction);
     });
-    return serialiseImport(created);
+    return serialiseImport(created, lineResults);
   } catch (error) {
     if (stored) {
       try { await storageAdapter.delete(objectKey); } catch { /* O erro da importação mantém precedência. */ }
@@ -418,6 +466,23 @@ export async function listExcelImports(auth, filters = {}) {
     limit: 100,
   });
   return rows.map(serialiseImport);
+}
+
+export async function getExcelImportResult(auth, importId, dependencies = {}) {
+  const id = canonicalRouteId(importId, 'Importação');
+  const { ExcelImport, ImportRow, Client } = dependencies.models ?? getModels();
+  const row = await ExcelImport.findOne({
+    where: { id },
+    include: [{ model: Client, as: 'cliente', attributes: ['id', 'nome'], where: { ativo: true }, required: true }],
+  });
+  if (!row) throw httpError(404, 'Importação não encontrada.');
+  await (dependencies.assertClientAccess ?? assertClientAccess)(auth, Number(row.cliente_id));
+  const lines = await ImportRow.findAll({
+    where: { importacao_id: id },
+    attributes: ['numero_linha', 'estado', 'erro', 'dados'],
+    order: [['numero_linha', 'ASC']],
+  });
+  return serialiseImport(row, lines);
 }
 
 /**

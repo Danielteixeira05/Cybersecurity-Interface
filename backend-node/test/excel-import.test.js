@@ -14,6 +14,7 @@ import {
   commitExcelImport,
   createAssetImportTemplate,
   downloadExcelImport,
+  getExcelImportResult,
   parseExcelImportForTests,
   previewExcelImport,
 } from '../src/services/excel-import.service.js';
@@ -168,6 +169,31 @@ test('o importador rejeita um ficheiro incompatível com XLSX', async () => {
   );
 });
 
+test('a pré-visualização aplica a unicidade persistida antes de apresentar uma linha como válida', async () => {
+  const preview = await previewExcelImport(
+    { role: 'client', sub: '7' },
+    { tipo: 'ATIVOS', cliente_id: 7 },
+    await xlsxFile([{ nome: 'Ativo repetido', criticidade: 'MEDIA', numero_inventario: 'INV-EXISTENTE' }]),
+    {
+      activeClientForImport: async () => 7,
+      models: {
+        Asset: {
+          findAll: async (options) => {
+            assert.equal(options.where.cliente_id, 7);
+            assert.deepEqual(options.attributes, ['numero_inventario']);
+            return [{ numero_inventario: 'INV-EXISTENTE' }];
+          },
+        },
+      },
+    },
+  );
+
+  assert.equal(preview.linhas_validas, 0);
+  assert.equal(preview.linhas_rejeitadas, 1);
+  assert.equal(preview.linhas[0].estado, 'REJEITADA');
+  assert.match(preview.linhas[0].erro, /número de inventário/i);
+});
+
 test('a confirmação persiste o tipo normalizado e conclui a transação sem ReferenceError', async () => {
   const transaction = { id: 'transacao-isolada' };
   const created = {
@@ -193,6 +219,7 @@ test('a confirmação persiste o tipo normalizado e conclui a transação sem Re
         delete: async () => { blobDeleted = true; },
       },
       models: {
+        Asset: { findAll: async () => [] },
         ExcelImport: {
           create: async (payload, options) => {
             assert.equal(options.transaction, transaction);
@@ -226,8 +253,50 @@ test('a confirmação persiste o tipo normalizado e conclui a transação sem Re
   assert.equal(result.tipo, 'ATIVOS');
   assert.equal(result.estado, 'PROCESSADO');
   assert.equal(result.linhas_importadas, 1);
+  assert.deepEqual(result.linhas, [{ numero_linha: 2, estado: 'IMPORTADA', nome: 'ATIVO-E2E', erro: null }]);
   assert.equal(assetCreated, true);
   assert.equal(blobDeleted, false);
+});
+
+test('o resultado da importação expõe apenas linha, estado, nome e erro depois de validar a organização', async () => {
+  const importRow = {
+    id: 31,
+    cliente_id: 7,
+    tipo: 'ATIVOS',
+    nome_ficheiro_original: 'ativos-alpha.xlsx',
+    caminho_ficheiro: 'imports/7/segredo.xlsx',
+    estado: 'FALHADO',
+    total_linhas: 1,
+    linhas_importadas: 0,
+    linhas_rejeitadas: 1,
+    importado_por: 70,
+    importado_em: new Date('2026-09-07T22:47:26Z'),
+    cliente: { id: 7, nome: 'Organização de teste' },
+  };
+  let accessChecked = false;
+  const result = await getExcelImportResult({ role: 'manager', sub: '70' }, '31', {
+    models: {
+      Client: { name: 'Client' },
+      ExcelImport: { findOne: async () => importRow },
+      ImportRow: {
+        findAll: async () => [{
+          numero_linha: 2,
+          estado: 'REJEITADA',
+          erro: 'Número de inventário repetido.',
+          dados: { nome: 'ATIVO-E2E', token: 'não expor', nested: { segredo: true } },
+        }],
+      },
+    },
+    assertClientAccess: async (_auth, clientId) => {
+      assert.equal(clientId, 7);
+      accessChecked = true;
+    },
+  });
+
+  assert.equal(accessChecked, true);
+  assert.deepEqual(result.linhas, [{ numero_linha: 2, estado: 'REJEITADA', nome: 'ATIVO-E2E', erro: 'Número de inventário repetido.' }]);
+  assert.equal('caminho_ficheiro' in result, false);
+  assert.doesNotMatch(JSON.stringify(result), /token|segredo|imports\//i);
 });
 
 function createTemplateTestApp() {
@@ -412,5 +481,31 @@ test('o endpoint de download exige sessão e devolve XLSX com nome seguro', asyn
     assert.match(response.headers.get('content-disposition') || '', /ativos__alpha\.xlsx/i);
     assert.doesNotMatch(response.headers.get('content-disposition') || '', /\.\.\//);
     assert.equal(Buffer.from(await response.arrayBuffer()).toString(), 'xlsx-http');
+  });
+});
+
+test('o endpoint de resultado exige sessão e mantém a rota antes dos parâmetros de download', async () => {
+  const instance = express();
+  instance.use('/api/excel-imports', createExcelImportRouter({
+    authenticateMiddleware(request, _response, next) {
+      const role = request.get('x-test-role');
+      if (!role) return next(httpError(401, 'Autenticação necessária.'));
+      request.auth = { role, sub: '70' };
+      return next();
+    },
+    handlers: {
+      result: (_request, response) => response.json({ id: 31, linhas: [] }),
+      download: (_request, response) => response.status(500).json({ erro: 'router incorreto' }),
+    },
+  }));
+  instance.use(notFound);
+  instance.use(errorHandler);
+
+  await withServer(instance, async (baseUrl) => {
+    const anonymous = await fetch(`${baseUrl}/api/excel-imports/31/result`);
+    assert.equal(anonymous.status, 401);
+    const response = await fetch(`${baseUrl}/api/excel-imports/31/result`, { headers: { 'x-test-role': 'client' } });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { id: 31, linhas: [] });
   });
 });

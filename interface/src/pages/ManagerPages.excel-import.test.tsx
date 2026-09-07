@@ -10,6 +10,7 @@ const {
   confirmarImportacaoExcelApi,
   importacoesExcelApi,
   previsualizarImportacaoExcelApi,
+  resultadoImportacaoExcelApi,
 } = vi.hoisted(() => ({
   clientesApi: vi.fn(),
   descarregarImportacaoExcelApi: vi.fn(),
@@ -17,6 +18,7 @@ const {
   confirmarImportacaoExcelApi: vi.fn(),
   importacoesExcelApi: vi.fn(),
   previsualizarImportacaoExcelApi: vi.fn(),
+  resultadoImportacaoExcelApi: vi.fn(),
 }));
 
 vi.mock('../apiClient', async (importOriginal) => {
@@ -29,6 +31,7 @@ vi.mock('../apiClient', async (importOriginal) => {
     confirmarImportacaoExcelApi,
     importacoesExcelApi,
     previsualizarImportacaoExcelApi,
+    resultadoImportacaoExcelApi,
   };
 });
 
@@ -37,6 +40,17 @@ describe('modelo Excel de ativos', () => {
     vi.clearAllMocks();
     clientesApi.mockResolvedValue([{ id: 7, nome: 'Organização de teste', nif: '509999999', ativo: true }]);
     importacoesExcelApi.mockResolvedValue([]);
+    resultadoImportacaoExcelApi.mockResolvedValue({
+      id: 31,
+      cliente_id: 7,
+      tipo: 'ATIVOS',
+      nome_ficheiro_original: 'ativos-alpha.xlsx',
+      estado: 'FALHADO',
+      total_linhas: 1,
+      linhas_importadas: 0,
+      linhas_rejeitadas: 1,
+      linhas: [{ numero_linha: 2, estado: 'REJEITADA', nome: 'ATIVO-E2E', erro: 'Número de inventário repetido.' }],
+    });
     descarregarModeloImportacaoAtivosApi.mockResolvedValue({
       blob: new Blob(['xlsx'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
       filename: 'modelo_importacao_ativos.xlsx',
@@ -179,6 +193,45 @@ describe('modelo Excel de ativos', () => {
 
     await waitFor(() => expect(confirmarImportacaoExcelApi).toHaveBeenCalledWith('ATIVOS', 7, expect.any(File)));
     expect(onCompleted).toHaveBeenCalledWith(expect.objectContaining({ id: 31, cliente_id: 7, estado: 'PROCESSADO' }));
+  });
+
+  it('não apresenta sucesso nem abandona o formulário quando zero ativos são importados', async () => {
+    const user = userEvent.setup();
+    const onCompleted = vi.fn();
+    previsualizarImportacaoExcelApi.mockResolvedValueOnce({
+      tipo: 'ATIVOS', cliente_id: 7, nome_ficheiro_original: 'repetido.xlsx',
+      total_linhas: 1, linhas_validas: 1, linhas_rejeitadas: 0,
+      linhas: [{ numero_linha: 2, estado: 'IMPORTADA', erro: null, dados: { nome: 'ATIVO-E2E' } }],
+    });
+    confirmarImportacaoExcelApi.mockResolvedValueOnce({
+      id: 32, cliente_id: 7, tipo: 'ATIVOS', nome_ficheiro_original: 'repetido.xlsx', estado: 'FALHADO',
+      total_linhas: 1, linhas_importadas: 0, linhas_rejeitadas: 1,
+      linhas: [{ numero_linha: 2, estado: 'REJEITADA', nome: 'ATIVO-E2E', erro: 'Número de inventário repetido.' }],
+    });
+    const { container } = render(<ExcelImportWorkspace role="client" onCompleted={onCompleted} />);
+    await screen.findByText('Organização da importação');
+    await user.upload(container.querySelector('input[type="file"]') as HTMLInputElement, new File(['xlsx'], 'repetido.xlsx'));
+    await user.click(screen.getByRole('button', { name: 'Validar & Pré-visualizar' }));
+    await user.click(await screen.findByRole('button', { name: 'Confirmar importação' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('nenhum ativo foi importado');
+    expect(screen.getByText(/Linha 2 \(ATIVO-E2E\): Número de inventário repetido/)).toBeVisible();
+    expect(screen.queryByText(/concluída com sucesso/i)).not.toBeInTheDocument();
+    expect(onCompleted).not.toHaveBeenCalled();
+  });
+
+  it('carrega e apresenta os motivos funcionais de uma importação falhada', async () => {
+    const user = userEvent.setup();
+    importacoesExcelApi.mockResolvedValueOnce([{
+      id: 31, cliente_id: 7, cliente_nome: 'Organização de teste', tipo: 'ATIVOS',
+      nome_ficheiro_original: 'ativos-alpha.xlsx', estado: 'FALHADO', total_linhas: 1,
+      linhas_importadas: 0, linhas_rejeitadas: 1,
+    }]);
+    render(<ExcelImportHistory clientId={7} />);
+    await user.click(await screen.findByRole('button', { name: 'Consultar resultado da importação 31' }));
+
+    await waitFor(() => expect(resultadoImportacaoExcelApi).toHaveBeenCalledWith(31, expect.any(AbortSignal)));
+    expect(screen.getByRole('region', { name: 'Resultado da importação 31' })).toHaveTextContent('ATIVO-E2E: Número de inventário repetido.');
   });
 
   it('filtra o histórico pelo cliente atual e ignora respostas antigas', async () => {

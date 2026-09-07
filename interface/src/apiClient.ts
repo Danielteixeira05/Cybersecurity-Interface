@@ -416,6 +416,14 @@ export interface ApiImportacaoExcel {
   importado_por?: number | null;
   importado_por_nome?: string | null;
   importado_em?: string;
+  linhas?: ApiLinhaResultadoImportacao[];
+}
+
+export interface ApiLinhaResultadoImportacao {
+  numero_linha: number;
+  estado: 'IMPORTADA' | 'REJEITADA';
+  nome: string | null;
+  erro: string | null;
 }
 
 export interface ApiPrevisualizacaoExcel {
@@ -1371,6 +1379,11 @@ export async function importacoesExcelApi(clienteId?: number, signal?: AbortSign
   const qs = clienteId ? `?cliente_id=${clienteId}` : '';
   const result = await apiFetch<{ items?: ApiImportacaoExcel[] } | ApiImportacaoExcel[]>(`/api/excel-imports/${qs}`, { signal });
   return Array.isArray(result) ? result : (result.items ?? []);
+}
+
+export async function resultadoImportacaoExcelApi(importId: number, signal?: AbortSignal): Promise<ApiImportacaoExcel> {
+  if (!Number.isSafeInteger(importId) || importId < 1) throw new Error('Identificador de importação inválido.');
+  return apiFetch<ApiImportacaoExcel>(`/api/excel-imports/${importId}/result`, { signal });
 }
 
 export async function descarregarModeloImportacaoAtivosApi(): Promise<{ blob: Blob; filename: string }> {
